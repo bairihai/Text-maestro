@@ -1,3 +1,13 @@
+# 文本分析工具箱
+
+[![Version 1.0](https://img.shields.io/badge/version-1.0-brightgreen.svg)](https://github.com/iamscottxu/AcFun-Video-Download/releases/tag/v1.0)
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/stars/khfheicddakgkjkocaokijccaaeebfko.svg)](https://chrome.google.com/webstore/detail/acfun-video-download/khfheicddakgkjkocaokijccaaeebfko)
+[![Firefox Add-ons](https://img.shields.io/amo/stars/acfun-video-download.svg)](https://addons.mozilla.org/zh-CN/firefox/addon/acfun-video-download/)
+[![MIT](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/iamscottxu/AcFun-Video-Download/blob/master/LICENSE)
+
+
+
+
 功能1：文件分类
 
 按照一定条件，以所选择的方式，列出符合条件的文件。
