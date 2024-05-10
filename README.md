@@ -89,10 +89,11 @@
 作为云都官能团早就想做，但时至今日才得以正式开始施工的最新桌面应用，请允许我在这里为2022-2024年所有云都官能团的支持者，表示衷心的感谢！
 
 以下，是部分本产品的参考清单：
+（参考：指资源、产品、教程等）
 
 1. [DiVoMiner 及其推荐的UCINET](https://zhuanlan.zhihu.com/p/359610083)
 2. [Chrome拓展程序，Discordmate - Discord Chat Exporter导出聊天记录](https://chromewebstore.google.com/detail/discordmate-discord-chat/ofjlibelpafmdhigfgggickpejfomamk)
-
+3. [vite+electron教程](https://blog.csdn.net/qq_42365534/article/details/129887911) 注意：csdn近期在推自己的码仓，不要被那什么~~老流氓~~加速计划误导了。
 
 开源库地址：[gitee]()
 
@@ -102,3 +103,5 @@
 
 
 赞助云都官能团，成为“云山原子”，并为我们的IP事业提供建议：[爱发电链接]()
+
+在此，亦感谢那本高中的信息技术书。python做词云确实简单好用！
