@@ -1,3 +1,5 @@
+# 文本分析工具箱
+
 # 文本分析工具箱 Text-maestro
 
 ## 综述
@@ -17,7 +19,17 @@
 ## 2
 
 
+[![Version 1.0](https://img.shields.io/badge/version-1.0-brightgreen.svg)](https://github.com/iamscottxu/AcFun-Video-Download/releases/tag/v1.0)
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/stars/khfheicddakgkjkocaokijccaaeebfko.svg)](https://chrome.google.com/webstore/detail/acfun-video-download/khfheicddakgkjkocaokijccaaeebfko)
+[![Firefox Add-ons](https://img.shields.io/amo/stars/acfun-video-download.svg)](https://addons.mozilla.org/zh-CN/firefox/addon/acfun-video-download/)
+[![MIT](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/iamscottxu/AcFun-Video-Download/blob/master/LICENSE)
+
+
+
+
 功能1：文件分类
+
+按照一定条件，以所选择的方式，列出符合条件的文件。
 
 按照列表导入，批量新建多个文件夹；
 
@@ -38,6 +50,8 @@
 
 输出文件目录结构。
 
+监控空间占用情况，并进行导出。
+
 
 功能4：插件推荐
 
@@ -50,7 +64,15 @@
 
 统计记日记的时间段频率，生成统计图，拟合曲线等。
 
+
 大概就是先做这几个功能吧。
+
+
+后期功能例：文件搬迁
+
+选中指定文件，从仓库中搬出，保留一个单向/双向链接。
+
+
 
 
 
@@ -70,7 +92,6 @@
 
 1. [DiVoMiner 及其推荐的UCINET](https://zhuanlan.zhihu.com/p/359610083)
 2. [Chrome拓展程序，Discordmate - Discord Chat Exporter导出聊天记录](https://chromewebstore.google.com/detail/discordmate-discord-chat/ofjlibelpafmdhigfgggickpejfomamk)
-
 
 
 开源库地址：[gitee]()
