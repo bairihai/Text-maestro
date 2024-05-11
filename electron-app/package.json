@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "description": "Text-maestro。下列内容为启动脚本。main一项的值必须为.js文件。",
-  "type": "module",
-  "main": "app/main/electron.js",
+
+  "main": "dist-electron/electron.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
