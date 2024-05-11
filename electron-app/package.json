@@ -2,7 +2,9 @@
   "name": "electron-vite-project",
   "private": true,
   "version": "0.0.0",
+  "description": "Text-maestro。下列内容为启动脚本。main一项的值必须为.js文件。",
   "type": "module",
+  "main": "app/main/electron.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
@@ -34,6 +36,5 @@
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5"
-  },
-  "main": "app/main/electron.js"
+  }
 }
