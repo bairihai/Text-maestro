@@ -10,7 +10,7 @@ export default defineConfig({
     electron({
       main: {
         // Shortcut of `build.lib.entry`.
-        entry: 'electron/main.ts',
+        entry: 'app/main/electron.ts',
       },
       preload: {
         // Shortcut of `build.rollupOptions.input`.
