@@ -9,8 +9,9 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
 
-    "start:main": "electron ./app/main",
-    "start:render": "webpack-dev-server --config ./webpack/webpack.render.dev.js"
+    "build:main": "tsc -p tsconfig.json",
+    "start:main": "npm run build:main && electron .",
+    "start:render": "vite"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -33,5 +34,5 @@
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5"
   },
-  "main": "dist-electron/main.js"
+  "main": "app/main/electron.js"
 }
