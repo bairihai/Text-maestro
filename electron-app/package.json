@@ -8,7 +8,7 @@
     "build": "tsc && vite build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-
+    
     "build:main": "tsc -p tsconfig.json",
     "start:main": "npm run build:main && electron .",
     "start:render": "vite"
@@ -19,6 +19,7 @@
     "react-router-dom": "^6.23.1"
   },
   "devDependencies": {
+    "@types/plist": "^3.0.5",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
