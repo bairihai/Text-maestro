@@ -7,7 +7,9 @@ const devConfig = {
   mode: 'development',
   entry: {
     // 👇 对应渲染进程的 app.jsx 入口文件
-    index: path.resolve(__dirname, '../app/renderer/app.jsx'),
+
+    // 结构不要动，总之这里可以跑tsx，webpack就是神奇
+    index: path.resolve(__dirname, '../app/renderer/app.tsx'),
   },
   output: {
     filename: '[name].[hash].js',
