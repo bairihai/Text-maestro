@@ -12,7 +12,7 @@
     "preview": "vite preview",
     
     "build:main": "tsc -p tsconfig.json",
-    "start:main": "npm run build:main && electron .",
+    "start:main": "npm run build:main && electron --trace-warnings .",
     "start:render": "vite"
   },
   "dependencies": {
