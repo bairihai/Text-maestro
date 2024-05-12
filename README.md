@@ -20,7 +20,7 @@
 ### 1 自己部署/编译：
 
 clone仓库。请使用其中的electron-app-v2文件夹中的代码。
-electron-app是计划使用新版node+vite的一次测试，但是最后以失败告终了，并不能使用。
+electron-app是计划使用新版node+vite的一次测试，但是最后以失败告终了，并不能使用。（现已收入redme/废案）
 
 要使用electron-app-v2，需要把node降级至14.x。
 （cursor推荐使用nvm进行降级。降级成功的提示形如：`Now using node v14.17.0 (64-bit)`。nvm理应有自动将自己加入帐户环境变量的功能，原理类似cpp编译器等东西。）
