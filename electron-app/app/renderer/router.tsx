@@ -18,11 +18,12 @@ function Router() {
         {/* <Route path="/resume" exact>
           <Resume />
         </Route> */}
-        
+
       </Switch>
       {/* 默认重定向到首页 */}
       <Redirect to="/" />
     </HashRouter>
   );
 }
+
 export default Router;
