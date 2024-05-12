@@ -1,5 +1,3 @@
-# 文本分析工具箱
-
 # 文本分析工具箱 Text-maestro
 
 ## 综述
@@ -16,7 +14,27 @@
 
 本工具的目标：做更适合 obsidian文档\微信留痕\discord聊天记录 等的，ai化的聊天记录分析工具。
 
-## 2
+
+## 如何使用
+
+### 1 自己部署/编译：
+
+clone仓库。请使用其中的electron-0.2文件夹中的代码。
+electron-app是计划使用vite的一次测试，但是最后以失败告终了，并不能使用。
+
+### 2 开箱即用
+
+到release中下载所需要的包体即可使用。
+
+### 3 国内镜像/其他支持的使用方式
+
+开源库地址：[gitee]()
+
+开源库镜像：[github镜像]()
+
+为obsidian装载：[obsidian市场中的&#34;Text Maestro&#34;]()
+
+## 支持的功能
 
 
 [![Version 1.0](https://img.shields.io/badge/version-1.0-brightgreen.svg)](https://github.com/iamscottxu/AcFun-Video-Download/releases/tag/v1.0)
@@ -82,7 +100,7 @@
 
 打开app后回到上次打开的文件夹。
 
-## 3 
+## 参考清单 & sponsor
 
 2024年5月5日 16点16分：
 
@@ -94,13 +112,9 @@
 1. [DiVoMiner 及其推荐的UCINET](https://zhuanlan.zhihu.com/p/359610083)
 2. [Chrome拓展程序，Discordmate - Discord Chat Exporter导出聊天记录](https://chromewebstore.google.com/detail/discordmate-discord-chat/ofjlibelpafmdhigfgggickpejfomamk)
 3. [vite+electron教程](https://blog.csdn.net/qq_42365534/article/details/129887911) 注意：csdn近期在推自己的码仓，不要被那什么~~老流氓~~加速计划误导了。
-4. [彭道宽-electron掘金教程&github仓库](https://github.com/PDKSophia/visResumeMook)
+4. [彭道宽-electron掘金教程&github仓库](https://github.com/PDKSophia/visResumeMook) 几乎很难说一个教程是种祝福还是诅咒
 
-开源库地址：[gitee]()
 
-开源库镜像：[github镜像]()
-
-为obsidian装载：[obsidian市场中的&#34;Text Maestro&#34;]()
 
 
 赞助云都官能团，成为“云山原子”，并为我们的IP事业提供建议：[爱发电链接]()
