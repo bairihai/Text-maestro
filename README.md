@@ -48,6 +48,10 @@ electron-app是计划使用新版node+vite的一次测试，但是最后以失�
 
 为obsidian装载：[obsidian市场中的&#34;Text Maestro&#34;]()
 
+### 4 通过源代码使用
+
+内容和上面的1部分一致，不过注意建议使用pnpm而非npm
+
 ## 支持的功能
 
 

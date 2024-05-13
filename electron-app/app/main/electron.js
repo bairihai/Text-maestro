@@ -17,6 +17,7 @@
      webPreferences: {
        devTools: true,
        nodeIntegration: true,
+       contextIsolation: false
      },
    });
  
