@@ -1,7 +1,7 @@
-import path from 'path';
-import webpack from 'webpack';
-import baseConfig from './webpack.base.js';
-import { webpackMerge } from 'webpack-merge';
+const path = require('path');
+const webpack = require('webpack');
+const baseConfig = require('./webpack.base.js');
+const webpackMerge = require('webpack-merge');
 
 const mainConfig = {
   entry: path.resolve(__dirname, '../app/main/electron.js'),

@@ -1,7 +1,7 @@
-import path from 'path';
-import { webpackMerge } from 'webpack-merge';
-import baseConfig from './webpack.base.js';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
+const path = require('path');
+const webpackMerge = require('webpack-merge');
+const baseConfig = require('./webpack.base.js');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 const devConfig = {
   mode: 'development',
