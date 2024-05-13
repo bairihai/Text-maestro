@@ -10,6 +10,7 @@
     "install:electron": "ELECTRON_MIRROR=https://cdn.npm.taobao.org/dist/electron/ npm install electron"
   },
   "dependencies": {
+    "@arco-design/web-react": "^2.62.0",
     "@babel/polyfill": "^7.12.1",
     "electron": "^11.5.0",
     "react": "^17.0.2",
