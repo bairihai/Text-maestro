@@ -16,6 +16,7 @@ const devConfig = {
     path: path.resolve(__dirname, '../dist'),
   },
   target: 'electron-renderer',
+  // target: 'web',
   devtool: 'inline-source-map',
   devServer: {
     contentBase: path.join(__dirname, '../dist'),
