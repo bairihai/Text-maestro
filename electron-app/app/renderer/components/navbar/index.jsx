@@ -32,8 +32,8 @@ const SubMenu = Menu.SubMenu;
 const NavBar = () => {
 
     return (
-        <div className="menu-demo-round" style={{ height: 600 }}>
-            <Menu style={{ width: 200 }} mode="pop" hasCollapseButton>
+        <div className="menu-demo-round" style={{ height: '100%' , width: 200 }}>
+            <Menu style={{ height: '100%', width: 200 }} mode='vertical' hasCollapseButton>
                 <MenuItem key="0">
                     <IconApps />
                     Navigation 1
