@@ -17,6 +17,25 @@ const devConfig = {
   },
   target: 'electron-renderer',
   // target: 'web',
+
+  // 尝试配置css loader
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader']
+      },
+      {
+        test: /\.less$/,
+        use: [
+          'style-loader', // 将 CSS 注入到 DOM 中
+          'css-loader',   // 解析 CSS 文件
+          'less-loader'   // 编译 Less 为 CSS
+        ]
+      }
+    ]
+  },
+
   devtool: 'inline-source-map',
   devServer: {
     contentBase: path.join(__dirname, '../dist'),
