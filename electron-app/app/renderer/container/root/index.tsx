@@ -17,17 +17,15 @@ const style = {
 const { Text } = Typography;
 
 
-// 目前已知的情报：
-// 1. 生效：arco的html
-// 2. 生效：arco icon （即：引入方式没问题
-// 3. 未生效：arco的css （即：
-// 4. 生效：直接写进style的css （即：css能生效
-// 5. 未生效：网页端（即：不是electron的问题
 
-// 注意：less只是负责逻辑处理，和模块化没有任何关系
+
+
+// （这里之前写了arco less未生效的推理，现在lessloader修好自然用不到了）
 
 function Root() {
   return(
+  <div>
+
   <Tabs defaultActiveTab="1">
     <TabPane
       key="1"
@@ -71,6 +69,8 @@ function Root() {
       </Typography.Paragraph>
     </TabPane>
   </Tabs>
+
+  </div> 
   );
 }
 
