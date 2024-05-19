@@ -1,7 +1,7 @@
 import React from 'react';
 import { HashRouter, Route, Switch, Redirect } from 'react-router-dom';
 import Root from './container/root';
-// import Resume from './container/resume';
+import Document from './container/document';
 
 // 暂不进行版本升级
 
@@ -15,9 +15,9 @@ function Router() {
           <Root />
         </Route>
 
-        {/* <Route path="/resume" exact>
-          <Resume />
-        </Route> */}
+        <Route path="/document" exact>
+          <Document />
+        </Route>
 
       </Switch>
       {/* 默认重定向到首页 */}

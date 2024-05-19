@@ -15,8 +15,8 @@ const devConfig = {
     filename: '[name].[hash].js',
     path: path.resolve(__dirname, '../dist'),
   },
-  target: 'electron-renderer',
-  // target: 'web',
+  // target: 'electron-renderer',
+  target: 'web',
 
   // 尝试配置css loader
   module: {
