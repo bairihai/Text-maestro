@@ -31,47 +31,59 @@ const NavBar = () => {
 
     return (
         // <div className="menu-demo-round" style={{ height: '100%' , width: 200 }}>
-            <Menu style={{ height: '100%', width: 225 }} mode='vertical' hasCollapseButton>
-                <MenuItem key="0">
-                    <IconFolder />
-                    单一文件夹分析
-                </MenuItem>
-                <SubMenu
-                    key="1"
-                    title={
-                        <>
-                            <IconDriveFile />
-                            复合web分析
-                        </>
-                    }
-                >
-                    <MenuItem key="1_0">discord服务器聊天记录</MenuItem>
-                    <MenuItem key="1_1">知乎用户回答</MenuItem>
-                    <MenuItem key="1_2">b站收藏夹</MenuItem>
-                </SubMenu>
-                <SubMenu
-                    key="2"
-                    title={
-                        <>
-                            <IconDriveFile />
-                            复合本地文档分析
-                        </>
-                    }
-                >
-                    <MenuItem key="2_0">obsidian仓库</MenuItem>
-                    <MenuItem key="2_1">（待更新）</MenuItem>
-                </SubMenu>
+        <Menu style={{ height: '100%', width: 225 }} mode='vertical' hasCollapseButton>
+            <SubMenu
+                key="0"
+                title={
+                    <>
+                        <IconDriveFile />
+                        游戏与其他文档
+                    </>
+                }
+            >
+                <MenuItem key="2_0">（maa）明日方舟库存管理</MenuItem>
+                <MenuItem key="2_1">obsidian 单篇文档分析</MenuItem>
+                <MenuItem key="2_2">obsidian 多文档分析</MenuItem>
+            </SubMenu>
 
-                <MenuItem key="3" onClick={() => history.push('/document')}>
+            <SubMenu
+                key="1"
+                title={
+                    <>
+                        <IconDriveFile />
+                        论坛app
+                    </>
+                }
+            >
+                <MenuItem key="1_0">b站评论</MenuItem>
+                <MenuItem key="1_1">知乎用户回答</MenuItem>
+                <MenuItem key="1_2">b站收藏夹</MenuItem>
+            </SubMenu>
+
+            <SubMenu
+                key="2"
+                title={
+                    <>
+                        <IconDriveFile />
+                        聊天app
+                    </>
+                }
+            >
+                <MenuItem key="2_0">discord聊天记录</MenuItem>
+                <MenuItem key="2_1">qq聊天记录</MenuItem>
+                <MenuItem key="2_2">微信聊天记录</MenuItem>
+            </SubMenu>
+
+            <MenuItem key="3" onClick={() => history.push('/document')}>
                 <IconSafe />
                 官网丨文档丨帮助
             </MenuItem>
-            
+
             <MenuItem key="4" onClick={() => history.push('/')}>
                 <IconSettings />
                 Text-maestro设置
             </MenuItem>
-            </Menu>
+        </Menu>
         // </div>
     );
 }

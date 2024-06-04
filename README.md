@@ -6,7 +6,7 @@
 
 效果：**自动清洗必要的数据，文本分析可视化**
 
-技术选型：py扩展+webpack构建+react（electron）
+技术选型：py扩展+webpack构建+react（electron4）+**node14**
 
 
 重启时间：2024年5月5日 15点58分【重启后的新版本采用electron进行了重新设计】
