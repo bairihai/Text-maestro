@@ -85,7 +85,9 @@ const NavBar = () => {
                 <MenuItem key="3_0">任一文件夹的结构树</MenuItem>
                 <MenuItem key="3_1">obsidian 单篇文档分析</MenuItem>
                 <MenuItem key="3_2">obsidian 多文档分析</MenuItem>
-                <MenuItem key="3_2">掘金小册 上云action生成</MenuItem>
+                <MenuItem key="3_3">掘金小册 上云action生成</MenuItem>
+                <MenuItem key="3_4">Hiplot 作图meta生成</MenuItem>
+                <MenuItem key="3_5">Apifox postman双向配置改造</MenuItem>
             </SubMenu>
 
             <MenuItem key="5" onClick={() => history.push('/document')}>
