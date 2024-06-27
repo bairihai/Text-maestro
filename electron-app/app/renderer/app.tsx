@@ -4,18 +4,23 @@ import Router from './router';
 
 import NavBar from './components/navbar';
 
+import { BrowserRouter } from 'react-router-dom';
+
 function App() {
-  return(
-  <div style={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
+  return (
+    <BrowserRouter>
+      <div style={{ display: 'flex', flexDirection: 'row', height: '100%' }}>
 
         <NavBar />
-
-
-      <div style={{ flex: 1 }}>
-        <Router />
+        <div style={{ flex: 1 }}>
+          <Router />
+        </div>
+        
       </div>
-  </div>
+    </BrowserRouter>
   );
 }
+
+
 
 ReactDOM.render(<App />, document.getElementById('root'));

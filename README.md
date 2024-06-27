@@ -20,6 +20,8 @@
 
 clone仓库。请使用其中的electron-app文件夹中的代码。
 
+首先，node降级到14.
+
 启动服务端（electron应用的main process主进程）：参见package.json中给出的指令
 启动前端：参见package.json中给出的指令
 

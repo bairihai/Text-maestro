@@ -23,7 +23,7 @@ const MenuItem = Menu.Item;
 const SubMenu = Menu.SubMenu;
 
 
-import { useHistory } from 'react-router';
+import { useHistory } from 'react-router-dom';
 
 
 const NavBar = () => {
@@ -93,12 +93,12 @@ const NavBar = () => {
                 官网丨文档丨帮助
             </MenuItem>
 
-            <MenuItem key="6" onClick={() => history.push('/')}>
+            <MenuItem key="6" onClick={() => history.push('/1')}>
                 <IconSettings />
                 playground DIY广场
             </MenuItem>
 
-            <MenuItem key="7" onClick={() => history.push('/')}>
+            <MenuItem key="7" onClick={() => history.push('/1')}>
                 <IconSettings />
                 Text-maestro设置
             </MenuItem>
