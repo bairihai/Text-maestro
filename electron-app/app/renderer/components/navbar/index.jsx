@@ -31,19 +31,18 @@ const NavBar = () => {
 
     return (
         // <div className="menu-demo-round" style={{ height: '100%' , width: 200 }}>
-        <Menu style={{ height: '100%', width: 225 }} mode='vertical' hasCollapseButton>
+        <Menu style={{ height: '100%', width: 245 }} mode='vertical' hasCollapseButton>
             <SubMenu
                 key="0"
                 title={
                     <>
                         <IconDriveFile />
-                        游戏与其他文档
+                        游戏文件
                     </>
                 }
             >
-                <MenuItem key="2_0">（maa）明日方舟库存管理</MenuItem>
-                <MenuItem key="2_1">obsidian 单篇文档分析</MenuItem>
-                <MenuItem key="2_2">obsidian 多文档分析</MenuItem>
+                <MenuItem key="0_0">maa 明日方舟库存管理</MenuItem>
+                <MenuItem key="0_1">明日方舟 寻访记录管理</MenuItem>
             </SubMenu>
 
             <SubMenu
@@ -74,12 +73,32 @@ const NavBar = () => {
                 <MenuItem key="2_2">微信聊天记录</MenuItem>
             </SubMenu>
 
-            <MenuItem key="3" onClick={() => history.push('/document')}>
+            <SubMenu
+                key="3"
+                title={
+                    <>
+                        <IconDriveFile />
+                        通用文档
+                    </>
+                }
+            >
+                <MenuItem key="3_0">任一文件夹的结构树</MenuItem>
+                <MenuItem key="3_1">obsidian 单篇文档分析</MenuItem>
+                <MenuItem key="3_2">obsidian 多文档分析</MenuItem>
+                <MenuItem key="3_2">掘金小册 上云action生成</MenuItem>
+            </SubMenu>
+
+            <MenuItem key="5" onClick={() => history.push('/document')}>
                 <IconSafe />
                 官网丨文档丨帮助
             </MenuItem>
 
-            <MenuItem key="4" onClick={() => history.push('/')}>
+            <MenuItem key="6" onClick={() => history.push('/')}>
+                <IconSettings />
+                playground DIY广场
+            </MenuItem>
+
+            <MenuItem key="7" onClick={() => history.push('/')}>
                 <IconSettings />
                 Text-maestro设置
             </MenuItem>

@@ -6,8 +6,7 @@
 
 效果：**自动清洗必要的数据，文本分析可视化**
 
-技术选型：py扩展+webpack构建+react（electron4）+**node14**
-
+技术选型：py扩展+electron4+mysql数据库（后端） 丨 webpack构建+react+tailwindcss（前端）丨基于**node14**
 
 重启时间：2024年5月5日 15点58分【重启后的新版本采用electron进行了重新设计】
 
@@ -20,21 +19,11 @@
 ### 1 自己部署/编译：
 
 clone仓库。请使用其中的electron-app文件夹中的代码。
-electron-app是计划使用新版node+vite的一次测试，但是最后以失败告终了，并不能使用。（现已收入readme/废案）
-之后推出的v2则是将之router升级的尝试。然而原代码实在是过于屎山，我的拔苗助长先干活再学习的计划也失败了。（现已收入readme/废案）
 
-要使用electron-app-v2，需要把node降级至14.x。
-（cursor推荐使用nvm进行降级。降级成功的提示形如：`Now using node v14.17.0 (64-bit)`。nvm理应有自动将自己加入帐户环境变量的功能，原理类似gcc mingw64等东西。）
-
-
-启动服务端（electron应用）：参见package.json中给出的指令
-
+启动服务端（electron应用的main process主进程）：参见package.json中给出的指令
 启动前端：参见package.json中给出的指令
 
-
-推荐使用ustclug镜像。没有为什么，我也不讨厌淘宝，我也不喜欢科大里面膜来膜去的风气，我也考不上，我就是单纯喜欢那个人而已。
-
-以上。
+main和render要输两个命令这事儿真不怪我，哪怕是electron官方教程也得输两个（无非是只用打一个进行复合了）
 
 ### 2 开箱即用
 
@@ -47,12 +36,6 @@ electron-app是计划使用新版node+vite的一次测试，但是最后以失�
 开源库镜像：[github镜像]()
 
 为obsidian装载：[obsidian市场中的&#34;Text Maestro&#34;]()
-
-### 4 通过源代码使用
-
-内容和上面的1部分一致，不过注意建议使用pnpm而非npm
-
-main和render要输两个命令这事儿真不怪我，哪怕是electron官方教程也得输两个（无非是只用打一个进行复合了）
 
 ## 支持的功能
 
