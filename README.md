@@ -6,13 +6,11 @@
 
 效果：**自动清洗必要的数据，文本分析可视化**
 
-技术选型：py扩展+electron4+mysql数据库（后端） 丨 webpack构建+react+tailwindcss（前端）丨基于**node14**（实测最高支持node16）
-
+技术选型：py扩展+electron-vite+mysql数据库（后端） 丨 webpack构建+react+tailwindcss（前端）丨基于**node22**
 重启时间：2024年5月5日 15点58分【重启后的新版本采用electron进行了重新设计】
 
 
 本工具的目标：做更适合 obsidian文档\微信留痕\discord聊天记录 等的，ai化的聊天记录分析工具。
-
 
 # Text-maestro 本地部署概要：
 
@@ -32,14 +30,13 @@ node降级：建议node选用node14、15或16。
 
 然后，启动进程。
 
-启动服务端（main process）：参见package.json中给出的指令
+使用electron-vite官方提供的复合script，快速启动：
 
-> 【推荐】webpack启动：形如 `npm run start:main`
+```shell
+npm run dev
+```
 
-启动前端（render process）：参见package.json中给出的指令
-
-> 【推荐】webpack启动：形如 `npm run start:render`
-> vite启动：形如 `npm run start-vite:render`
+启动后，您可以通过按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> 打开开发者工具（DevTools）进行调试。
 
 # Text-maestro 立即启用：
 

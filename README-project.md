@@ -21,13 +21,20 @@ electron-app是计划使用新版node+vite的一次测试，但是最后以失�
 
 比如淘宝的cnpm内置了npm淘宝源。
 
-## 为什么启动进程要打两个命令
+## ~~为什么启动进程要打两个命令~~
 
 main和render要输两个命令这事儿真不怪我，哪怕是electron官方教程也得输两个（无非是只用打一个进行复合了）
 
 官方的做法就是如此。
 
 任何服务都有前后端，很正常，electron也不能例外。前后端项目都要打两个script的。
+
+
+更新：2024年6月28日 23点21分
+
+via electron-vite tool,resolved the script problem.
+
+Now,use `npm run dev` one scipt to start dev.
 
 ## 配置tailwindcss
 
