@@ -57,4 +57,12 @@ Now,use `npm run dev` one scipt to start dev.
 
 ~~同理，改回去之后，就不能在web显示。~~
 
-target是webpack专有的设置。参见[文档](https://webpack.js.org/configuration/target)
+target是webpack专有的设置。参见[文档](https://webpack.js.org/configuration/target)。
+
+这里用的vite+electron可以直接访问，形如http://localhost:5173/。
+
+效果比webpack差。
+
+另注：vite也有一个Build target功能，不过那个是为了配置兼容性目标。参见[vite文档](https://vitejs.dev/config/build-options)
+
+> Browser compatibility target for the final bundle. The default value is a Vite special value, 'modules', which targets browsers with native ES Modules, native ESM dynamic import, and import.meta support. Vite will replace 'modules' to ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14']

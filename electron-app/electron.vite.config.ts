@@ -16,6 +16,10 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src')
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    // build: {
+    //   // 设置构建目标为浏览器
+    //   target: 'web'
+    // }
   }
 })
