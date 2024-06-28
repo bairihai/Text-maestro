@@ -10,7 +10,8 @@ function App(): JSX.Element {
       <div className="creator">Powered by electron-vite</div>
       <div className="text">
         Build an Electron app with <span className="react">React</span>
-        &nbsp;and <span className="ts">TypeScript</span>
+        &nbsp;and <span className="ts">TypeScript</span> 
+        &nbsp;and <span className=" text-orange-500">Tailwindcss</span>
       </div>
       <p className="tip">
         Please try pressing <code>F12</code> to open the devTool
@@ -27,9 +28,6 @@ function App(): JSX.Element {
           </a>
         </div>
       </div>
-      <h1 className="text-3xl font-bold text-orange-500">
-        Hello world!
-      </h1>
       <Versions></Versions>
     </>
   )
