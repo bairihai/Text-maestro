@@ -6,7 +6,7 @@
 
 效果：**自动清洗必要的数据，文本分析可视化**
 
-技术选型：py扩展+electron4+mysql数据库（后端） 丨 webpack构建+react+tailwindcss（前端）丨基于**node14**
+技术选型：py扩展+electron4+mysql数据库（后端） 丨 webpack构建+react+tailwindcss（前端）丨基于**node14**（实测最高支持node16）
 
 重启时间：2024年5月5日 15点58分【重启后的新版本采用electron进行了重新设计】
 
@@ -14,18 +14,34 @@
 本工具的目标：做更适合 obsidian文档\微信留痕\discord聊天记录 等的，ai化的聊天记录分析工具。
 
 
-## 如何使用
+# Text-maestro 本地部署概要：
 
-### 1 自己部署/编译：
+以下部署方法（含环境配置方法）仅供参考：请务必按照这里的顺序依次完成。
+如有错误请反馈，
+需要更深入的指导应查看**README-project.md**。
+这与本文档在同一目录下。
 
-clone仓库。请使用其中的electron-app文件夹中的代码。
+如若问题仍未解决，请向我求助，我的学习笔记能帮你解决问题。
+这可能需要一定费用——我不会向您索要，但您应当多少给点。
 
-首先，node降级到14.
+## 1 启动进程：
 
-启动服务端（electron应用的main process主进程）：参见package.json中给出的指令
-启动前端：参见package.json中给出的指令
+clone仓库。使用其中的electron-app文件夹中的代码。
 
-main和render要输两个命令这事儿真不怪我，哪怕是electron官方教程也得输两个（无非是只用打一个进行复合了）
+node降级：建议node选用node14、15或16。
+
+然后，启动进程。
+
+启动服务端（main process）：参见package.json中给出的指令
+
+> 【推荐】webpack启动：形如 `npm run start:main`
+
+启动前端（render process）：参见package.json中给出的指令
+
+> 【推荐】webpack启动：形如 `npm run start:render`
+> vite启动：形如 `npm run start-vite:render`
+
+# Text-maestro 立即启用：
 
 ### 2 开箱即用
 

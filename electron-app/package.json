@@ -1,5 +1,5 @@
 {
-  "name": "visResumeMook",
+  "name": "Text-maestro",
   "version": "0.0.1",
   "author": "彭道宽",
   "description": "从0到1实现一款轻巧适用的简历平台桌面应用。",
@@ -27,6 +27,7 @@
     "@babel/preset-env": "^7.14.2",
     "@babel/preset-react": "^7.13.13",
     "@babel/preset-typescript": "^7.13.0",
+    "@types/react-router-dom": "^5.3.3",
     "babel-loader": "^8.2.2",
     "clean-webpack-plugin": "^4.0.0-alpha.0",
     "css-loader": "^3.6.0",
