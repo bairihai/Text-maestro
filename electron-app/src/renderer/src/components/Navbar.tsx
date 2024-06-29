@@ -5,14 +5,15 @@
 // 比如，学习一下菜单项拆分到ts数组的办法。
 
 import React from 'react';
-import './index.less';
 
 import { Tabs, Typography, Menu } from "@arco-design/web-react";
 import { IconDriveFile, IconFolder, IconSafe, IconSettings, IconFire } from "@arco-design/web-react/icon";
 
-const Text = Typography.Text;
+const { Text } = Typography;
 const { TabPane } = Tabs;
-const { MenuItem, SubMenu } = Menu;
+const { SubMenu } = Menu;
+
+const MenuItem = Menu.Item; // as重命名
 
 import { useNavigate } from 'react-router-dom';
 

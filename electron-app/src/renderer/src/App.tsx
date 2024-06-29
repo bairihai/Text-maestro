@@ -1,11 +1,14 @@
 import Versions from './components/Versions'
 import electronLogo from './assets/electron.svg'
 
+import { NavBar } from './components/Navbar'
+
 function App(): JSX.Element {
   const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
 
   return (
     <>
+      <NavBar></NavBar>
       <img alt="logo" className="logo" src={electronLogo} />
       <div className="creator">Powered by electron-vite</div>
       <div className="text">
