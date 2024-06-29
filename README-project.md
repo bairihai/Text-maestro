@@ -48,7 +48,7 @@ Now,use `npm run dev` one scipt to start dev.
 
 [tailwindcss](https://tailwindcss.com/docs/installation/using-postcss)
 
-## ~~配置render在浏览器而非electron窗口显示~~
+## 配置render在浏览器而非electron窗口显示
 
 ~~配置target设置，指定render的目标位置。~~
 
@@ -61,7 +61,9 @@ target是webpack专有的设置。参见[文档](https://webpack.js.org/configur
 
 这里用的vite+electron可以直接访问，形如http://localhost:5173/。
 
-效果比webpack差。
+效果比webpack差。不过毕竟主要还是面向main process，能看就行了，别要求太多。
+
+**不要自作聪明把localhost换成127.0.0.1 访问会失败**
 
 另注：vite也有一个Build target功能，不过那个是为了配置兼容性目标。参见[vite文档](https://vitejs.dev/config/build-options)
 

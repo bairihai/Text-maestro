@@ -1,5 +1,5 @@
 import './assets/main.css'
-import './styles/tailwind.css'
+import './styles/tailwind.css' // 引入tailwindcss各组件
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
