@@ -91,81 +91,32 @@ export const NavBar = () => {
     return (
         // <div className="menu-demo-round" style={{ height: '100%' , width: 200 }}>
         <Menu style={{ height: '100%', width: 245 }} mode='vertical' hasCollapseButton>
-            <SubMenu
-                key="0"
-                title={
-                    <>
-                        <IconDriveFile />
-                        游戏文件
-                    </>
+            {LINKS.map((link) => {
+                if (link.items) {
+                    return (
+                        <SubMenu
+                            key={link.key}
+                            title={
+                                <>
+                                    {link.icon}
+                                    {link.title}
+                                </>
+                            }
+                        >
+                            {link.items.map((item) => (
+                                <MenuItem key={item.key}>{item.label}</MenuItem>
+                            ))}
+                        </SubMenu>
+                    );
+                } else {
+                    return (
+                        <MenuItem key={link.key} onClick={() => navigateTo(link.to)}>
+                            {link.icon}
+                            {link.title}
+                        </MenuItem>
+                    );
                 }
-            >
-                <MenuItem key="0_0">maa 明日方舟库存管理</MenuItem>
-                <MenuItem key="0_1">明日方舟 寻访记录管理</MenuItem>
-            </SubMenu>
-
-            <SubMenu
-                key="1"
-                title={
-                    <>
-                        <IconDriveFile />
-                        论坛app
-                    </>
-                }
-            >
-                <MenuItem key="1_0">b站评论</MenuItem>
-                <MenuItem key="1_1">知乎用户回答</MenuItem>
-                <MenuItem key="1_2">b站收藏夹</MenuItem>
-            </SubMenu>
-
-            <SubMenu
-                key="2"
-                title={
-                    <>
-                        <IconDriveFile />
-                        聊天app
-                    </>
-                }
-            >
-                <MenuItem key="2_0">discord聊天记录</MenuItem>
-                <MenuItem key="2_1">qq聊天记录</MenuItem>
-                <MenuItem key="2_2">微信聊天记录</MenuItem>
-            </SubMenu>
-
-            <SubMenu
-                key="3"
-                title={
-                    <>
-                        <IconDriveFile />
-                        通用文档
-                    </>
-                }
-            >
-                <MenuItem key="3_0">任一文件夹的结构树</MenuItem>
-                <MenuItem key="3_1">obsidian 单篇文档分析</MenuItem>
-                <MenuItem key="3_2">obsidian 多文档分析</MenuItem>
-                <MenuItem key="3_3">掘金小册 上云action生成</MenuItem>
-                <MenuItem key="3_4">Hiplot 作图meta生成</MenuItem>
-                <MenuItem key="3_5">Apifox postman双向配置改造</MenuItem>
-            </SubMenu>
-
-            <MenuItem key="5" onClick={() => history.push('/document')}>
-                <IconSafe />
-                官网丨文档丨帮助
-            </MenuItem>
-
-            <MenuItem key="6" onClick={() => history.push('/1')}>
-                <IconSettings />
-                playground DIY广场
-            </MenuItem>
-
-            <MenuItem key="7" onClick={() => history.push('/1')}>
-                <IconSettings />
-                Text-maestro设置
-            </MenuItem>
+            })}
         </Menu>
-        // </div>
     );
 }
-
-
