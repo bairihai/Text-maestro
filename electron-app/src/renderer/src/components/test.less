@@ -1,3 +1,6 @@
+// 我现在严重怀疑这个样式根本就没有被引入（是一个import不够吗？）
+// 样式文件若是没被引入，那么我再这里面再怎么努力也是没用的。
+
 :global .menu-demo-round {
     box-sizing: border-box;
     width: 100%;
@@ -8,7 +11,7 @@
     overflow-y: auto;
 }
 
-:global .menu-demo-round .arco-menu {
+/deep/ .menu-demo-round .arco-menu {
     height: 100%;
     box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
 }
