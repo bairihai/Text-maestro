@@ -1,3 +1,10 @@
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route
+} from "react-router-dom"
+
+
 import Versions from './components/Versions'
 import electronLogo from './assets/electron.svg'
 
@@ -8,6 +15,8 @@ function App(): JSX.Element {
 
   return (
     <>
+    <Router>
+
       <NavBar></NavBar>
       <img alt="logo" className="logo" src={electronLogo} />
       <div className="creator">Powered by electron-vite</div>
@@ -35,6 +44,8 @@ function App(): JSX.Element {
         </div>
       </div>
       <Versions></Versions>
+
+      </Router>
     </>
   )
 }

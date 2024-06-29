@@ -15,6 +15,8 @@ const { SubMenu } = Menu;
 
 const MenuItem = Menu.Item; // as重命名
 
+import "@arco-design/web-react/dist/css/arco.css";
+
 import { useNavigate } from 'react-router-dom';
 
 export const LINKS: { // 自用数组，用于生成导航里的链接。
