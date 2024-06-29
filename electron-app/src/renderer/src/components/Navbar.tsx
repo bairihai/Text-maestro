@@ -2,7 +2,9 @@
 // 引入Applayout。
 
 // 但是我们不是modal弹窗类型的交互，所以也只有参考作用了。
-// 比如，学习一下菜单项拆分到ts数组的办法。
+
+// 另：因为要对arco自带的样式做修改，所以虽然用了tailwind，但还是得加个style文件。
+// arco的样式在app.tsx里面被引入，这里无需重复引入。
 
 import React from 'react';
 
@@ -15,9 +17,8 @@ const { SubMenu } = Menu;
 
 const MenuItem = Menu.Item; // as重命名
 
-import "@arco-design/web-react/dist/css/arco.css";
-
 import { useNavigate } from 'react-router-dom';
+
 
 export const LINKS: { // 自用数组，用于生成导航里的链接。
     key: string

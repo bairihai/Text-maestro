@@ -4,6 +4,7 @@ import {
   Route
 } from "react-router-dom"
 
+import "@arco-design/web-react/dist/css/arco.css"; // 引入arco的样式文件
 
 import Versions from './components/Versions'
 import electronLogo from './assets/electron.svg'
