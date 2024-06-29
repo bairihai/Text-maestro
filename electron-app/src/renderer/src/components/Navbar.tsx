@@ -19,6 +19,7 @@ const MenuItem = Menu.Item; // as重命名
 
 import { useNavigate } from 'react-router-dom';
 
+import './test.css';
 
 export const LINKS: { // 自用数组，用于生成导航里的链接。
     key: string
