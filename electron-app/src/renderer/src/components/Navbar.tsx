@@ -6,7 +6,7 @@
 // 另：因为要对arco自带的样式做修改，所以虽然用了tailwind，但还是得加个style文件。
 // arco的样式在app.tsx里面被引入，这里无需重复引入。
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import { Tabs, Typography, Menu } from "@arco-design/web-react";
 import { IconDriveFile, IconFolder, IconSafe, IconSettings, IconFire } from "@arco-design/web-react/icon";
@@ -92,6 +92,49 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
 
 export const NavBar = () => {
     const navigateTo = useNavigate(); // 路由方法。navigateTo后面不要加括号，那是立即执行等号后者的写法。
+
+    useEffect(() => {
+        // 创建一个 style 元素
+        const style = document.createElement('style');
+        style.type = 'text/css';
+        style.innerHTML = `
+        .menu-demo-round {
+            @apply box-border w-full;
+            
+        }
+        
+        .menu-demo-round .arco-menu-inner {
+            @apply overflow-y-auto;
+        }
+        
+        .menu-demo-round .arco-menu {
+            @apply h-full shadow;
+        }
+        
+        .menu-demo-round .arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
+            @apply absolute right-0 bottom-2 translate-x-1/2;
+        }
+        
+        .menu-demo-round .arco-menu:not(.arco-menu-collapse)::before {
+            @apply absolute w-12 h-12 right-0 bottom-0  bg-inherit;
+        }
+        
+        .menu-demo-round .arco-menu-collapse {
+            @apply h-auto pt-6;
+        }
+        
+        .menu-demo-round .arco-menu-collapse-button {
+            @apply absolute right-2 bottom-2 w-8 h-8 ;
+        }
+        `;
+        // 将 style 元素添加到 head 中
+        document.head.appendChild(style);
+    
+        // 组件卸载时移除 style 元素
+        return () => {
+          document.head.removeChild(style);
+        };
+      }, []);
 
     return (
         // <div className="menu-demo-round" style={{ height: '100%' , width: 200 }}>
