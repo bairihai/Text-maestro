@@ -94,47 +94,27 @@ export const NavBar = () => {
     const navigateTo = useNavigate(); // 路由方法。navigateTo后面不要加括号，那是立即执行等号后者的写法。
 
     useEffect(() => {
-        // 创建一个 style 元素
-        const style = document.createElement('style');
-        style.type = 'text/css';
-        style.innerHTML = `
-        .menu-demo-round {
-            @apply box-border w-full;
-            
-        }
-        
-        .menu-demo-round .arco-menu-inner {
-            @apply overflow-y-auto;
-        }
-        
-        .menu-demo-round .arco-menu {
-            @apply h-full shadow;
-        }
-        
-        .menu-demo-round .arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
-            @apply absolute right-0 bottom-2 translate-x-1/2;
-        }
-        
-        .menu-demo-round .arco-menu:not(.arco-menu-collapse)::before {
-            @apply absolute w-12 h-12 right-0 bottom-0  bg-inherit;
-        }
-        
-        .menu-demo-round .arco-menu-collapse {
-            @apply h-auto pt-6;
-        }
-        
-        .menu-demo-round .arco-menu-collapse-button {
-            @apply absolute right-2 bottom-2 w-8 h-8 ;
-        }
-        `;
-        // 将 style 元素添加到 head 中
-        document.head.appendChild(style);
+        // 获取所有需要添加样式的元素
+        const menuElements = document.querySelectorAll('.menu-demo-round .arco-menu');
+        const buttonElements = document.querySelectorAll('.arco-menu-collapse-button');
+
+        console.log('Menu Elements:', menuElements); // 日志输出选中的菜单元素
+        console.log('Button Elements:', buttonElements); // 日志输出选中的按钮元素
     
-        // 组件卸载时移除 style 元素
-        return () => {
-          document.head.removeChild(style);
-        };
-      }, []);
+
+        // 为这些元素添加 Tailwind CSS 类
+        menuElements.forEach(element => {
+            element.classList.add('h-full', 'shadow'); // 示例：添加高度100%和阴影
+            console.log('Updated Menu Element:', element); // 日志输出更新后的元素
+        });
+
+        buttonElements.forEach(element => {
+            element.classList.add('right-0', 'bottom-2', 'translate-x-1/2'); // 示例：调整位置和变换
+            console.log('Updated Button Element:', element); // 日志输出更新后的元素
+        });
+
+        // 可以根据需要继续添加其他元素和类
+    }, []);
 
     return (
         // <div className="menu-demo-round" style={{ height: '100%' , width: 200 }}>
