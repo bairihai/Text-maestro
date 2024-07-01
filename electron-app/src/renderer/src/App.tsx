@@ -18,7 +18,7 @@ function App(): JSX.Element {
     <>
     <Router>
 
-      <NavBar></NavBar>
+      <NavBar/>
       <img alt="logo" className="logo" src={electronLogo} />
       <div className="creator">Powered by electron-vite</div>
       <div className="text">

@@ -3,37 +3,46 @@
 // 样式文件若是没被引入，那么我再这里面各种:global /deep/再怎么努力也是没用的。
 // 以我这边的测试来看，我把这个样式文件直接html内联写死到jsx里面，也没有生效。什么都没生效。哎。
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
-@layer components {
-    .menu-demo-round {
-        @apply box-border w-full;
-        
-    }
-    
-    .menu-demo-round .arco-menu-inner {
-        @apply overflow-y-auto;
-    }
-    
-    .menu-demo-round .arco-menu {
-        @apply h-full shadow;
-    }
-    
-    .menu-demo-round .arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
-        @apply absolute right-0 bottom-2 translate-x-1/2;
-    }
-    
-    .menu-demo-round .arco-menu:not(.arco-menu-collapse)::before {
-        @apply absolute w-12 h-12 right-0 bottom-0  bg-inherit;
-    }
-    
-    .menu-demo-round .arco-menu-collapse {
-        @apply h-auto pt-6;
-    }
-    
-    .menu-demo-round .arco-menu-collapse-button {
-        @apply absolute right-2 bottom-2 w-8 h-8 ;
-    }
+.arco-menu-inner {
+    overflow-y: auto;
+}
+
+.arco-menu {
+    height: 100%;
+    box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
+    right: 0;
+    bottom: 8px;
+    transform: translateX(50%);
+}
+
+.arco-menu:not(.arco-menu-collapse)::before {
+    content: '';
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    right: 0;
+    bottom: 0;
+    border-radius: 50%;
+    background-color: inherit;
+    box-shadow: -4px 0 2px var(--color-bg-2), 0 0 1px rgba(0, 0, 0, 0.3);
+    transform: translateX(50%);
+}
+
+.arco-menu-collapse {
+    height: auto;
+    padding-top: 24px;
+    padding-bottom: 138px;
+    border-radius: 22px;
+}
+
+.arco-menu-collapse-button {
+    right: 8px;
+    bottom: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
 }
