@@ -19,6 +19,8 @@ function App(): JSX.Element {
     <Router>
 
       <NavBar/>
+
+      <div className="ml-12 flex flex-col items-center justify-center h-full">
       <img alt="logo" className="logo" src={electronLogo} />
       <div className="creator">Powered by electron-vite</div>
       <div className="text">
@@ -28,6 +30,12 @@ function App(): JSX.Element {
       </div>
       <p className="tip">
         Please try pressing <code>Ctrl</code> + <code>Shift</code> + <code>I</code> to open the devTool
+      </p>
+      <p className="tip">
+        <code>window.location.reload()</code> 以刷新页面
+      </p>
+      <p className="tip">
+         <code>window.location.pathname</code> 查看当前router路径
       </p>
       <p className="tip">
         by 云都官能团@白日海
@@ -45,6 +53,7 @@ function App(): JSX.Element {
         </div>
       </div>
       <Versions></Versions>
+      </div>
 
       </Router>
     </>

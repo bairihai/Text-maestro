@@ -78,13 +78,13 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
         },
         {
             key: '6',
-            to: '/1',
+            to: '/playground',
             title: 'playground DIY广场',
             icon: <IconSettings />
         },
         {
             key: '7',
-            to: '/1',
+            to: '/setting',
             title: 'Text-maestro设置',
             icon: <IconSettings />
         }
@@ -92,7 +92,13 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
 
 
 export const NavBar = () => {
-    const navigateTo = useNavigate(); // 路由方法。navigateTo后面不要加括号，那是立即执行等号后者的写法。
+    // 路由方法。navigateTo后面不要加括号，那是立即执行等号后者的写法。
+    const navigateTo = useNavigate(); 
+
+    const handleNavigation = (path: string) => {
+        console.log(`Navigating to: ${path}`);
+        navigateTo(path);
+    };
 
     return (
         <div className="menu-demo-round" style={{ height: '100%', width: '245px', position: 'fixed', top: 0, left: 0 }}>
@@ -116,7 +122,7 @@ export const NavBar = () => {
                     );
                 } else {
                     return (
-                        <MenuItem key={link.key} onClick={() => link.to && navigateTo(link.to)}>
+                        <MenuItem key={link.key} onClick={() => link.to && handleNavigation(link.to)}>
                             {link.icon}
                             {link.title}
                         </MenuItem>
