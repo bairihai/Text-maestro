@@ -68,3 +68,27 @@ target是webpack专有的设置。参见[文档](https://webpack.js.org/configur
 另注：vite也有一个Build target功能，不过那个是为了配置兼容性目标。参见[vite文档](https://vitejs.dev/config/build-options)
 
 > Browser compatibility target for the final bundle. The default value is a Vite special value, 'modules', which targets browsers with native ES Modules, native ESM dynamic import, and import.meta support. Vite will replace 'modules' to ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14']
+
+## 配置arco（lessloader+css文件引入）
+
+未正确配置时：
+
+![screenshot-20240630-003500](./readme/9 全好了/screenshot-20240630-003500.png)
+
+配置参考上次的electron-app，重构前的版本
+
+![screenshot-20240630-003643](./readme/9 全好了/screenshot-20240630-003643.png)
+
+但是不能直接把那个config搬过来。
+
+原因：在 Vite 配置文件中，module 关键字并不是一个有效的配置选项，这是为什么你会看到错误提示“对象字面量只能指定已知属性，并且‘module’不在类型‘UserConfigExport’中”。
+
+Vite 使用的是 Rollup 作为其底层打包工具，而不是像 Webpack 那样使用 module 关键字来配置加载器。
+
+
+
+
+
+为了配置arco正确引入，手动引入css文件。
+
+![screenshot-20240717-041424 早期技术积累就是这样的 耐心，耐心](./readme/9 全好了/screenshot-20240717-041424 早期技术积累就是这样的 耐心，耐心.png)

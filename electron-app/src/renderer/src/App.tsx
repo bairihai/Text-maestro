@@ -27,7 +27,7 @@ function App(): JSX.Element {
         &nbsp;+ <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#4F576A] to-[#EBE5D8]">Tailwindcss</span>
       </div>
       <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
+        Please try pressing <code>Ctrl</code> + <code>Shift</code> + <code>I</code> to open the devTool
       </p>
       <p className="tip">
         by 云都官能团@白日海

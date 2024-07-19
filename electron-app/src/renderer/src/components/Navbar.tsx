@@ -93,28 +93,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
 export const NavBar = () => {
     const navigateTo = useNavigate(); // 路由方法。navigateTo后面不要加括号，那是立即执行等号后者的写法。
 
-    useEffect(() => {
-        // 获取所有需要添加样式的元素
-        const menuElements = document.querySelectorAll('.menu-demo-round .arco-menu');
-        const buttonElements = document.querySelectorAll('.arco-menu-collapse-button');
 
-        console.log('Menu Elements:', menuElements); // 日志输出选中的菜单元素
-        console.log('Button Elements:', buttonElements); // 日志输出选中的按钮元素
-    
-
-        // 为这些元素添加 Tailwind CSS 类
-        menuElements.forEach(element => {
-            element.classList.add('h-full', 'shadow'); // 示例：添加高度100%和阴影
-            console.log('Updated Menu Element:', element); // 日志输出更新后的元素
-        });
-
-        buttonElements.forEach(element => {
-            element.classList.add('right-0', 'bottom-2', 'translate-x-1/2'); // 示例：调整位置和变换
-            console.log('Updated Button Element:', element); // 日志输出更新后的元素
-        });
-
-        // 可以根据需要继续添加其他元素和类
-    }, []);
 
     return (
         // <div className="menu-demo-round" style={{ height: '100%' , width: 200 }}>

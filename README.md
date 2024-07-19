@@ -26,7 +26,7 @@
 
 clone仓库。使用其中的electron-app文件夹中的代码。
 
-node降级：建议node选用node14、15或16。
+node切版本：建议node选用node22。
 
 然后，启动进程。
 

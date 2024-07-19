@@ -3,6 +3,8 @@
 // 样式文件若是没被引入，那么我再这里面各种:global /deep/再怎么努力也是没用的。
 // 以我这边的测试来看，我把这个样式文件直接html内联写死到jsx里面，也没有生效。什么都没生效。哎。
 
+// 2024年7月19日 17点14分
+// 引入成功，疑似是之前的menu-demo-round目标选择器被判定为“取交集”，导致样式失效。
 
 .arco-menu-inner {
     overflow-y: auto;
@@ -11,13 +13,15 @@
 .arco-menu {
     height: 100%;
     box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+    // box-sizing: border-box;
+    // width: 100%;
 }
 
-.arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
-    right: 0;
-    bottom: 8px;
-    transform: translateX(50%);
-}
+// .arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
+//     right: 0;
+//     bottom: 8px;
+//     transform: translateX(50%);
+// }
 
 .arco-menu:not(.arco-menu-collapse)::before {
     content: '';
@@ -33,9 +37,9 @@
 }
 
 .arco-menu-collapse {
-    height: auto;
-    padding-top: 24px;
-    padding-bottom: 138px;
+    // height: auto;
+    // padding-top: 24px;
+    // padding-bottom: 138px;
     border-radius: 22px;
 }
 
