@@ -5,48 +5,59 @@
 
 // 2024年7月19日 17点14分
 // 引入成功，疑似是之前的menu-demo-round目标选择器被判定为“取交集”，导致样式失效。
+// 经过检查，这些都是官方的arco示例的样式代码，可以放心使用，正在进行恢复
 
-.arco-menu-inner {
+.menu-demo-round {
+    box-sizing: border-box;
+    width: 100%;
+    // padding: 40px;
+    // background-color: var(--color-neutral-2);
+    z-index: 1000; /* 确保它在所有其他内容之上 */
+    left:0px;
+    top:0px; // 保证居于屏幕最左侧（会受到root dom的限制）
+}
+
+.menu-demo-round .arco-menu-inner {
     overflow-y: auto;
 }
 
-.arco-menu {
-    height: 100%;
-    box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
-    // box-sizing: border-box;
-    // width: 100%;
-}
+// .arco-menu {
+//     height: 100%;
+//     box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+//     // box-sizing: border-box;
+//     // width: 100%;
+// }
 
-// .arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
+// // .arco-menu:not(.arco-menu-collapse) .arco-menu-collapse-button {
+// //     right: 0;
+// //     bottom: 8px;
+// //     transform: translateX(50%);
+// // }
+
+// .arco-menu:not(.arco-menu-collapse)::before {
+//     content: '';
+//     position: absolute;
+//     width: 48px;
+//     height: 48px;
 //     right: 0;
-//     bottom: 8px;
+//     bottom: 0;
+//     border-radius: 50%;
+//     background-color: inherit;
+//     box-shadow: -4px 0 2px var(--color-bg-2), 0 0 1px rgba(0, 0, 0, 0.3);
 //     transform: translateX(50%);
 // }
 
-.arco-menu:not(.arco-menu-collapse)::before {
-    content: '';
-    position: absolute;
-    width: 48px;
-    height: 48px;
-    right: 0;
-    bottom: 0;
-    border-radius: 50%;
-    background-color: inherit;
-    box-shadow: -4px 0 2px var(--color-bg-2), 0 0 1px rgba(0, 0, 0, 0.3);
-    transform: translateX(50%);
-}
+// .arco-menu-collapse {
+//     // height: auto;
+//     // padding-top: 24px;
+//     // padding-bottom: 138px;
+//     border-radius: 22px;
+// }
 
-.arco-menu-collapse {
-    // height: auto;
-    // padding-top: 24px;
-    // padding-bottom: 138px;
-    border-radius: 22px;
-}
-
-.arco-menu-collapse-button {
-    right: 8px;
-    bottom: 8px;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-}
+// .arco-menu-collapse-button {
+//     right: 8px;
+//     bottom: 8px;
+//     width: 32px;
+//     height: 32px;
+//     border-radius: 50%;
+// }

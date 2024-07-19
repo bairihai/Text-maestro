@@ -32,6 +32,8 @@ code {
   justify-content: center;
   flex-direction: column;
   margin-bottom: 80px;
+  width: 100vw; /* 使宽度铺满窗口 */
+  height: 100vh; /* 使高度铺满窗口 */
 }
 
 .logo {
