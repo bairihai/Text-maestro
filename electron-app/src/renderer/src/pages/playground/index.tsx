@@ -1,5 +1,5 @@
 import React from 'react';
-import './index.less';
+// import './index.less';
 
 function Playground() {
   return <div>playground</div>;
