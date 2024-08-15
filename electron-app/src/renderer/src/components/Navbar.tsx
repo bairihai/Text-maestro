@@ -67,7 +67,8 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
                 { key: '3_2', label: 'obsidian 多文档分析' },
                 { key: '3_3', label: '掘金小册 上云action生成' },
                 { key: '3_4', label: 'Hiplot 作图meta生成' },
-                { key: '3_5', label: 'Apifox postman双向配置改造' }
+                { key: '3_5', label: 'Apifox postman双向配置改造' },
+                { key: '3_6', label: '学信网学历截图（有造假水印）' }
             ]
         },
         {

@@ -5,6 +5,10 @@ import Setting from '../pages/setting'
 
 const routes = [
   {
+    path: "/",
+    component: About
+  },
+  {
     path: "/about",
     component: About
   },
