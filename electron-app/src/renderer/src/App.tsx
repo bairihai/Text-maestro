@@ -11,11 +11,19 @@ import "@arco-design/web-react/dist/css/arco.css"; // 引入arco的样式文件
 
 import { NavBar } from './components/Navbar'
 
+
+import store from './store';
+import { Provider } from 'react-redux';
+// 经过 createStore 生成的 store 挂载到 react-redux 提供的 Provider 组件上
+// Provider 的工作任务是：通过 context 向子组件提供 store。
+
+
 function App(): JSX.Element {
   const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
 
   return (
     <>
+       <Provider store={store}>
       <Router>
 
         <NavBar />
@@ -28,6 +36,7 @@ function App(): JSX.Element {
         </Routes>
 
       </Router>
+      </Provider>
     </>
   )
 }
