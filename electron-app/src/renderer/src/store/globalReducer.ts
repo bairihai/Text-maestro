@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 const initialState = {
   appName: '简历应用平台',
@@ -9,8 +9,14 @@ const globalSlice = createSlice({
   initialState,
   reducers: {
     // 你可以在这里添加 reducers
+
+    // 添加一个可以修改所有 state 的 action
+    setState: (state, action: PayloadAction<Partial<typeof initialState>>) => {
+      return { ...state, ...action.payload };
+    },
   },
 });
 
-export const { actions, reducer: globalReducer } = globalSlice;
+export const { setState } = globalSlice.actions;
+export const { reducer: globalReducer } = globalSlice;
 export default globalReducer;
