@@ -3,14 +3,18 @@
 
 import logger from 'redux-logger';
 import { configureStore } from '@reduxjs/toolkit';
-import globalReducer from './globalReducer'; // 假设 globalModel 导出的是 reducer
+import globalReducer from './globalModel'; // 假设 globalModel 导出的是 reducer
 
-// 使用 configureStore 来创建 store
+// 使用 configureStore 创建 store，配置 reducer 和 middleware
 const store = configureStore({
+    // reducer 配置
     reducer: {
-        global: globalReducer,
+        global: globalReducer, // 将 globalReducer 分配给 'global' 键
     },
-    middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(logger),
+    // middleware 配置
+    middleware: (getDefaultMiddleware) => 
+        // 使用 getDefaultMiddleware 获取默认的 middleware 数组，并添加 logger middleware
+        getDefaultMiddleware().concat(logger),
 });
 
 export default store;
