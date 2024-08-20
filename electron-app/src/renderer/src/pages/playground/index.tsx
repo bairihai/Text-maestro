@@ -17,6 +17,8 @@ function Playground() {
     dispatch(setState({ appName: value }));
   };
 
+  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+
   console.log('appName = ', appName);
   return (
     <div className="p-4"> {/* 使用tailwind的padding类 */}
@@ -26,6 +28,7 @@ function Playground() {
         value={appName}
         onChange={handleChange} // 绑定 onChange 事件
       /> {/* 使用arco的Input组件 */}
+      <button onClick={ipcHandle} style={{ fontSize: 'larger', backgroundColor: 'green' }}>点击ipc test</button>
     </div>
   );
 }
