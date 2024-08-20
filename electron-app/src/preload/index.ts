@@ -1,3 +1,7 @@
+// electron开发的所有一切都可以在文档找到
+// 地址：https://cn.electron-vite.org/guide/
+// 这里是预加载脚本，属于renderer，用于暴露main的api给renderer
+
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
