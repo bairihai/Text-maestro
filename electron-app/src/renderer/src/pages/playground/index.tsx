@@ -17,7 +17,7 @@ function Playground() {
     dispatch(setState({ appName: value }));
   };
 
-  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping-playground')
 
   console.log('appName = ', appName);
   return (
