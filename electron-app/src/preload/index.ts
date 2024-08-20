@@ -8,6 +8,7 @@ import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
+// 这里使用的是移植来自vscode官方的参考api.详见https://github.com/microsoft/vscode/blob/8c66a69a465e29af2e6dab9147ea051c2c2f4e41/src/vs/base/parts/sandbox/electron-sandbox/preload.js#L17
 const api = {}
 
 // Use `contextBridge` APIs to expose Electron APIs to
