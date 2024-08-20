@@ -1,6 +1,8 @@
 // electron开发的所有一切都可以在文档找到
 // 地址：https://cn.electron-vite.org/guide/
-// 这里是预加载脚本，属于renderer，通过contextBridge全局对象暴露main（IsolatedWorld）的api给renderer（MainWorld）
+
+// 这里是预加载脚本，通过构造器BrowserWindow附着于renderer，
+// 通过contextBridge全局对象暴露main（IsolatedWorld）的api给renderer（MainWorld）
 
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
