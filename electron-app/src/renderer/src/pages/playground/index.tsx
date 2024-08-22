@@ -1,5 +1,5 @@
 // 引入样式组件。arco的css文件于App.tsx中引入。
-import React from 'react';
+import { useState } from 'react';
 import { Input } from '@arco-design/web-react';
 
 // 修改 redux 的值。在redux 官方文档提到：唯一改变 state 的方法就是触发 action。
@@ -17,7 +17,15 @@ function Playground() {
     dispatch(setState({ appName: value }));
   };
 
-  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping-playground')
+  const [fileContent, setFileContent] = useState('');
+
+  const ipcHandle = (): void => {
+    window.electron.ipcRenderer.send('read-file', 'E:\\200 学习\\230 编程-信息\\238 工具素养\\10 ai\\ai网文哪家强.md');
+  };
+
+  window.electron.ipcRenderer.on('file-content', (event, content) => {
+    setFileContent(content);
+  });
 
   console.log('appName = ', appName);
   return (
@@ -29,6 +37,16 @@ function Playground() {
         onChange={handleChange} // 绑定 onChange 事件
       /> {/* 使用arco的Input组件 */}
       <button onClick={ipcHandle} style={{ fontSize: 'larger', backgroundColor: 'green' }}>点击ipc test</button>
+      <pre style={{ 
+        color: 'black',
+        whiteSpace: 'pre-wrap', 
+        wordWrap: 'break-word', 
+        backgroundColor: '#f5f5f5', 
+        padding: '10px', 
+        borderRadius: '5px', 
+        maxHeight: '400px', 
+        overflowY: 'auto' 
+      }}>{fileContent}</pre> {/* 显示文件内容 */}
     </div>
   );
 }

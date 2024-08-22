@@ -3,6 +3,9 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+const fs = require('fs');
+const path = require('path');
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -52,6 +55,18 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong!hello world!'))
   ipcMain.on('ping-playground', () => console.log('pong!hello playground!'))
+
+  // IPC 读取文件
+  ipcMain.on('read-file', (event, filePath) => {
+    const fullPath = path.join(__dirname, filePath);
+    fs.readFile(fullPath, 'utf8', (err, data) => {
+      if (err) {
+        event.reply('file-content', `Error: ${err.message}`);
+      } else {
+        event.reply('file-content', data);
+      }
+    });
+  });  
 
   createWindow()
 
