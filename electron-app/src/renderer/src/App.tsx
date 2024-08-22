@@ -28,12 +28,14 @@ function App(): JSX.Element {
 
         <NavBar />
 
+        <div className="ml-12"> {/* 添加 ml-12 类，为左侧的navbar留出空间 */}
         <Routes>
           {
             routes.map(route => <Route key={route.path} path={route.path} element={<route.component />} />)
             // 视情况添加exact参数。这个能修部分匹配的问题。 ——2024年5月12日11点40分 // 用strict也有类似效果吧 ——2024年6月9日 05点07分 那个是react的事儿吧 ——2024年6月11日 07点50分
           }
         </Routes>
+        </div>
 
       </Router>
       </Provider>

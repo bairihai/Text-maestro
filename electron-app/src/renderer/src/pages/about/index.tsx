@@ -9,7 +9,7 @@ function About(): JSX.Element {
   const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
 
   return (
-    <div className="ml-12 flex flex-col items-center justify-center h-full">
+    <div className="flex flex-col items-center justify-center h-full">
       <img alt="logo" className="logo" src={electronLogo} />
       <div className="creator">Powered by electron-vite</div>
       <div className="text">
