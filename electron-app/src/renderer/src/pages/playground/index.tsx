@@ -20,8 +20,10 @@ function Playground() {
   const [fileContent, setFileContent] = useState('');
 
   const ipcHandle = (): void => {
-    window.electron.ipcRenderer.send('read-file', 'E:\\200 学习\\230 编程-信息\\238 工具素养\\10 ai\\ai网文哪家强.md');
+    const filePath = 'E:\\200 学习\\230 编程-信息\\238 工具素养\\10 ai\\ai网文哪家强.md';
+    window.electron.ipcRenderer.send('read-file', filePath);
   };
+
 
   window.electron.ipcRenderer.on('file-content', (event, content) => {
     setFileContent(content);
@@ -36,7 +38,7 @@ function Playground() {
         value={appName}
         onChange={handleChange} // 绑定 onChange 事件
       /> {/* 使用arco的Input组件 */}
-      <button onClick={ipcHandle} style={{ fontSize: 'larger', backgroundColor: 'green' }}>点击ipc test</button>
+      <button onClick={ipcHandle} style={{ fontSize: 'larger', backgroundColor: 'green' }}>点击ipc test，将会读取一个测试的Md显示到下面</button>
       <pre style={{ 
         color: 'black',
         whiteSpace: 'pre-wrap', 

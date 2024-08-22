@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 
 function createWindow(): void {
@@ -56,17 +56,18 @@ app.whenReady().then(() => {
   ipcMain.on('ping', () => console.log('pong!hello world!'))
   ipcMain.on('ping-playground', () => console.log('pong!hello playground!'))
 
-  // IPC 读取文件
-  ipcMain.on('read-file', (event, filePath) => {
-    const fullPath = path.join(__dirname, filePath);
-    fs.readFile(fullPath, 'utf8', (err, data) => {
-      if (err) {
-        event.reply('file-content', `Error: ${err.message}`);
-      } else {
-        event.reply('file-content', data);
-      }
-    });
-  });  
+// IPC 读取文件
+ipcMain.on('read-file', async (event, filePath) => {
+  try {
+    // 确保路径正确
+    const fullPath = path.resolve(filePath);
+    const data = await fs.readFile(fullPath, 'utf8');
+    event.reply('file-content', data);
+  } catch (err) {
+    const errorMessage = (err as Error).message;
+    event.reply('file-content', `Error: ${errorMessage}`);
+  }
+});
 
   createWindow()
 
