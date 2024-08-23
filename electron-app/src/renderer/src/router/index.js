@@ -1,7 +1,7 @@
 // router/index.js
-import About from '../pages/about'
-import Playground from '../pages/playground'
-import Setting from '../pages/setting'
+import About from '@renderer/pages/about'
+import Playground from '@renderer/pages/playground'
+import Setting from '@renderer/pages/setting/setting'
 
 const routes = [
   {

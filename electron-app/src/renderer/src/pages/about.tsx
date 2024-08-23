@@ -1,8 +1,8 @@
 import React from 'react';
 // import './index.less';
 
-import Versions from '../../components/Versions'
-import electronLogo from '../../assets/electron.svg'
+import Versions from '@renderer/components/Versions'
+import electronLogo from '@renderer/assets/electron.svg'
 
 function About(): JSX.Element {
   // window.electron 中的electron要与预加载脚本（preload contextBridge）中预留的字段'electron'对应
