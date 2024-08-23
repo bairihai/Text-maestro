@@ -6,7 +6,7 @@ import { Input } from '@arco-design/web-react';
 // 通过 dispatch 发起一个 action 就能修改 state 值，但仔细一想，每个 state，都对应一个 action，
 //  rc-redux-model提供一个 action API，只需记住一个 action，就能修改 state 的任意值。
 import { useSelector, useDispatch } from 'react-redux';
-import { setState } from '../../store/globalModel'; // 引入 setState action
+import { setState } from '@renderer/store/globalModel'; // 引入 setState action
 
 
 function Playground() {
