@@ -45,8 +45,6 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
                 { key: '1_0', label: 'b站评论' },
                 { key: '1_1', label: '知乎用户回答' },
                 { key: '1_2', label: 'b站收藏夹' },
-                { key: '1_3', label: 'zuomeme.com' },
-                { key: '1_4', label: '手写信' },
             ]
         },
         {
@@ -70,7 +68,15 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
                 { key: '3_3', label: '掘金小册 上云action生成' },
                 { key: '3_4', label: 'Hiplot 作图meta生成' },
                 { key: '3_5', label: 'Apifox postman双向配置改造' },
-                { key: '3_6', label: '学信网学历截图（有造假水印）' }
+            ]
+        },
+        {
+            key: '4',
+            title: '文与图',
+            icon: <IconDriveFile />,
+            items: [
+                { key: '3_0', label: '手写信生成' },
+                { key: '3_1', label: '学信网学历截图（有造假水印）' }
             ]
         },
         {

@@ -32,6 +32,8 @@ function Playground() {
   console.log('appName = ', appName);
   return (
     <div className="p-4"> {/* 使用tailwind的padding类 */}
+    这里能提供的工具是有限的，不过随着我们的开放能力逐步增强，我们希望大家可以diy自己的文本分析制作逻辑、并在playground这里发布。
+    目前这里还未开放。你可以到 zuomeme.com 上制作meme，或者到 collection.jituc.cn 上 找更多工具箱（如Unicode转码、字体预览等工具）。
       <Input
         placeholder="请输入内容"
         className="w-full"
