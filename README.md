@@ -132,9 +132,6 @@ npm run dev
 3. [vite+electron教程](https://blog.csdn.net/qq_42365534/article/details/129887911) 注意：csdn近期在推自己的码仓，不要被那什么~~老流氓~~加速计划误导了。
 4. [彭道宽-electron掘金教程&github仓库](https://github.com/PDKSophia/visResumeMook) 几乎很难说一个教程是种祝福还是诅咒
 
-
-
-
-赞助云都官能团，成为“云山原子”，并为我们的IP事业提供建议：[爱发电链接]()
+赞助云都官能团，成为"云山原子"，并为我们的IP事业提供建议：[爱发电链接]()
 
 在此，亦感谢那本高中的信息技术书。python做词云确实简单好用！
