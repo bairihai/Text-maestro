@@ -5,22 +5,9 @@ from difflib import Differ
 
 # from tools import utils
 
-# 功能：打招呼
-def greet(name):
-    return "Hello " + name + "!"
-
-# 功能：unicode双向转换
-def unicode_to_chinese(text):
-    try:
-        return text.encode('utf-8').decode('unicode-escape')
-    except Exception as e:
-        return str(e)
-
-def chinese_to_unicode(text):
-    try:
-        return text.encode('unicode-escape').decode('utf-8')
-    except Exception as e:
-        return str(e)
+# 部分功能实现函数被拆分到了不同的模块（.py文件），这里进行引入。
+# 下文中，需要用 utils.xxx 的方式调用这些函数。
+import utils
 
 # 功能：生成目录树
 def generate_tree(path, style="tree", max_depth=None, prefix=""):
@@ -59,14 +46,6 @@ def generate_tree_and_stats(path, style="tree", max_depth=None):
     stats = f"\n目录总大小: {size / (1024 * 1024):.2f} MB\n硬盘总大小: {total / (1024 * 1024 * 1024):.2f} GB\n已用空间: {used / (1024 * 1024 * 1024):.2f} GB\n剩余空间: {free / (1024 * 1024 * 1024):.2f} GB\n目录占用硬盘百分比: {percent_used:.2f}%"
     return tree + stats
 
-# 功能：文本比较
-def diff_texts(text1, text2):
-    d = Differ()
-    return [
-        (token[2:], token[0] if token[0] != " " else None)
-        for token in d.compare(text1, text2)
-    ]
-
 # 页面构建，功能引入
 with gr.Blocks(title="Text-maestro") as demo:
 
@@ -79,18 +58,18 @@ with gr.Blocks(title="Text-maestro") as demo:
     with gr.Tab("Unicode 转中文"):
         unicode_input = gr.Textbox(label="输入 Unicode 字符串", placeholder="例如： \\u4f60\\u597d\\u4e16\\u754c")
         chinese_output = gr.Textbox(label="输出中文")
-        gr.Button("转换").click(unicode_to_chinese, inputs=unicode_input, outputs=chinese_output)
+        gr.Button("转换").click(utils.unicode_to_chinese, inputs=unicode_input, outputs=chinese_output)
     
     with gr.Tab("中文转 Unicode"):
         chinese_input = gr.Textbox(label="输入中文", placeholder="例如： 你好世界")
         unicode_output = gr.Textbox(label="输出 Unicode 字符串")
-        gr.Button("转换").click(chinese_to_unicode, inputs=chinese_input, outputs=unicode_output)
+        gr.Button("转换").click(utils.chinese_to_unicode, inputs=chinese_input, outputs=unicode_output)
     
     # 问候功能
     gr.Markdown("## 问候功能")
     name_input = gr.Textbox(label="输入名字")
     greet_output = gr.Textbox(label="输出问候语")
-    gr.Button("问候").click(greet, inputs=name_input, outputs=greet_output)
+    gr.Button("问候").click(utils.greet, inputs=name_input, outputs=greet_output)
 
     # 目录统计与树状图
     gr.Markdown("## 目录统计与树状图")
@@ -133,6 +112,6 @@ with gr.Blocks(title="Text-maestro") as demo:
         text1_input = gr.Textbox(label="文本 1", lines=3, value="The quick brown fox jumped over the lazy dogs.")
         text2_input = gr.Textbox(label="文本 2", lines=3, value="The fast brown fox jumps over lazy dogs.")
         diff_output = gr.HighlightedText(label="差异", combine_adjacent=True, show_legend=True, color_map={"+": "red", "-": "green"})
-        gr.Button("比较").click(diff_texts, inputs=[text1_input, text2_input], outputs=diff_output)
+        gr.Button("比较").click(utils.diff_texts, inputs=[text1_input, text2_input], outputs=diff_output)
 
 demo.launch()

@@ -27,7 +27,7 @@
 | 开发速度   | 慢，需大量时间构建基础操作界面 | ==快，专注于核心功能==               | 慢，需要大量SDK            |
 | 界面复杂度 | 高，需要处理复杂的前端框架     | ==低，Gradio提供简单的界面构建工具== | 高，很臃肿                 |
 | 适用场景   | 适合需要复杂交互的桌面应用     | ==适合快速开发和原型验证==           | 适合需要精细操作的桌面应用 |
-| 依赖       | Node.js, Electron, Webpack等   | Python, Gradio                       | Python,Qt maker            |
+| 依赖       | Node.js, Electron, Webpack等   | Python, Gradio                       | C++,Qt maker            |
 | 更新状况   | **完成gradio之后引入**         | ==**优先更新**==                     | **停更**                   |
 
 
@@ -60,6 +60,8 @@ gradio app.py
 
 启动后，按照输出提示，在webUI进行操作。
 
+使用gradio启动是为了支持部分热重载（面对简单的改动可以热重载）等特性。
+
 ## Electron-app【停用】
 
 **注意：由于开发进度调整，Electron版本的开发已暂停（冻结），待Gradio版本完成后再继续。** 冻结期间，electron-app的更新仅以最低限度保留。
@@ -80,9 +82,12 @@ npm run dev
 
 在完成Gradio版本的核心功能后，将其集成到Electron应用中，以便在桌面环境中提供更好的用户体验。
 
-届时可能会存在“需要先启动gradio再用api引入到electron-app”的繁琐情况，我们会尽力优化，但能力有限，希望您理解。
+届时可能会存在“需要先启动gradio再用api引入到electron-app”的繁琐情况，但这是目前的最优解。
 
+> 本身来说，gradio提供ui直接转api。
+> electron方面，js可以直接重放录好的api，相比单独用electron频繁的进程间通信（IPC），这样更强大也更方便，同时对js和py去其糟粕取其精华。
 
+我们会尽力优化，但能力有限，希望您理解。
 
 ## obsidian插件
 
