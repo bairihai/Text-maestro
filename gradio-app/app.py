@@ -1,4 +1,5 @@
 import os
+import shutil
 import gradio as gr
 
 # 功能：打招呼
@@ -19,16 +20,41 @@ def chinese_to_unicode(text):
         return str(e)
 
 # 功能：生成目录树
-def generate_tree(path, prefix=""):
+def generate_tree(path, style="tree", max_depth=None, prefix=""):
     tree = ""
     for root, dirs, files in os.walk(path):
         level = root.replace(path, '').count(os.sep)
-        indent = ' ' * 4 * (level)
+        if max_depth is not None and level >= max_depth:
+            continue
+        indent = ' ' * 4 * (level) if style == "tree" else ''
         tree += f"{prefix}{indent}{os.path.basename(root)}/\n"
-        sub_indent = ' ' * 4 * (level + 1)
+        sub_indent = ' ' * 4 * (level + 1) if style == "tree" else ''
         for f in files:
             tree += f"{prefix}{sub_indent}{f}\n"
     return tree
+
+# 功能：计算目录大小
+def get_directory_size(path):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            total_size += os.path.getsize(fp)
+    return total_size
+
+# 功能：获取硬盘信息
+def get_disk_usage(path):
+    total, used, free = shutil.disk_usage(path)
+    return total, used, free
+
+# 功能：生成目录树并统计空间
+def generate_tree_and_stats(path, style="tree", max_depth=None):
+    tree = generate_tree(path, style, max_depth)
+    size = get_directory_size(path)
+    total, used, free = get_disk_usage(path)
+    percent_used = (size / total) * 100
+    stats = f"\n目录总大小: {size / (1024 * 1024):.2f} MB\n硬盘总大小: {total / (1024 * 1024 * 1024):.2f} GB\n已用空间: {used / (1024 * 1024 * 1024):.2f} GB\n剩余空间: {free / (1024 * 1024 * 1024):.2f} GB\n目录占用硬盘百分比: {percent_used:.2f}%"
+    return tree + stats
 
 # 页面构建，功能引入
 with gr.Blocks(title="Text-maestro") as demo:
@@ -51,7 +77,9 @@ with gr.Blocks(title="Text-maestro") as demo:
 
     gr.Markdown("## 目录树生成工具")
     path_input = gr.Textbox(label="输入目录路径", placeholder="例如： /home/user")
-    tree_output = gr.Textbox(label="输出目录树")
-    gr.Button("生成目录树").click(generate_tree, inputs=path_input, outputs=tree_output)
+    style_input = gr.Dropdown(label="选择输出样式", choices=["tree", "ls"], value="tree")
+    depth_input = gr.Slider(label="指定深度", minimum=1, maximum=10, step=1, value=3)
+    tree_output = gr.Textbox(label="输出目录树和统计信息")
+    gr.Button("生成目录树和统计信息").click(generate_tree_and_stats, inputs=[path_input, style_input, depth_input], outputs=tree_output)
 
 demo.launch()
