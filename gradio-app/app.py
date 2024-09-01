@@ -75,11 +75,29 @@ with gr.Blocks(title="Text-maestro") as demo:
     greet_output = gr.Textbox(label="输出问候语")
     gr.Button("问候").click(greet, inputs=name_input, outputs=greet_output)
 
-    gr.Markdown("## 目录树生成工具")
+    gr.Markdown("## 目录树生成和统计工具")
     path_input = gr.Textbox(label="输入目录路径", placeholder="例如： /home/user")
     style_input = gr.Dropdown(label="选择输出样式", choices=["tree", "ls"], value="tree")
-    depth_input = gr.Slider(label="指定深度", minimum=1, maximum=10, step=1, value=3)
-    tree_output = gr.Textbox(label="输出目录树和统计信息")
-    gr.Button("生成目录树和统计信息").click(generate_tree_and_stats, inputs=[path_input, style_input, depth_input], outputs=tree_output)
+    depth_input = gr.Slider(label="【输出目录树时】最大深度", minimum=1, maximum=10, step=1, value=3)
+    options = gr.CheckboxGroup(label="选择功能", choices=["生成目录树", "统计目录信息"], value=["生成目录树", "统计目录信息"])
+    output = gr.Textbox(label="输出结果")
+
+    def handle_options(path, style, depth, options):
+        result = ""
+        if "生成目录树" in options:
+            result += generate_tree(path, style, depth)
+        if "统计目录信息" in options:
+            size = get_directory_size(path)
+            total, used, free = get_disk_usage(path)
+            percent_used = (size / total) * 100
+            stats = (f"目录总大小: {size / (1024 * 1024):.2f} MB ({size} Bytes), "
+                     f"硬盘总大小: {total / (1024 * 1024 * 1024):.2f} GB, "
+                     f"已用空间: {used / (1024 * 1024 * 1024):.2f} GB, "
+                     f"剩余空间: {free / (1024 * 1024 * 1024):.2f} GB, "
+                     f"目录占用硬盘百分比: {percent_used:.2f}%")
+            result += stats
+        return result
+
+    gr.Button("生成结果").click(handle_options, inputs=[path_input, style_input, depth_input, options], outputs=output)
 
 demo.launch()
