@@ -1,3 +1,4 @@
+import os
 import gradio as gr
 
 # 功能：打招呼
@@ -17,6 +18,17 @@ def chinese_to_unicode(text):
     except Exception as e:
         return str(e)
 
+# 功能：生成目录树
+def generate_tree(path, prefix=""):
+    tree = ""
+    for root, dirs, files in os.walk(path):
+        level = root.replace(path, '').count(os.sep)
+        indent = ' ' * 4 * (level)
+        tree += f"{prefix}{indent}{os.path.basename(root)}/\n"
+        sub_indent = ' ' * 4 * (level + 1)
+        for f in files:
+            tree += f"{prefix}{sub_indent}{f}\n"
+    return tree
 
 # 页面构建，功能引入
 with gr.Blocks(title="Text-maestro") as demo:
@@ -36,5 +48,10 @@ with gr.Blocks(title="Text-maestro") as demo:
     name_input = gr.Textbox(label="输入名字")
     greet_output = gr.Textbox(label="输出问候语")
     gr.Button("问候").click(greet, inputs=name_input, outputs=greet_output)
+
+    gr.Markdown("## 目录树生成工具")
+    path_input = gr.Textbox(label="输入目录路径", placeholder="例如： /home/user")
+    tree_output = gr.Textbox(label="输出目录树")
+    gr.Button("生成目录树").click(generate_tree, inputs=path_input, outputs=tree_output)
 
 demo.launch()
