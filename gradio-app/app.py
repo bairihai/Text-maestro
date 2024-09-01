@@ -3,6 +3,8 @@ import shutil
 import gradio as gr
 from difflib import Differ
 
+# from tools import utils
+
 # 功能：打招呼
 def greet(name):
     return "Hello " + name + "!"
@@ -69,7 +71,7 @@ def diff_texts(text1, text2):
 with gr.Blocks(title="Text-maestro") as demo:
 
     # 公告区域
-    gr.Markdown("> 欢迎使用 Text-maestro 工具！  \n 目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。  \n >    \n 注意：各项功能均以运行的机器（后端）为准，如果运行的机器（后端）和打开面板的机器（前端）不同，并不能在前端使用。  \n 接下来的electron版本会启用api并进行整理。")
+    gr.Markdown("> 欢迎使用 Text-maestro 工具！  \n 目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。  \n >    \n 注意：请确保运行本面板的机器（后端）和打开面板的机器（前端）相同。涉及到本地文件部分的功能并不能仅靠一个gradio面板在前端使用。  \n >    \n 接下来的electron版本会启用api并进行整理。")
 
     # Unicode 和中文双向转换工具
     gr.Markdown("## Unicode 和中文双向转换工具")
