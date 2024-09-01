@@ -55,7 +55,7 @@
 ```shell
 pip install requirements.txt
 
-python app.py
+gradio app.py
 ```
 
 启动后，按照输出提示，在webUI进行操作。
@@ -115,7 +115,7 @@ npm run dev
 
 按照一定规则遍历统计，生成词频动态图/视频。（可能会做）
 
-功能3：树状图
+**【dev-0.5.1已实装】功能3：树状图**
 
 输出文件目录结构。
 
