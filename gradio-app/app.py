@@ -46,6 +46,10 @@ def generate_tree_and_stats(path, style="tree", max_depth=None):
     stats = f"\n目录总大小: {size / (1024 * 1024):.2f} MB\n硬盘总大小: {total / (1024 * 1024 * 1024):.2f} GB\n已用空间: {used / (1024 * 1024 * 1024):.2f} GB\n剩余空间: {free / (1024 * 1024 * 1024):.2f} GB\n目录占用硬盘百分比: {percent_used:.2f}%"
     return tree + stats
 
+# 功能：获取当前工作目录
+def get_current_directory():
+    return os.getcwd()
+
 # 页面构建，功能引入
 with gr.Blocks(title="Text-maestro") as demo:
 
@@ -113,5 +117,10 @@ with gr.Blocks(title="Text-maestro") as demo:
         text2_input = gr.Textbox(label="文本 2", lines=3, value="The fast brown fox jumps over lazy dogs.")
         diff_output = gr.HighlightedText(label="差异", combine_adjacent=True, show_legend=True, color_map={"+": "red", "-": "green"})
         gr.Button("比较").click(utils.diff_texts, inputs=[text1_input, text2_input], outputs=diff_output)
+
+    # 自检功能
+    gr.Markdown("## 自检功能")
+    current_dir_output = gr.Textbox(label="gradio-app 当前工作目录")
+    gr.Button("显示当前工作目录").click(get_current_directory, outputs=current_dir_output)
 
 demo.launch()
