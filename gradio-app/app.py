@@ -69,7 +69,7 @@ def diff_texts(text1, text2):
 with gr.Blocks(title="Text-maestro") as demo:
 
     # 公告区域
-    gr.Code("## 公告区域\n欢迎使用 Text-maestro 工具！")
+    gr.Markdown("> 欢迎使用 Text-maestro 工具！  \n 目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。  \n >    \n 注意：各项功能均以运行的机器（后端）为准，如果运行的机器（后端）和打开面板的机器（前端）不同，并不能在前端使用。  \n 接下来的electron版本会启用api并进行整理。")
 
     # Unicode 和中文双向转换工具
     gr.Markdown("## Unicode 和中文双向转换工具")
