@@ -1,6 +1,7 @@
 import os
 import shutil
 import gradio as gr
+from difflib import Differ
 
 # 功能：打招呼
 def greet(name):
@@ -55,6 +56,14 @@ def generate_tree_and_stats(path, style="tree", max_depth=None):
     percent_used = (size / total) * 100
     stats = f"\n目录总大小: {size / (1024 * 1024):.2f} MB\n硬盘总大小: {total / (1024 * 1024 * 1024):.2f} GB\n已用空间: {used / (1024 * 1024 * 1024):.2f} GB\n剩余空间: {free / (1024 * 1024 * 1024):.2f} GB\n目录占用硬盘百分比: {percent_used:.2f}%"
     return tree + stats
+
+# 功能：文本比较
+def diff_texts(text1, text2):
+    d = Differ()
+    return [
+        (token[2:], token[0] if token[0] != " " else None)
+        for token in d.compare(text1, text2)
+    ]
 
 # 页面构建，功能引入
 with gr.Blocks(title="Text-maestro") as demo:
@@ -115,5 +124,13 @@ with gr.Blocks(title="Text-maestro") as demo:
 
     options.change(update_visibility, inputs=options, outputs=[style_input, depth_input])
     gr.Button("生成结果").click(handle_options, inputs=[path_input, style_input, depth_input, options], outputs=output)
+
+    # 文本比较功能
+    gr.Markdown("## 文本比较")
+    with gr.Group():
+        text1_input = gr.Textbox(label="文本 1", lines=3, value="The quick brown fox jumped over the lazy dogs.")
+        text2_input = gr.Textbox(label="文本 2", lines=3, value="The fast brown fox jumps over lazy dogs.")
+        diff_output = gr.HighlightedText(label="差异", combine_adjacent=True, show_legend=True, color_map={"+": "red", "-": "green"})
+        gr.Button("比较").click(diff_texts, inputs=[text1_input, text2_input], outputs=diff_output)
 
 demo.launch()
