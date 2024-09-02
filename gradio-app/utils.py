@@ -1,5 +1,7 @@
 from difflib import Differ
 
+# utils.py 基础功能
+
 # 功能：打招呼
 def greet(name):
     return "Hello " + name + "!"

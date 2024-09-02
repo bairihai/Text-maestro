@@ -1,6 +1,8 @@
 import os
 import shutil
 
+# utils_folder.py 目录和文件夹相关的操作功能
+
 # 功能：生成目录树
 def generate_tree(path, style="tree", max_depth=None, prefix=""):
     tree = ""

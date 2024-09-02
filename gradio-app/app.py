@@ -15,7 +15,7 @@ import utils_folder
 with gr.Blocks(title="Text-maestro") as demo:
 
     # 公告区域
-    gr.Markdown("> 欢迎使用 Text-maestro 工具！  \n 目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。  \n >    \n 注意：请确保运行本面板的机器（后端）和打开面板的机器（前端）相同。涉及到本地文件部分的功能并不能仅靠一个gradio面板在前端使用。  \n >    \n 接下来的electron版本会启用api并进行整理。")
+    gr.Markdown("> 欢迎使用 Text-maestro 工具！  \n 目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。  \n >    \n 注意：请确保运行本面板的机器（后端）和打开面板的机器（前端）相同。**涉及到本地文件部分的功能并不能仅靠一个gradio面板在前端使用。**  \n >  注意：部分被标注为everything sdk的功能需要你后台启用everything以加快搜索速度。**如未启动everything，这些功能无法使用。**  \n >    \n 接下来的electron版本会启用api并进行整理。")
 
     # Unicode 和中文双向转换工具
     gr.Markdown("## Unicode 和中文双向转换工具")
