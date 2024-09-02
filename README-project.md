@@ -40,7 +40,7 @@ Now,use `npm run dev` one scipt to start dev.
 
 我们通过postcss的方式引入tailwindcss，并通过引入maa-frontend首发的style控制系统避免了很多对原有内容的破坏性更新。
 
-这项功能已经完全实装。
+这项功能已经完全实装。实装的版本位于dev-0.4，0.4.1以及0.4.2。
 
 参见：
 
@@ -102,3 +102,21 @@ Vite 使用的是 Rollup 作为其底层打包工具，而不是像 Webpack 那�
 
 
 相关知识见我的学习积累，略。
+
+## 为什么配置everything 如何配置everthing
+
+everything使用需要用到其SDK，名为everything-sdk。这是一个基础的 IPC 包装器（IPC wrapper），实现进程间通信Inter Process Communication功能.
+
+仅限windows系统。不能替代everything本身。
+
+因为是IPC，需要Everything正在运行。
+
+参见：
+
+[SDK中文文档](https://www.voidtools.com/zh-cn/support/everything/sdk/)
+
+[使用了everything的项目例子](https://github.com/search?q=repo%3AShirasawaSama%2FCefDetector%20everything&type=code)
+
+精简版的everything没有IPC功能，也不能使用。
+
+![](./readme/11 everything引入 真复杂/screenshot-20240903-060205 精简版.png)
