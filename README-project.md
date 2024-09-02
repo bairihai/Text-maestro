@@ -4,6 +4,9 @@
 【cursor推荐】使用nvm进行降级。降级成功的提示形如：`Now using node v14.17.0 (64-bit)`。
 （nvm理应有自动将自己加入帐户环境变量的功能，原理类似gcc mingw64等东西。）
 
+更新：2024年9月3日 06点58分
+**使用新的electron-app无需降级，我进行了重构，node22就可以用。**
+
 ## 废案文件夹
 
 electron-app是计划使用新版node+vite的一次测试，但是最后以失败告终了，并不能使用。（现已收入readme/废案）
@@ -103,7 +106,7 @@ Vite 使用的是 Rollup 作为其底层打包工具，而不是像 Webpack 那�
 
 相关知识见我的学习积累，略。
 
-## 为什么配置everything 如何配置everthing
+## 为什么配置everything 如何配置everything
 
 everything使用需要用到其SDK，名为everything-sdk。这是一个基础的 IPC 包装器（IPC wrapper），实现进程间通信Inter Process Communication功能.
 
@@ -124,3 +127,5 @@ everything使用需要用到其SDK，名为everything-sdk。这是一个基础�
 ![](./readme/11 everything引入 真复杂/screenshot-20240903-060205 精简版.png)
 
 本项目并未使用jupyter notebook，但你如有需要可以很轻松使用ipynb自行验证。
+
+**此外你可以看到的一点是默认使用64.dll。实在有需要的话手动去找.py文件改称32.dll**

@@ -62,6 +62,10 @@ gradio app.py
 
 使用gradio启动是为了支持部分热重载（面对简单的改动可以热重载）等特性。
 
+在gradio-app文件夹下还一并硬编码了everything的sdk（dll），所谓sdk就类似你用python修改系统音量那种，也是用了一个软件调用其api，sdk就类似于给封装起来了。
+
+具体到everything这里的sdk只是一个ipc的实现~~，没甚鸟谓~~，详见readme-project.md。
+
 ## Electron-app【停用】
 
 **注意：由于开发进度调整，Electron版本的开发已暂停（冻结），待Gradio版本完成后再继续。** 冻结期间，electron-app的更新仅以最低限度保留。

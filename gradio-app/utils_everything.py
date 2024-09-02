@@ -6,8 +6,10 @@
 import ctypes
 import datetime
 import struct
+import os
 
-#defines
+# 定义
+# defines
 EVERYTHING_REQUEST_FILE_NAME = 0x00000001
 EVERYTHING_REQUEST_PATH = 0x00000002
 EVERYTHING_REQUEST_FULL_PATH_AND_FILE_NAME = 0x00000004
@@ -25,28 +27,39 @@ EVERYTHING_REQUEST_HIGHLIGHTED_FILE_NAME = 0x00002000
 EVERYTHING_REQUEST_HIGHLIGHTED_PATH = 0x00004000
 EVERYTHING_REQUEST_HIGHLIGHTED_FULL_PATH_AND_FILE_NAME = 0x00008000
 
-#dll imports
-everything_dll = ctypes.WinDLL ("C:\\EverythingSDK\\DLL\\Everything32.dll")
+# 获取当前文件夹路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 构建相对路径，用相对路径手动导入everything-sdk dll
+dll_path = os.path.join(current_dir, "Everything-SDK", "dll", "Everything64.dll")
+everything_dll = ctypes.WinDLL(dll_path)
+
+# dll 导入，引入SDK基础内容
+# dll imports
 everything_dll.Everything_GetResultDateModified.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_ulonglong)]
 everything_dll.Everything_GetResultSize.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_ulonglong)]
 everything_dll.Everything_GetResultFileNameW.argtypes = [ctypes.c_int]
 everything_dll.Everything_GetResultFileNameW.restype = ctypes.c_wchar_p
 
-#setup search
+# 设置搜索，也就是everything软件那个搜索栏
+# setup search
 everything_dll.Everything_SetSearchW("test.py")
 everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FILE_NAME | EVERYTHING_REQUEST_PATH | EVERYTHING_REQUEST_SIZE | EVERYTHING_REQUEST_DATE_MODIFIED)
 
-#execute the query
+# 执行查询
+# execute the query
 everything_dll.Everything_QueryW(1)
 
-#get the number of results
+# 获取结果数量
+# get the number of results
 num_results = everything_dll.Everything_GetNumResults()
 
-#show the number of results
+# 显示结果数量
+# show the number of results
 print("Result Count: {}".format(num_results))
 
-#convert a windows FILETIME to a python datetime
-#https://stackoverflow.com/questions/39481221/convert-datetime-back-to-windows-64-bit-filetime
+# 将 Windows FILETIME 转换为 Python datetime
+# convert a windows FILETIME to a python datetime
+# https://stackoverflow.com/questions/39481221/convert-datetime-back-to-windows-64-bit-filetime
 WINDOWS_TICKS = int(1/10**-7)  # 10,000,000 (100 nanoseconds or .1 microseconds)
 WINDOWS_EPOCH = datetime.datetime.strptime('1601-01-01 00:00:00',
                                            '%Y-%m-%d %H:%M:%S')
@@ -56,17 +69,20 @@ EPOCH_DIFF = (POSIX_EPOCH - WINDOWS_EPOCH).total_seconds()  # 11644473600.0
 WINDOWS_TICKS_TO_POSIX_EPOCH = EPOCH_DIFF * WINDOWS_TICKS  # 116444736000000000.0
 
 def get_time(filetime):
+    """将 Windows filetime winticks 转换为 Python datetime.datetime"""
     """Convert windows filetime winticks to python datetime.datetime."""
     winticks = struct.unpack('<Q', filetime)[0]
     microsecs = (winticks - WINDOWS_TICKS_TO_POSIX_EPOCH) / WINDOWS_TICKS
     return datetime.datetime.fromtimestamp(microsecs)
 
-#create buffers
+# 创建缓冲区
+# create buffers
 filename = ctypes.create_unicode_buffer(260)
 date_modified_filetime = ctypes.c_ulonglong(1)
 file_size = ctypes.c_ulonglong(1)
 
-#show results
+# 显示结果
+# show results
 for i in range(num_results):
 
 	everything_dll.Everything_GetResultFullPathNameW(i,filename,260)
