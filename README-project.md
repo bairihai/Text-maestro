@@ -115,8 +115,12 @@ everything使用需要用到其SDK，名为everything-sdk。这是一个基础�
 
 [SDK中文文档](https://www.voidtools.com/zh-cn/support/everything/sdk/)
 
+[SDK python实例文档](https://www.voidtools.com/support/everything/sdk/python/)
+
 [使用了everything的项目例子](https://github.com/search?q=repo%3AShirasawaSama%2FCefDetector%20everything&type=code)
 
 精简版的everything没有IPC功能，也不能使用。
 
 ![](./readme/11 everything引入 真复杂/screenshot-20240903-060205 精简版.png)
+
+本项目并未使用jupyter notebook，但你如有需要可以很轻松使用ipynb自行验证。
