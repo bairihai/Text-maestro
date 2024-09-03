@@ -100,14 +100,15 @@ with gr.Blocks(title="Text-maestro") as demo:
     with gr.Group():
         search_path_input = gr.Textbox(label="输入文件夹路径", placeholder="例如： D:\\My Program\\novelai-webui-aki-v2")
         with gr.Row():
-            search_subdirs_input = gr.Checkbox(label="搜索子目录（维修中，暂无法关闭）", value=True)
-            search_full_path_input = gr.Checkbox(label="输出完整的绝对路径，以便进一步操作（维修中，暂无法关闭）", value=True)
+            search_subdirs_input = gr.Checkbox(label="搜索子目录", value=True)
+            search_full_path_input = gr.Checkbox(label="输出完整的绝对路径，以便进一步操作", value=True)
+        search_only_file_input = gr.Checkbox(label="仅搜索文件，排除文件夹", value=False)
         search_output = gr.Textbox(label="搜索结果")
 
-    def search_files(path, search_subdirs):
-        return "\n".join(utils_everything.search_files_in_directory(path, search_subdirs))
+    def search_files(path, search_subdirs, full_path):
+        return "\n".join(utils_everything.search_files_in_directory(path, search_subdirs, full_path))
 
-    gr.Button("搜索").click(search_files, inputs=[search_path_input, search_subdirs_input], outputs=search_output)
+    gr.Button("搜索").click(search_files, inputs=[search_path_input, search_subdirs_input, search_full_path_input], outputs=search_output)
 
     # RGB 和 十六进制颜色码双向转换工具
     gr.Markdown("## RGB 和 十六进制颜色码双向转换工具")

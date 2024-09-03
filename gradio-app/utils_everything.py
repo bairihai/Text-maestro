@@ -91,17 +91,19 @@ def test():
         everything_dll.Everything_GetResultSize(i,file_size)
         print("Filename: {}\nDate Modified: {}\nSize: {} bytes\n".format(ctypes.wstring_at(filename),get_time(date_modified_filetime),file_size.value))
 
-# 功能：指定一个文件夹，获取里面所有文件的 filename（不用去除其中的路径），而且可以选择“是否搜索子目录”
-def search_files_in_directory(directory, search_subdirectories):
-    # 设置搜索路径
-    search_query = f'"{directory}"'
+# 功能：指定一个文件夹，获取里面所有文件的 filename，可以选择“是否搜索子目录” “是否绝对路径”
+def search_files_in_directory(directory, search_subdirectories, full_path):
+    # 设置搜索
     if search_subdirectories:
-        search_query += "\\*"
+        search_query = f'"{directory}\\*"'
     else:
-        search_query += "\\*"
+        search_query = f'parent:"{directory}"'
 
     everything_dll.Everything_SetSearchW(search_query)
-    everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FULL_PATH_AND_FILE_NAME)
+    if full_path:
+        everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FULL_PATH_AND_FILE_NAME)
+    else:
+        everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FILE_NAME)
     everything_dll.Everything_QueryW(1)
 
     num_results = everything_dll.Everything_GetNumResults()
@@ -110,7 +112,10 @@ def search_files_in_directory(directory, search_subdirectories):
     for i in range(num_results):
         buffer_size = 260
         buffer = ctypes.create_unicode_buffer(buffer_size)
-        everything_dll.Everything_GetResultFullPathNameW(i, buffer, buffer_size)
+        if full_path:
+            everything_dll.Everything_GetResultFullPathNameW(i, buffer, buffer_size)
+        else:
+            buffer.value = everything_dll.Everything_GetResultFileNameW(i)
         filenames.append(buffer.value)
 
     return filenames
