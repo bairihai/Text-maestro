@@ -11,6 +11,7 @@ import utils
 import utils_folder
 import utils_everything
 import utils_jieba
+import utils_wordcloud
 
 # 页面构建（gradio interface），功能引入
 with gr.Blocks(title="Text-maestro api大全") as demo:
@@ -190,7 +191,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         
         def generate_wordcloud_from_freq(freq_str, font_path):
             word_freq = parse_word_freq(freq_str)
-            img_base64 = utils_jieba.generate_wordcloud(word_freq, font_path)
+            img_base64 = utils_wordcloud.generate_wordcloud(word_freq, font_path)
             return f"data:image/png;base64,{img_base64}"
         
         gr.Button("生成").click(generate_wordcloud_from_freq, inputs=[input_word_frequency, input_font_path], outputs=output_image)
