@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
 
+from PIL import Image
+
 def generate_wordcloud(word_freq, font_path):
     wordcloud = WordCloud(font_path=font_path, width=800, height=400, background_color='white')
     wordcloud.generate_from_frequencies(word_freq)
@@ -20,4 +22,7 @@ def generate_wordcloud(word_freq, font_path):
     # return img_base64
 
     # 直接返回图像数据
-    return img_buffer
+    # return img_buffer
+
+    # 返回PIL图像对象
+    return Image.open(img_buffer)

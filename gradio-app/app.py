@@ -182,7 +182,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     
     with gr.Tab("生成词云图"):
         input_word_frequency = gr.Textbox(label="频率表", lines=3 , placeholder="生成的txt格式频率表", value="{'盛夏': 1, '头发': 1, '军队': 1, '标准': 1, '瑕疵': 1, '赘肉': 1, '矫健': 1, '把位': 1, '过肩': 1, '小臂': 1, '男孩子': 1, '男孩': 1, '骂人': 1, '姑娘': 1, '回事儿': 1, '师父': 1, '国家队': 1, '女将': 1, '胳膊': 2, '柔道队': 1, '时候': 2, '柔道': 1, '技术': 1, '月薪': 1, '学员': 1, '小男孩': 1, '动作': 1, '肩膀': 1}")
-        input_font_path = gr.Textbox(label="字体文件路径", placeholder="输入字体文件的完整路径")
+        input_font_path = gr.Textbox(label="字体文件路径", placeholder="输入字体文件的完整路径 必填！！！")
         output_image = gr.Image(label="词云图", format="png")
         
         def parse_word_freq(freq_str):
@@ -191,8 +191,8 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         
         def generate_wordcloud_from_freq(freq_str, font_path):
             word_freq = parse_word_freq(freq_str)
-            img_buffer = utils_jieba.generate_wordcloud(word_freq, font_path)
-            return img_buffer
+            img = utils_wordcloud.generate_wordcloud(word_freq, font_path)
+            return img
         
         gr.Button("生成").click(generate_wordcloud_from_freq, inputs=[input_word_frequency, input_font_path], outputs=output_image)
 
@@ -211,6 +211,11 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     # 多篇文档拼接功能
     gr.Markdown("## 多篇文档拼接功能")
+    with gr.Group():
+    file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
+
+    gr.Button("筛选").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
+
 
 
 demo.launch()
