@@ -1,8 +1,6 @@
 # utils_everything.py 需要后台启动everything，使用其SDK才能实现的功能。
 # 可选项。好处是快，快很多倍。
 
-# 测试中，这是官方例子，还没引入gradio
-
 import ctypes
 import datetime
 import struct
@@ -40,22 +38,6 @@ everything_dll.Everything_GetResultSize.argtypes = [ctypes.c_int,ctypes.POINTER(
 everything_dll.Everything_GetResultFileNameW.argtypes = [ctypes.c_int]
 everything_dll.Everything_GetResultFileNameW.restype = ctypes.c_wchar_p
 
-# 设置搜索，也就是everything软件那个搜索栏
-# setup search
-everything_dll.Everything_SetSearchW("test.py")
-everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FILE_NAME | EVERYTHING_REQUEST_PATH | EVERYTHING_REQUEST_SIZE | EVERYTHING_REQUEST_DATE_MODIFIED)
-
-# 执行查询
-# execute the query
-everything_dll.Everything_QueryW(1)
-
-# 获取结果数量
-# get the number of results
-num_results = everything_dll.Everything_GetNumResults()
-
-# 显示结果数量
-# show the number of results
-print("Result Count: {}".format(num_results))
 
 # 将 Windows FILETIME 转换为 Python datetime
 # convert a windows FILETIME to a python datetime
@@ -75,21 +57,41 @@ def get_time(filetime):
     microsecs = (winticks - WINDOWS_TICKS_TO_POSIX_EPOCH) / WINDOWS_TICKS
     return datetime.datetime.fromtimestamp(microsecs)
 
-# 创建缓冲区
-# create buffers
-filename = ctypes.create_unicode_buffer(260)
-date_modified_filetime = ctypes.c_ulonglong(1)
-file_size = ctypes.c_ulonglong(1)
+# 功能：硬编码测试everything-sdk效果（仅供测试用）
+def test():
+    # 设置搜索，也就是everything软件那个搜索栏
+    # setup search
+    everything_dll.Everything_SetSearchW("test.py")
+    everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FILE_NAME | EVERYTHING_REQUEST_PATH | EVERYTHING_REQUEST_SIZE | EVERYTHING_REQUEST_DATE_MODIFIED)
 
-# 显示结果
-# show results
-for i in range(num_results):
+    # 执行查询
+    # execute the query
+    everything_dll.Everything_QueryW(1)
 
-	everything_dll.Everything_GetResultFullPathNameW(i,filename,260)
-	everything_dll.Everything_GetResultDateModified(i,date_modified_filetime)
-	everything_dll.Everything_GetResultSize(i,file_size)
-	print("Filename: {}\nDate Modified: {}\nSize: {} bytes\n".format(ctypes.wstring_at(filename),get_time(date_modified_filetime),file_size.value))
+    # 获取结果数量
+    # get the number of results
+    num_results = everything_dll.Everything_GetNumResults()
 
+    # 显示结果数量
+    # show the number of results
+    print("Result Count: {}".format(num_results))
+
+    # 创建缓冲区
+    # create buffers
+    filename = ctypes.create_unicode_buffer(260)
+    date_modified_filetime = ctypes.c_ulonglong(1)
+    file_size = ctypes.c_ulonglong(1)
+
+    # 显示结果
+    # show results
+    for i in range(num_results):
+
+        everything_dll.Everything_GetResultFullPathNameW(i,filename,260)
+        everything_dll.Everything_GetResultDateModified(i,date_modified_filetime)
+        everything_dll.Everything_GetResultSize(i,file_size)
+        print("Filename: {}\nDate Modified: {}\nSize: {} bytes\n".format(ctypes.wstring_at(filename),get_time(date_modified_filetime),file_size.value))
+
+# 功能：指定一个文件夹，获取里面所有文件的 filename（不用去除其中的路径），而且可以选择“是否搜索子目录”
 def search_files_in_directory(directory, search_subdirectories):
     # 设置搜索路径
     search_query = f'"{directory}"'
@@ -111,7 +113,8 @@ def search_files_in_directory(directory, search_subdirectories):
 
     return filenames
 
-# 示例调用
+# 示例调用：测试 search_files_in_directory 函数。
+# __main__确保以下代码块仅在脚本作为主程序运行时执行，而在作为模块导入时不会执行。
 if __name__ == "__main__":
     directory = "D:\\My Program\\novelai-webui-aki-v2"
     search_subdirectories = True
