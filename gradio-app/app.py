@@ -20,7 +20,7 @@ with gr.Blocks(title="Text-maestro") as demo:
         <h2>公告区</h2>
         <p>目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。</p>
         <p><strong>注意：</strong> 请确保运行本面板的机器（后端）和打开面板的机器（前端）相同。<strong>涉及到本地文件部分的功能并不能仅靠一个gradio面板在前端使用。</strong></p>
-        <p><strong>注意：</strong> 部分被标注为everything的功能需要你后台启用everything以加快搜索速度。<strong>如未启动everything，这些功能无法使用。</strong> 详见README.md以及README-project.md</p>
+        <p><strong>注意：</strong> 部分被标注为<span style="background-color: #FAFAD2; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">everything</span>的功能需要你后台启用everything以加快搜索速度。<strong>如未启动everything，这些功能无法使用。</strong> 详见README.md以及README-project.md</p>
         <p>接下来的electron版本会启用api并进行整理。</p>
         <p>就不做清空按钮之类的东西了，因为这里只是一个“api大全”，electron应用里面再做吧。</p>
     </div>
@@ -94,7 +94,9 @@ with gr.Blocks(title="Text-maestro") as demo:
     gr.Button("显示当前工作目录").click(utils_folder.get_current_directory, outputs=current_dir_output)
 
     # 文件搜索功能
-    gr.Markdown("## 文件搜索功能【everything】")
+    gr.Markdown("""
+    ## 文件搜索功能 <span style="background-color: #FAFAD2; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;">everything</span>
+    """)
     with gr.Group():
         search_path_input = gr.Textbox(label="输入文件夹路径", placeholder="例如： D:\\My Program\\novelai-webui-aki-v2")
         search_subdirs_input = gr.Checkbox(label="搜索子目录", value=True)
