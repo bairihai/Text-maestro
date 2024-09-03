@@ -101,8 +101,8 @@ with gr.Blocks(title="Text-maestro") as demo:
         search_path_input = gr.Textbox(label="输入文件夹路径", placeholder="例如： D:\\My Program\\novelai-webui-aki-v2")
         with gr.Row():
             search_subdirs_input = gr.Checkbox(label="搜索子目录", value=True)
-            search_full_path_input = gr.Checkbox(label="输出完整的绝对路径，以便进一步操作", value=True)
-        search_only_file_input = gr.Checkbox(label="仅搜索文件，排除文件夹", value=False)
+            search_only_file_input = gr.Checkbox(label="仅搜索文件，排除文件夹", value=False)
+        search_full_path_input = gr.Checkbox(label="输出完整的绝对路径，以便进一步操作", value=True)
         search_output = gr.Textbox(label="搜索结果")
 
     def search_files(path, search_subdirs, full_path, only_files):
