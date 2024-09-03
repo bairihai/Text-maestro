@@ -20,7 +20,7 @@ with gr.Blocks(title="Text-maestro") as demo:
         <h2>公告区</h2>
         <p>目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。</p>
         <p><strong>注意：</strong> 请确保运行本面板的机器（后端）和打开面板的机器（前端）相同。<strong>涉及到本地文件部分的功能并不能仅靠一个gradio面板在前端使用。</strong></p>
-        <p><strong>注意：</strong> 部分被标注为<span style="background-color: #FAFAD2; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">everything</span>的功能需要你后台启用everything以加快搜索速度。<strong>如未启动everything，这些功能无法使用。</strong> 详见README.md以及README-project.md</p>
+        <p><strong>注意：</strong> 部分被标注为<span style="background-color: #FF8000; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">everything</span>的功能需要你后台启用everything以加快搜索速度。<strong>如未启动everything，这些功能无法使用。</strong> 详见README.md以及README-project.md</p>
         <p>接下来的electron版本会启用api并进行整理。</p>
         <p>就不做清空按钮之类的东西了，因为这里只是一个“api大全”，electron应用里面再做吧。</p>
     </div>
@@ -95,16 +95,31 @@ with gr.Blocks(title="Text-maestro") as demo:
 
     # 文件搜索功能
     gr.Markdown("""
-    ## 文件搜索功能 <span style="background-color: #FAFAD2; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;">everything</span>
+    ## 文件搜索功能 <span style="background-color: #FF8000; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;">everything</span>
     """)
     with gr.Group():
         search_path_input = gr.Textbox(label="输入文件夹路径", placeholder="例如： D:\\My Program\\novelai-webui-aki-v2")
-        search_subdirs_input = gr.Checkbox(label="搜索子目录", value=True)
+        search_subdirs_input = gr.Checkbox(label="搜索子目录（维修中，暂无法关闭）", value=True)
         search_output = gr.Textbox(label="搜索结果")
 
     def search_files(path, search_subdirs):
         return "\n".join(utils_everything.search_files_in_directory(path, search_subdirs))
 
     gr.Button("搜索").click(search_files, inputs=[search_path_input, search_subdirs_input], outputs=search_output)
+
+    # RGB 和 十六进制颜色码双向转换工具
+    gr.Markdown("## RGB 和 十六进制颜色码双向转换工具")
+    
+    with gr.Tab("RGB 转 十六进制"):
+        r_input = gr.Slider(label="R", minimum=0, maximum=255, step=1, value=255)
+        g_input = gr.Slider(label="G", minimum=0, maximum=255, step=1, value=128)
+        b_input = gr.Slider(label="B", minimum=0, maximum=255, step=1, value=0)
+        hex_output = gr.Textbox(label="输出十六进制颜色码")
+        gr.Button("转换").click(utils.rgb_to_hex, inputs=[r_input, g_input, b_input], outputs=hex_output)
+    
+    with gr.Tab("十六进制 转 RGB"):
+        hex_input = gr.Textbox(label="输入十六进制颜色码", placeholder="例如：FF8000")
+        rgb_output = gr.Textbox(label="输出 RGB 颜色值")
+        gr.Button("转换").click(utils.hex_to_rgb, inputs=hex_input, outputs=rgb_output)
 
 demo.launch()
