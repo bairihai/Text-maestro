@@ -145,18 +145,42 @@ with gr.Blocks(title="Text-maestro") as demo:
         lines=5, 
         placeholder="在此输入文本进行字数词数统计", 
         value="""“早上起来，先来个五公里。吃饭。然后一整个上午就是打靶，摔沙人。练得汗流浃背，旁边教练拿着靶盯着你，你要是想偷懒就一靶抽你屁股上。
-下午开始实战了，挑好对手，捉对厮杀。鼻子喷血了，被踢淤青了，手腕挫了，脚扭了，别喊疼，都是小伤。喷点药，接着干。晚上再来个五公里。然后你可以出去溜达一圈了。”
-
-17年的盛夏，她穿着贴身的跤衣，头发剪了军队标准的三毫米，但脸毫无瑕疵。身上没有一丝赘肉，矫健修长。她抓着我的把位，一个漂亮的过肩摔，我翻滚在地上受身。我抓住她的小臂，进步，却怎么也卡不准位置。
-她像个男孩子一样大笑起来。事实上她说话也和男孩一模一样，粗里粗气，爽朗。当然，教练不许偷骂人。然而这么多年，我也没见过比她漂亮的姑娘了。
-她说："你那鞭腿踢的挺像回事儿，但摔跤咋就那么笨呢?一个过肩摔两天还学不会。"
-她的师父，一个国家队退役的女将，抱着胳膊在我后面耸耸肩："你好好练，我当年刚去省柔道队时候，不会柔道技术，就用这一招连摔了十二个人!"她那时候月薪三千块钱。
-其他学员都嘻嘻哈哈的围过来，几个比我小几岁的小男孩叽叽喳喳给我说动作要领，抓着我的肩膀往他们胳膊下放，教我怎么顶。"""
+下午开始实战了，挑好对手，捉对厮杀。鼻子喷血了，被踢淤青了，手腕挫了，脚扭了，别喊疼，都是小伤。喷点药，接着干。晚上再来个五公里。然后你可以出去溜达一圈了。”"""
     )
     char_count_output = gr.Textbox(label="总字符数")
     word_count_output = gr.Textbox(label="总词数")
 
     gr.Button("统计").click(utils_jieba.count_chars_and_words, inputs=text_input, outputs=[char_count_output, word_count_output])
+
+
+    # 词频统计功能
+    gr.Markdown("## 词频统计功能")
+
+    with gr.Group():
+        text_input = gr.Textbox(
+            label="输入文本", 
+            lines=5, 
+            placeholder="在此输入文本进行字数词数统计", 
+            value="""17年的盛夏，她穿着贴身的跤衣，头发剪了军队标准的三毫米，但脸毫无瑕疵。身上没有一丝赘肉，矫健修长。她抓着我的把位，一个漂亮的过肩摔，我翻滚在地上受身。我抓住她的小臂，进步，却怎么也卡不准位置。
+她像个男孩子一样大笑起来。事实上她说话也和男孩一模一样，粗里粗气，爽朗。当然，教练不许偷骂人。然而这么多年，我也没见过比她漂亮的姑娘了。
+她说："你那鞭腿踢的挺像回事儿，但摔跤咋就那么笨呢?一个过肩摔两天还学不会。"
+她的师父，一个国家队退役的女将，抱着胳膊在我后面耸耸肩："你好好练，我当年刚去省柔道队时候，不会柔道技术，就用这一招连摔了十二个人!"她那时候月薪三千块钱。
+其他学员都嘻嘻哈哈的围过来，几个比我小几岁的小男孩叽叽喳喳给我说动作要领，抓着我的肩膀往他们胳膊下放，教我怎么顶。""")
+        
+        with gr.Row():
+            input_ban_word = gr.Textbox(label="停用词", placeholder="被停用的词将被忽略，不会被统计", value="我,的,和,有,不,是")
+            input_text_dict = gr.Textbox(label="自定义分词词典", placeholder="自定义分词词典，中文里的人名或者自造词需要被手动录入", value="峻影,柔道,云都,自臣,终末之神,死渊,天元的猎犬")
+        options = gr.CheckboxGroup(label="按照词性排除", choices=["连词conj.，如“和”“也”", "介词prep.，如“从”“用”"])
+
+    with gr.Tab("生成频率表"):
+        path_input = gr.Textbox(label="输入路径", placeholder="例如： D:\\My Program\\novelai-webui-aki-v2")
+        output_text = gr.Textbox(label="输出文本")
+        gr.Button("读取").click(utils.read_file_from_path, inputs=path_input, outputs=output_text)
+    
+    with gr.Tab("生成词云图"):
+        input_file = gr.File(label="待读取的文件")
+        output_text = gr.Textbox(label="输出文本")
+        gr.Button("读取").click(utils.read_file, inputs=input_file, outputs=output_text)
 
 
     # 文本读取功能
@@ -171,6 +195,9 @@ with gr.Blocks(title="Text-maestro") as demo:
         input_file = gr.File(label="待读取的文件")
         output_text = gr.Textbox(label="输出文本")
         gr.Button("读取").click(utils.read_file, inputs=input_file, outputs=output_text)
-   
+
+    # 多篇文档拼接功能
+    gr.Markdown("## 多篇文档拼接功能")
+
 
 demo.launch()
