@@ -92,12 +92,15 @@ def test():
         print("Filename: {}\nDate Modified: {}\nSize: {} bytes\n".format(ctypes.wstring_at(filename),get_time(date_modified_filetime),file_size.value))
 
 # 功能：指定一个文件夹，获取里面所有文件的 filename，可以选择“是否搜索子目录” “是否绝对路径”
-def search_files_in_directory(directory, search_subdirectories, full_path):
+def search_files_in_directory(directory, search_subdirectories, full_path, search_only_files):  
     # 设置搜索
     if search_subdirectories:
         search_query = f'"{directory}\\*"'
     else:
         search_query = f'parent:"{directory}"'
+
+    if search_only_files:  
+        search_query = f'file:{search_query}'
 
     everything_dll.Everything_SetSearchW(search_query)
     if full_path:

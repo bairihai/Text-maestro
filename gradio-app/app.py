@@ -105,10 +105,10 @@ with gr.Blocks(title="Text-maestro") as demo:
         search_only_file_input = gr.Checkbox(label="仅搜索文件，排除文件夹", value=False)
         search_output = gr.Textbox(label="搜索结果")
 
-    def search_files(path, search_subdirs, full_path):
-        return "\n".join(utils_everything.search_files_in_directory(path, search_subdirs, full_path))
+    def search_files(path, search_subdirs, full_path, only_files):
+        return "\n".join(utils_everything.search_files_in_directory(path, search_subdirs, full_path, only_files))
 
-    gr.Button("搜索").click(search_files, inputs=[search_path_input, search_subdirs_input, search_full_path_input], outputs=search_output)
+    gr.Button("搜索").click(search_files, inputs=[search_path_input, search_subdirs_input, search_full_path_input, search_only_file_input], outputs=search_output)
 
     # RGB 和 十六进制颜色码双向转换工具
     gr.Markdown("## RGB 和 十六进制颜色码双向转换工具")
