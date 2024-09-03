@@ -101,6 +101,10 @@ npm run dev
 
 # 附录
 
+## 测试用例
+
+随本仓库附带测试用例文件夹，位于example文件夹中。这里面有一些简单的实例，可以用于测试本工具的运行情况。
+
 ## 支持的功能
 
 [![Version 1.0](https://img.shields.io/badge/version-1.0-brightgreen.svg)](https://github.com/iamscottxu/AcFun-Video-Download/releases/tag/v1.0)
