@@ -101,15 +101,17 @@ def search_files_in_directory(directory, search_subdirectories):
         search_query += "\\*"
 
     everything_dll.Everything_SetSearchW(search_query)
-    everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FILE_NAME)
+    everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FULL_PATH_AND_FILE_NAME)
     everything_dll.Everything_QueryW(1)
 
     num_results = everything_dll.Everything_GetNumResults()
     filenames = []
 
     for i in range(num_results):
-        filename = everything_dll.Everything_GetResultFileNameW(i)
-        filenames.append(filename)
+        buffer_size = 260
+        buffer = ctypes.create_unicode_buffer(buffer_size)
+        everything_dll.Everything_GetResultFullPathNameW(i, buffer, buffer_size)
+        filenames.append(buffer.value)
 
     return filenames
 
