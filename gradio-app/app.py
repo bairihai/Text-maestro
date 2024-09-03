@@ -9,7 +9,7 @@ from difflib import Differ
 # 下文中，需要用 utils.xxx 的方式调用这些函数。
 import utils
 import utils_folder
-
+import utils_everything
 
 # 页面构建，功能引入
 with gr.Blocks(title="Text-maestro") as demo:
@@ -92,5 +92,17 @@ with gr.Blocks(title="Text-maestro") as demo:
     gr.Markdown("## 自检功能")
     current_dir_output = gr.Textbox(label="gradio-app 当前工作目录")
     gr.Button("显示当前工作目录").click(utils_folder.get_current_directory, outputs=current_dir_output)
+
+    # 文件搜索功能
+    gr.Markdown("## 文件搜索功能【everything】")
+    with gr.Group():
+        search_path_input = gr.Textbox(label="输入文件夹路径", placeholder="例如： D:\\My Program\\novelai-webui-aki-v2")
+        search_subdirs_input = gr.Checkbox(label="搜索子目录", value=True)
+        search_output = gr.Textbox(label="搜索结果")
+
+    def search_files(path, search_subdirs):
+        return "\n".join(utils_everything.search_files_in_directory(path, search_subdirs))
+
+    gr.Button("搜索").click(search_files, inputs=[search_path_input, search_subdirs_input], outputs=search_output)
 
 demo.launch()

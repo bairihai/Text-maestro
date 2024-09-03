@@ -89,3 +89,32 @@ for i in range(num_results):
 	everything_dll.Everything_GetResultDateModified(i,date_modified_filetime)
 	everything_dll.Everything_GetResultSize(i,file_size)
 	print("Filename: {}\nDate Modified: {}\nSize: {} bytes\n".format(ctypes.wstring_at(filename),get_time(date_modified_filetime),file_size.value))
+
+def search_files_in_directory(directory, search_subdirectories):
+    # 设置搜索路径
+    search_query = f'"{directory}"'
+    if search_subdirectories:
+        search_query += "\\*"
+    else:
+        search_query += "\\*"
+
+    everything_dll.Everything_SetSearchW(search_query)
+    everything_dll.Everything_SetRequestFlags(EVERYTHING_REQUEST_FILE_NAME)
+    everything_dll.Everything_QueryW(1)
+
+    num_results = everything_dll.Everything_GetNumResults()
+    filenames = []
+
+    for i in range(num_results):
+        filename = everything_dll.Everything_GetResultFileNameW(i)
+        filenames.append(filename)
+
+    return filenames
+
+# 示例调用
+if __name__ == "__main__":
+    directory = "D:\\My Program\\novelai-webui-aki-v2"
+    search_subdirectories = True
+    files = search_files_in_directory(directory, search_subdirectories)
+    for file in files:
+        print(file)
