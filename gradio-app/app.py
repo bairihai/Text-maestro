@@ -157,6 +157,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     # 词频统计功能
     gr.Markdown("## 词频统计功能")
+    gr.Markdown("目前还不太能自定义，还是按照预设的名词、两个字以上、停用词、自定义词典进行统计。暂不支持自定义")
 
     with gr.Group():
         text_input = gr.Textbox(
@@ -175,14 +176,24 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     with gr.Tab("生成频率表"):
         input_sheet_style = gr.Textbox(label="频率表形式（施工中，暂未开放）", placeholder="csv/xls/md/txt，目前只有txt")
-        output_text = gr.Textbox(label="输出文本")
+        output_text = gr.Textbox(label="输出频率表")
         gr.Button("生成").click(utils_jieba.word_frequency, inputs=[text_input, input_ban_word, input_text_dict], outputs=output_text)
     
     with gr.Tab("生成词云图"):
-        input_file = gr.File(label="待读取的文件")
-        output_text = gr.Textbox(label="输出文本")
-        gr.Button("生成").click(utils.read_file, inputs=input_file, outputs=output_text)
-
+        input_word_frequency = gr.Textbox(label="频率表", placeholder="生成的txt格式频率表", value="{'盛夏': 1, '头发': 1, '军队': 1, '标准': 1, '瑕疵': 1, '赘肉': 1, '矫健': 1, '把位': 1, '过肩': 1, '小臂': 1, '男孩子': 1, '男孩': 1, '骂人': 1, '姑娘': 1, '回事儿': 1, '师父': 1, '国家队': 1, '女将': 1, '胳膊': 2, '柔道队': 1, '时候': 2, '柔道': 1, '技术': 1, '月薪': 1, '学员': 1, '小男孩': 1, '动作': 1, '肩膀': 1}")
+        input_font_path = gr.Textbox(label="字体文件路径", placeholder="输入字体文件的完整路径")
+        output_image = gr.Image(label="词云图", format="png")
+        
+        def parse_word_freq(freq_str):
+            import ast
+            return ast.literal_eval(freq_str)
+        
+        def generate_wordcloud_from_freq(freq_str, font_path):
+            word_freq = parse_word_freq(freq_str)
+            img_base64 = utils_jieba.generate_wordcloud(word_freq, font_path)
+            return f"data:image/png;base64,{img_base64}"
+        
+        gr.Button("生成").click(generate_wordcloud_from_freq, inputs=[input_word_frequency, input_font_path], outputs=output_image)
 
     # 文本读取功能
     gr.Markdown("## 文本读取功能")
