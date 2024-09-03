@@ -1,4 +1,5 @@
 from difflib import Differ
+import re
 
 # utils.py 基础功能
 
@@ -35,3 +36,15 @@ def rgb_to_hex(r, g, b):
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+# 功能：搜索结果文件筛选
+def filter_files(file_list, regex):
+    pattern = re.compile(regex)
+    matched_files = []
+    unmatched_files = []
+    for file in file_list.splitlines():
+        if pattern.match(file):
+            matched_files.append(file)
+        else:
+            unmatched_files.append(file)
+    return "匹配的文件:\n" + "\n".join(matched_files) + "\n\n不匹配的文件:\n" + "\n".join(unmatched_files)

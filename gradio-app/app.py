@@ -22,7 +22,7 @@ with gr.Blocks(title="Text-maestro") as demo:
         <p><strong>注意：</strong> 请确保运行本面板的机器（后端）和打开面板的机器（前端）相同。<strong>涉及到本地文件部分的功能并不能仅靠一个gradio面板在前端使用。</strong></p>
         <p><strong>注意：</strong> 部分被标注为<span style="background-color: #FF8000; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">everything</span>的功能需要你后台启用everything以加快搜索速度。<strong>如未启动everything，这些功能无法使用。</strong> 详见README.md以及README-project.md</p>
         <p>接下来的electron版本会启用api并进行整理。</p>
-        <p>就不做清空按钮之类的东西了，因为这里只是一个“api大全”，electron应用里面再做吧。</p>
+        <p>就不做清空按钮、自动填入测试样例之类的东西了，因为这里只是一个“api大全”，electron应用里面再做吧。</p>
     </div>
     """)
 
@@ -109,6 +109,18 @@ with gr.Blocks(title="Text-maestro") as demo:
         return "\n".join(utils_everything.search_files_in_directory(path, search_subdirs, full_path, only_files))
 
     gr.Button("搜索").click(search_files, inputs=[search_path_input, search_subdirs_input, search_full_path_input, search_only_file_input], outputs=search_output)
+
+    # 搜索结果筛选功能
+    gr.Markdown("## 搜索结果筛选功能")
+    with gr.Group():
+        file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。")
+        regex_input = gr.Textbox(label="正则表达式筛选", placeholder="对每一行进行遍历核验，不匹配的和匹配的会被区分开，顺序不会被打乱。", value=".*\\.(txt|md)$")
+        filter_output = gr.Textbox(label="筛选结果")
+
+    def filter_files(file_list, regex):
+        return utils.filter_files(file_list, regex)
+
+    gr.Button("筛选").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
 
     # RGB 和 十六进制颜色码双向转换工具
     gr.Markdown("## RGB 和 十六进制颜色码双向转换工具")
