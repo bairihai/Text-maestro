@@ -16,5 +16,8 @@ def generate_wordcloud(word_freq, font_path):
     img_buffer.seek(0)
     
     # 将图像转换为base64编码
-    img_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
-    return img_base64
+    # img_base64 = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+    # return img_base64
+
+    # 直接返回图像数据
+    return img_buffer
