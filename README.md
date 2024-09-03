@@ -112,7 +112,7 @@ npm run dev
 [![Firefox Add-ons](https://img.shields.io/amo/stars/acfun-video-download.svg)](https://addons.mozilla.org/zh-CN/firefox/addon/acfun-video-download/)
 [![MIT](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/iamscottxu/AcFun-Video-Download/blob/master/LICENSE)
 
-功能1：文件分类
+**【dev-0.6.1已实装】功能1：文件分类**
 
 按照一定条件，以所选择的方式，列出符合条件的文件。
 
