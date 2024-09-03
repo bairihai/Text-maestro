@@ -10,8 +10,9 @@ from difflib import Differ
 import utils
 import utils_folder
 import utils_everything
+import utils_jieba
 
-# 页面构建，功能引入
+# 页面构建（gradio interface），功能引入
 with gr.Blocks(title="Text-maestro") as demo:
 
     # 公告区域
@@ -136,5 +137,25 @@ with gr.Blocks(title="Text-maestro") as demo:
         hex_input = gr.Textbox(label="输入十六进制颜色码", placeholder="例如：FF8000 （不需要带#，直接输入数值内容）")
         rgb_output = gr.Textbox(label="输出 RGB 颜色值")
         gr.Button("转换").click(utils.hex_to_rgb, inputs=hex_input, outputs=rgb_output)
+
+    # 字数词数统计功能，三引号实现长文本分段
+    gr.Markdown("## 字数词数统计功能")
+    text_input = gr.Textbox(
+        label="输入文本", 
+        lines=5, 
+        placeholder="在此输入文本进行字数词数统计", 
+        value="""“早上起来，先来个五公里。吃饭。然后一整个上午就是打靶，摔沙人。练得汗流浃背，旁边教练拿着靶盯着你，你要是想偷懒就一靶抽你屁股上。
+下午开始实战了，挑好对手，捉对厮杀。鼻子喷血了，被踢淤青了，手腕挫了，脚扭了，别喊疼，都是小伤。喷点药，接着干。晚上再来个五公里。然后你可以出去溜达一圈了。”
+
+17年的盛夏，她穿着贴身的跤衣，头发剪了军队标准的三毫米，但脸毫无瑕疵。身上没有一丝赘肉，矫健修长。她抓着我的把位，一个漂亮的过肩摔，我翻滚在地上受身。我抓住她的小臂，进步，却怎么也卡不准位置。
+她像个男孩子一样大笑起来。事实上她说话也和男孩一模一样，粗里粗气，爽朗。当然，教练不许偷骂人。然而这么多年，我也没见过比她漂亮的姑娘了。
+她说："你那鞭腿踢的挺像回事儿，但摔跤咋就那么笨呢?一个过肩摔两天还学不会。"
+她的师父，一个国家队退役的女将，抱着胳膊在我后面耸耸肩："你好好练，我当年刚去省柔道队时候，不会柔道技术，就用这一招连摔了十二个人!"她那时候月薪三千块钱。
+其他学员都嘻嘻哈哈的围过来，几个比我小几岁的小男孩叽叽喳喳给我说动作要领，抓着我的肩膀往他们胳膊下放，教我怎么顶。"""
+    )
+    char_count_output = gr.Textbox(label="总字数")
+    word_count_output = gr.Textbox(label="总词数")
+
+    gr.Button("统计").click(utils_jieba.count_chars_and_words, inputs=text_input, outputs=[char_count_output, word_count_output])
 
 demo.launch()
