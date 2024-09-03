@@ -171,6 +171,7 @@ npm run dev
 2. [Chrome拓展程序，Discordmate - Discord Chat Exporter导出聊天记录](https://chromewebstore.google.com/detail/discordmate-discord-chat/ofjlibelpafmdhigfgggickpejfomamk)
 3. [vite+electron教程](https://blog.csdn.net/qq_42365534/article/details/129887911) 注意：csdn近期在推自己的码仓，不要被那什么~~老流氓~~加速计划误导了。
 4. [彭道宽-electron掘金教程&github仓库](https://github.com/PDKSophia/visResumeMook) 几乎很难说一个教程是种祝福还是诅咒
+5. [gradio词云项目示例](https://github.com/AlionSSS/wordcloud-webui)
 
 赞助云都官能团，成为“云山原子”，并为我们的IP事业提供建议：[爱发电链接]()
 

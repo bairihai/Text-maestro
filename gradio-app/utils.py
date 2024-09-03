@@ -48,3 +48,19 @@ def filter_files(file_list, regex):
         else:
             unmatched_files.append(file)
     return "匹配的文件:\n" + "\n".join(matched_files) + "\n\n不匹配的文件:\n" + "\n".join(unmatched_files)
+
+# 功能：读取文件内容
+def read_file(file):
+    try:
+        with open(file.name, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        return str(e)
+
+# 功能：通过路径读取文件内容
+def read_file_from_path(path):
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        return str(e)        

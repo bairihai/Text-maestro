@@ -153,9 +153,24 @@ with gr.Blocks(title="Text-maestro") as demo:
 她的师父，一个国家队退役的女将，抱着胳膊在我后面耸耸肩："你好好练，我当年刚去省柔道队时候，不会柔道技术，就用这一招连摔了十二个人!"她那时候月薪三千块钱。
 其他学员都嘻嘻哈哈的围过来，几个比我小几岁的小男孩叽叽喳喳给我说动作要领，抓着我的肩膀往他们胳膊下放，教我怎么顶。"""
     )
-    char_count_output = gr.Textbox(label="总字数")
+    char_count_output = gr.Textbox(label="总字符数")
     word_count_output = gr.Textbox(label="总词数")
 
     gr.Button("统计").click(utils_jieba.count_chars_and_words, inputs=text_input, outputs=[char_count_output, word_count_output])
+
+
+    # 文本读取功能
+    gr.Markdown("## 文本读取功能")
+
+    with gr.Tab("通过路径读取"):
+        path_input = gr.Textbox(label="输入路径", placeholder="例如： D:\\My Program\\novelai-webui-aki-v2")
+        output_text = gr.Textbox(label="输出文本")
+        gr.Button("读取").click(utils.read_file_from_path, inputs=path_input, outputs=output_text)
+    
+    with gr.Tab("通过文件读取"):
+        input_file = gr.File(label="待读取的文件")
+        output_text = gr.Textbox(label="输出文本")
+        gr.Button("读取").click(utils.read_file, inputs=input_file, outputs=output_text)
+   
 
 demo.launch()
