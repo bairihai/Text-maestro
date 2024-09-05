@@ -184,18 +184,24 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     with gr.Tab("生成词云图"):
         input_word_frequency = gr.Textbox(label="频率表", lines=3 , placeholder="生成的txt格式频率表", value="{'盛夏': 1, '头发': 1, '军队': 1, '标准': 1, '瑕疵': 1, '赘肉': 1, '矫健': 1, '把位': 1, '过肩': 1, '小臂': 1, '男孩子': 1, '男孩': 1, '骂人': 1, '姑娘': 1, '回事儿': 1, '师父': 1, '国家队': 1, '女将': 1, '胳膊': 2, '柔道队': 1, '时候': 2, '柔道': 1, '技术': 1, '月薪': 1, '学员': 1, '小男孩': 1, '动作': 1, '肩膀': 1}")
         input_font_path = gr.Textbox(label="字体文件路径", placeholder="输入字体文件的完整路径 必填！！！")
+        with gr.Row():
+            input_max_font_size = gr.Slider(label="最大字号", minimum=10, maximum=200, value=100)
+            input_min_font_size = gr.Slider(label="最小字号", minimum=10, maximum=200, value=20)
+        with gr.Row():
+            input_margin = gr.Slider(label="词间距", minimum=0, maximum=10, value=2)
+            input_prefer_horizontal = gr.Slider(label="横向排列概率", minimum=0, maximum=1, value=0.9)
         output_image = gr.Image(label="词云图", format="png")
         
         def parse_word_freq(freq_str):
             import ast
             return ast.literal_eval(freq_str)
         
-        def generate_wordcloud_from_freq(freq_str, font_path):
+        def generate_wordcloud_from_freq(freq_str, font_path, max_font_size=100, min_font_size=20, margin=2, prefer_horizontal=0.9):
             word_freq = parse_word_freq(freq_str)
-            img = utils_wordcloud.generate_wordcloud(word_freq, font_path)
+            img = utils_wordcloud.generate_wordcloud(word_freq, font_path, max_font_size, min_font_size, margin, prefer_horizontal)
             return img
         
-        gr.Button("生成").click(generate_wordcloud_from_freq, inputs=[input_word_frequency, input_font_path], outputs=output_image)
+        gr.Button("生成").click(generate_wordcloud_from_freq, inputs=[input_word_frequency, input_font_path, input_max_font_size, input_min_font_size, input_margin, input_prefer_horizontal], outputs=output_image)
 
     # 文本读取功能
     gr.Markdown("## 文本读取功能")

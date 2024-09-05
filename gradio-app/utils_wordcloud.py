@@ -8,8 +8,17 @@ from io import BytesIO
 
 from PIL import Image
 
-def generate_wordcloud(word_freq, font_path):
-    wordcloud = WordCloud(font_path=font_path, width=800, height=400, background_color='white')
+def generate_wordcloud(word_freq, font_path, max_font_size=100, min_font_size=20, margin=2, prefer_horizontal=0.9):
+    wordcloud = WordCloud(
+        font_path=font_path,
+        width=800,
+        height=400,
+        background_color='white',
+        max_font_size=max_font_size,
+        min_font_size=min_font_size,
+        margin=margin,
+        prefer_horizontal=prefer_horizontal
+    )
     wordcloud.generate_from_frequencies(word_freq)
     
     # 将词云图保存到内存中
