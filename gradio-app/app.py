@@ -160,7 +160,8 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     gr.Markdown("## 词频统计功能")
     gr.Markdown("目前还不太能自定义，还是按照预设的名词、两个字以上、停用词、自定义词典进行统计。暂不支持自定义")
 
-    with gr.Group():
+
+    with gr.Tab("生成频率表"):
         text_input = gr.Textbox(
             label="输入文本", 
             lines=5, 
@@ -175,7 +176,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
             input_text_dict = gr.Textbox(label="自定义分词词典", placeholder="自定义分词词典，中文里的人名或者自造词需要被手动录入", value="峻影,柔道,云都,自臣,终末之神,死渊,天元的猎犬", interactive=True)
         options = gr.CheckboxGroup(label="按照词性排除", choices=["连词conj.，如“和”“也”", "介词prep.，如“从”“用”"])
 
-    with gr.Tab("生成频率表"):
+
         input_sheet_style = gr.Textbox(label="频率表形式（施工中，暂未开放）", placeholder="csv/xls/md/txt，目前只有txt")
         output_text = gr.Textbox(label="输出频率表")
         gr.Button("生成").click(utils_jieba.word_frequency, inputs=[text_input, input_ban_word, input_text_dict], outputs=output_text)
@@ -212,10 +213,17 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     # 多篇文档拼接功能
     gr.Markdown("## 多篇文档拼接功能")
     with gr.Group():
-    file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
+        file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
 
     gr.Button("筛选").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
 
+    # 以UTF-8编码打开csv数据
+    gr.Markdown("## 以UTF-8编码打开csv数据")
+    gr.Markdown("discord mate等插件会保存UTF8的csv，但在wps中会以默认的GBK编码打开，导致乱码。如果你也是当年有一个免费的联想office忘了激活，不得不用wps，来这里重写吧。不确定请查看 [编码恢复](https://wrtools.top/coderepair.php)")
+    with gr.Group():
+        file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
+
+    gr.Button("筛选").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
 
 
 demo.launch()
