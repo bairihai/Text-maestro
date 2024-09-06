@@ -3,3 +3,4 @@ gradio_client
 jieba
 wordcloud
 openai
+pandas

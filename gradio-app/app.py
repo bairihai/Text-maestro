@@ -233,7 +233,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     # 以UTF-8编码打开csv数据
     gr.Markdown("## 以UTF-8编码打开csv数据")
-    gr.Markdown("discord mate等插件会保存UTF8的csv，但在wps中会以默认的GBK编码打开，导致乱码。如果你也是当年有一个免费的联想office忘了激活，不得不用wps，来这里重写吧。不确定请查看 [编码恢复](https://wrtools.top/coderepair.php)")
+    gr.Markdown("discord mate等插件会保存UTF8的csv，但在wps中会以默认的GBK编码打开，导致乱码。如果你也是当年有一个免费的联想office忘了激活，不得不用wps，来这里重写吧。不确定请查看 [编码恢复](https://wrtools.top/coderepair.php) 纯文本形式打开请使用文本读取功能")
     with gr.Group():
         file_path_input = gr.Textbox(label="输入CSV文件路径", placeholder="例如： D:\\My Program\\data.csv")
 
@@ -244,17 +244,20 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     gr.Markdown("独立性检验工具：wps等。所谓偏好度是指比例乘以总量系数，就是说一个人发言特别多大家发言前后都不得不挨着他，他相邻比例会很高偏好度不高。")
     with gr.Tab("个人发言提取"):
         with gr.Group():
-            file_list_input = gr.Textbox(label="输入待提取的discordmate聊天记录", placeholder="输入csv格式，输出csv格式，仅保留指定用户名的发言。暂不支持一组用户。")
-        gr.Button("提取").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
-    
+            chat_record_input = gr.Textbox(label="输入待提取的discordmate聊天记录", placeholder="输入csv格式的文本，输出csv格式的文本，请使用文本读取功能打开csv文件。保留指定用户名的发言。暂不支持一组用户。")
+            username_input = gr.Textbox(label="输入用户名", placeholder="例如： surtr01234")
+            output_text = gr.Textbox(label="输出文本", value="csv可以直接丢到词频统计功能里分析，会自动把英文什么的忽略掉")
+        
+        gr.Button("提取").click(utils.filter_by_username, inputs=[chat_record_input, username_input], outputs=output_text)
+
     with gr.Tab("发言时间段（频率）"):
         with gr.Group():
-            file_list_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="只看指定用户：用discordmate分离功能 拼接多个记录：用csv拼接功能")
-        gr.Button("分析").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
+            chat_record_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="只看指定用户：用discordmate分离功能 拼接多个记录：用csv拼接功能")
+        gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
     
     with gr.Tab("发言相邻的用户（频率/偏好程度）"):
         with gr.Group():
-            csv_file_list_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="不要给出只有一两个用户的聊天记录，那样估计啥也分析不出来。")
-        gr.Button("分析").click(filter_files, inputs=[csv_file_list_input, regex_input], outputs=filter_output)
+            chat_record_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="不要给出只有一两个用户的聊天记录，那样估计啥也分析不出来。")
+        gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
 
 demo.launch()

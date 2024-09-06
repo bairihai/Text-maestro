@@ -2,6 +2,7 @@ from difflib import Differ
 import re
 
 import csv
+import pandas as pd
 
 # utils.py 基础功能
 
@@ -75,3 +76,10 @@ def preview_csv(file_path):
             return [row for row in reader]
     except Exception as e:
         return str(e)
+
+# 功能：根据用户名筛选CSV数据
+def filter_by_username(csv_text, username):
+    from io import StringIO
+    df = pd.read_csv(StringIO(csv_text))
+    filtered_df = df[df['Username'] == username]
+    return filtered_df.to_csv(index=False)
