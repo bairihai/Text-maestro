@@ -28,6 +28,8 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     </div>
     """)
 
+    # <p><strong>注意：</strong> 计划接入的<span style="background-color: #A2DEC8; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">GPT-4o</span>功能需要API Key才能使用。</p>
+
     # Unicode 和中文双向转换工具
     gr.Markdown("## Unicode 和中文双向转换工具")
     
@@ -233,9 +235,26 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     gr.Markdown("## 以UTF-8编码打开csv数据")
     gr.Markdown("discord mate等插件会保存UTF8的csv，但在wps中会以默认的GBK编码打开，导致乱码。如果你也是当年有一个免费的联想office忘了激活，不得不用wps，来这里重写吧。不确定请查看 [编码恢复](https://wrtools.top/coderepair.php)")
     with gr.Group():
-        file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
+        file_path_input = gr.Textbox(label="输入CSV文件路径", placeholder="例如： D:\\My Program\\data.csv")
 
-    gr.Button("筛选").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
+    gr.Button("预览CSV").click(utils.preview_csv, inputs=file_path_input, outputs=gr.Dataframe())
 
+    # discordmate聊天记录分析
+    gr.Markdown("## discordmate聊天记录画像分析")
+    gr.Markdown("独立性检验工具：wps等。所谓偏好度是指比例乘以总量系数，就是说一个人发言特别多大家发言前后都不得不挨着他，他相邻比例会很高偏好度不高。")
+    with gr.Tab("个人发言提取"):
+        with gr.Group():
+            file_list_input = gr.Textbox(label="输入待提取的discordmate聊天记录", placeholder="输入csv格式，输出csv格式，仅保留指定用户名的发言。暂不支持一组用户。")
+        gr.Button("提取").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
+    
+    with gr.Tab("发言时间段（频率）"):
+        with gr.Group():
+            file_list_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="只看指定用户：用discordmate分离功能 拼接多个记录：用csv拼接功能")
+        gr.Button("分析").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
+    
+    with gr.Tab("发言相邻的用户（频率/偏好程度）"):
+        with gr.Group():
+            csv_file_list_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="不要给出只有一两个用户的聊天记录，那样估计啥也分析不出来。")
+        gr.Button("分析").click(filter_files, inputs=[csv_file_list_input, regex_input], outputs=filter_output)
 
 demo.launch()

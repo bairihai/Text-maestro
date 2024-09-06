@@ -2,3 +2,4 @@ gradio
 gradio_client
 jieba
 wordcloud
+openai
