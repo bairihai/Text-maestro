@@ -1,6 +1,8 @@
 from difflib import Differ
 import re
 
+import csv
+
 # utils.py 基础功能
 
 # 功能：打招呼
@@ -64,3 +66,12 @@ def read_file_from_path(path):
             return f.read()
     except Exception as e:
         return str(e)        
+
+# 功能：读取并预览CSV文件内容
+def preview_csv(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            return [row for row in reader]
+    except Exception as e:
+        return str(e)

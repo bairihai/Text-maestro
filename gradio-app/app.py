@@ -218,10 +218,16 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     # 多篇文档拼接功能
     gr.Markdown("## 多篇文档拼接功能")
-    with gr.Group():
-        file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
-
-    gr.Button("筛选").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
+    
+    with gr.Tab("字符串有序拼接"):
+        with gr.Group():
+            file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
+        gr.Button("拼接").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
+    
+    with gr.Tab("csv有序拼接"):
+        with gr.Group():
+            csv_file_list_input = gr.Textbox(label="输入CSV文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
+        gr.Button("拼接").click(filter_files, inputs=[csv_file_list_input, regex_input], outputs=filter_output)
 
     # 以UTF-8编码打开csv数据
     gr.Markdown("## 以UTF-8编码打开csv数据")
