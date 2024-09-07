@@ -119,4 +119,11 @@ def calculate_user_preference(user_time_freq, channel_time_freq):
     merged_df = pd.merge(user_df, channel_df, on='Time', how='outer').fillna(0)
     merged_df['Preference'] = merged_df['UserPercentage'] - merged_df['ChannelPercentage']
     
+    # 统一小数位数
+    merged_df['UserCount'] = merged_df['UserCount'].astype(int)
+    merged_df = merged_df.round({'UserPercentage': 2, 'ChannelCount': 0, 'ChannelPercentage': 2, 'Preference': 2})
+    
+    # 添加中文注释
+    merged_df.columns = ['时间段', '这一时间段内该用户发言条数', '这一时间段内该用户发言与该用户总发言的百分比', '这一时间段内频道发言条数', '这一时间段内频道发言与频道总发言的百分比', '该用户在该时段发言的偏好度']
+    
     return merged_df.to_string(index=False)
