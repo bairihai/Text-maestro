@@ -223,7 +223,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     
     with gr.Tab("字符串有序拼接"):
         with gr.Group():
-            file_list_input = gr.Textbox(label="输入文件列表", placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
+            file_list_input = gr.Textbox(label="输入文件列表", lines=3 , placeholder="每行一个绝对路径。可使用上面的文件搜索功能给文件夹生成，之后粘贴进来。可以在筛选功能处筛选好了再粘贴过来。")
         gr.Button("拼接").click(filter_files, inputs=[file_list_input, regex_input], outputs=filter_output)
     
     with gr.Tab("csv有序拼接"):
@@ -240,30 +240,48 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     gr.Button("预览CSV").click(utils.preview_csv, inputs=file_path_input, outputs=gr.Dataframe())
 
     # discordmate聊天记录分析
-    gr.Markdown("## discordmate聊天记录画像分析")
+    gr.Markdown("## discordmate聊天记录数据分析")
     gr.Markdown("独立性检验工具：wps等。所谓偏好度是指比例乘以总量系数，就是说一个人发言特别多大家发言前后都不得不挨着他，他相邻比例会很高偏好度不高。")
     with gr.Tab("个人发言提取"):
         with gr.Group():
-            chat_record_input = gr.Textbox(label="输入待提取的discordmate聊天记录", placeholder="输入csv格式的文本，输出csv格式的文本，请使用文本读取功能打开csv文件。保留指定用户名的发言。暂不支持一组用户。")
+            chat_record_input = gr.Textbox(label="输入待提取的discordmate聊天记录", lines=3, placeholder="输入csv格式的文本，输出csv格式的文本，请使用文本读取功能打开csv文件。保留指定用户名的发言。暂不支持一组用户。")
             username_input = gr.Textbox(label="输入用户名", placeholder="例如： surtr01234")
             output_text = gr.Textbox(label="输出文本", value="csv可以直接丢到词频统计功能里分析，会自动把英文什么的忽略掉")
         
         gr.Button("提取").click(utils.filter_by_username, inputs=[chat_record_input, username_input], outputs=output_text)
 
-    with gr.Tab("发言时间段（频率/偏好程度）"):
+    with gr.Tab("发言时间段（频率）"):
         with gr.Group():
-            chat_record_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="只看指定用户：用discordmate分离功能 拼接多个记录：用csv拼接功能")
+            chat_record_input = gr.Textbox(label="输入待分析的聊天记录", lines=3, placeholder="只看指定用户：用discordmate分离功能 拼接多个记录：用csv拼接功能")
             time_granularity_input = gr.Number(label="时间颗粒度（分钟）", value=360)
-            frequency_output = gr.Textbox(label="发言频率统计结果")
+            frequency_output = gr.Textbox(label="发言频率统计结果", lines=3)
+        gr.Button("统计").click(utils.count_message_frequency, inputs=[chat_record_input, time_granularity_input], outputs=frequency_output)
 
-        def count_message_frequency(csv_text, time_granularity):
-            return utils.count_message_frequency(csv_text, time_granularity)
+    with gr.Tab("发言相邻的用户（频率）"):
+        with gr.Group():
+            chat_record_input = gr.Textbox(label="输入待分析的聊天记录", lines=3, placeholder="不要给出只有一两个用户的聊天记录，那样估计啥也分析不出来。")
+        gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
 
+    gr.Markdown("## discordmate聊天记录画像分析")
+    with gr.Tab("发言时间段（偏好度）"):
+        with gr.Row():
+            input_ban_word = gr.Textbox(label="待分析用户的发言时频", placeholder="被停用的词将被忽略，不会被统计", value="""Time
+2024-09-02 11:00:00     3
+2024-09-02 12:00:00     1
+2024-09-02 13:00:00    14
+2024-09-02 15:00:00     3
+2024-09-02 18:00:00     2""", interactive=True)
+            input_text_dict = gr.Textbox(label="整个频道的发言时频", placeholder="自定义分词词典，中文里的人名或者自造词需要被手动录入", value="""Time
+2024-09-01 22:00:00     1
+2024-09-02 11:00:00    22
+2024-09-02 12:00:00    12
+2024-09-02 13:00:00    66
+2024-09-02 14:00:00     8
+2024-09-02 15:00:00    16
+2024-09-02 18:00:00     8
+2024-09-04 00:00:00     3
+2024-09-04 04:00:00     1""", interactive=True)
         gr.Button("统计").click(count_message_frequency, inputs=[chat_record_input, time_granularity_input], outputs=frequency_output)
 
-    with gr.Tab("发言相邻的用户（频率/偏好程度）"):
-        with gr.Group():
-            chat_record_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="不要给出只有一两个用户的聊天记录，那样估计啥也分析不出来。")
-        gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
 
 demo.launch()
