@@ -102,8 +102,16 @@ def calculate_time_slot_frequency(channel_time_freq):
 
 # 功能：discordmate分析单个用户在各个时段的发言偏好度（百分数）
 def calculate_user_preference(user_time_freq, channel_time_freq):
-    user_df = pd.read_csv(StringIO(user_time_freq), sep='\s+', header=None, names=['Time', 'UserCount'])
-    channel_df = pd.read_csv(StringIO(channel_time_freq), sep='\s+', header=None, names=['Time', 'ChannelCount'])
+    user_df = pd.read_csv(StringIO(user_time_freq), sep='\s+', header=0, names=['Time', 'UserCount'], on_bad_lines='skip')
+    channel_df = pd.read_csv(StringIO(channel_time_freq), sep='\s+', header=0, names=['Time', 'ChannelCount'], on_bad_lines='skip')
+    
+    # 确保时间格式一致
+    user_df['Time'] = pd.to_datetime(user_df['Time'], errors='coerce')
+    channel_df['Time'] = pd.to_datetime(channel_df['Time'], errors='coerce')
+    
+    # 删除无法解析的时间行
+    user_df = user_df.dropna(subset=['Time'])
+    channel_df = channel_df.dropna(subset=['Time'])
     
     user_df['UserPercentage'] = (user_df['UserCount'] / user_df['UserCount'].sum()) * 100
     channel_df['ChannelPercentage'] = (channel_df['ChannelCount'] / channel_df['ChannelCount'].sum()) * 100
