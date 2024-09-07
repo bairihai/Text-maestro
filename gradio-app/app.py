@@ -253,8 +253,14 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     with gr.Tab("发言时间段（频率/偏好程度）"):
         with gr.Group():
             chat_record_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="只看指定用户：用discordmate分离功能 拼接多个记录：用csv拼接功能")
-        gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
-    
+            time_granularity_input = gr.Number(label="时间颗粒度（分钟）", value=360)
+            frequency_output = gr.Textbox(label="发言频率统计结果")
+
+        def count_message_frequency(csv_text, time_granularity):
+            return utils.count_message_frequency(csv_text, time_granularity)
+
+        gr.Button("统计").click(count_message_frequency, inputs=[chat_record_input, time_granularity_input], outputs=frequency_output)
+
     with gr.Tab("发言相邻的用户（频率/偏好程度）"):
         with gr.Group():
             chat_record_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="不要给出只有一两个用户的聊天记录，那样估计啥也分析不出来。")

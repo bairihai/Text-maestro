@@ -83,3 +83,11 @@ def filter_by_username(csv_text, username):
     df = pd.read_csv(StringIO(csv_text))
     filtered_df = df[df['Username'] == username]
     return filtered_df.to_csv(index=False)
+
+# 功能：discordmate发言时段频率统计
+def count_message_frequency(csv_text, time_granularity):
+    from io import StringIO
+    df = pd.read_csv(StringIO(csv_text), parse_dates=['Date'])
+    df['Time'] = df['Date'].dt.floor(f'{time_granularity}min')
+    frequency = df.groupby('Time').size()
+    return frequency.to_string()
