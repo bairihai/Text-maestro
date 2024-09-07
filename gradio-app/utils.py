@@ -3,6 +3,7 @@ import re
 
 import csv
 import pandas as pd
+from io import StringIO
 
 # utils.py 基础功能
 
@@ -91,3 +92,23 @@ def count_message_frequency(csv_text, time_granularity):
     df['Time'] = df['Date'].dt.floor(f'{time_granularity}min')
     frequency = df.groupby('Time').size()
     return frequency.to_string()
+
+# 功能：discordmate统计每天各个时段的发言频率（百分数）
+def calculate_time_slot_frequency(channel_time_freq):
+    channel_df = pd.read_csv(StringIO(channel_time_freq), sep='\s+', header=None, names=['Time', 'Count'])
+    total_count = channel_df['Count'].sum()
+    channel_df['Percentage'] = (channel_df['Count'] / total_count) * 100
+    return channel_df.to_string(index=False)
+
+# 功能：discordmate分析单个用户在各个时段的发言偏好度（百分数）
+def calculate_user_preference(user_time_freq, channel_time_freq):
+    user_df = pd.read_csv(StringIO(user_time_freq), sep='\s+', header=None, names=['Time', 'UserCount'])
+    channel_df = pd.read_csv(StringIO(channel_time_freq), sep='\s+', header=None, names=['Time', 'ChannelCount'])
+    
+    user_df['UserPercentage'] = (user_df['UserCount'] / user_df['UserCount'].sum()) * 100
+    channel_df['ChannelPercentage'] = (channel_df['ChannelCount'] / channel_df['ChannelCount'].sum()) * 100
+    
+    merged_df = pd.merge(user_df, channel_df, on='Time', how='outer').fillna(0)
+    merged_df['Preference'] = merged_df['UserPercentage'] - merged_df['ChannelPercentage']
+    
+    return merged_df.to_string(index=False)

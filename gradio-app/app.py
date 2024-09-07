@@ -263,15 +263,21 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
 
     gr.Markdown("## discordmate聊天记录画像分析")
+    with gr.Tab("发言时间段（频率）"):
+        with gr.Group():
+            channel_time_freq_input = gr.Textbox(label="整个待分析的发言时频", lines=10, placeholder="输入整个频道的发言时频数据")
+            frequency_output = gr.Textbox(label="发言频率统计结果", lines=10)
+        gr.Button("统计").click(utils.calculate_time_slot_frequency, inputs=[channel_time_freq_input], outputs=frequency_output)
+
     with gr.Tab("发言时间段（偏好度）"):
         with gr.Row():
-            input_ban_word = gr.Textbox(label="待分析用户的发言时频", placeholder="被停用的词将被忽略，不会被统计", value="""Time
+            user_time_freq_input = gr.Textbox(label="待分析用户的发言时频", lines=10, placeholder="被停用的词将被忽略，不会被统计", value="""Time
 2024-09-02 11:00:00     3
 2024-09-02 12:00:00     1
 2024-09-02 13:00:00    14
 2024-09-02 15:00:00     3
 2024-09-02 18:00:00     2""", interactive=True)
-            input_text_dict = gr.Textbox(label="整个频道的发言时频", placeholder="自定义分词词典，中文里的人名或者自造词需要被手动录入", value="""Time
+            channel_time_freq_input = gr.Textbox(label="整个频道的发言时频", lines=10, placeholder="自定义分词词典，中文里的人名或者自造词需要被手动录入", value="""Time
 2024-09-01 22:00:00     1
 2024-09-02 11:00:00    22
 2024-09-02 12:00:00    12
@@ -281,7 +287,8 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 2024-09-02 18:00:00     8
 2024-09-04 00:00:00     3
 2024-09-04 04:00:00     1""", interactive=True)
-        gr.Button("统计").click(count_message_frequency, inputs=[chat_record_input, time_granularity_input], outputs=frequency_output)
+        preference_output = gr.Textbox(label="发言偏好度统计结果", lines=10)
+        gr.Button("统计").click(utils.calculate_user_preference, inputs=[user_time_freq_input, channel_time_freq_input], outputs=preference_output)
 
 
 demo.launch()
