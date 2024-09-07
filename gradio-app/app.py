@@ -250,7 +250,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         
         gr.Button("提取").click(utils.filter_by_username, inputs=[chat_record_input, username_input], outputs=output_text)
 
-    with gr.Tab("发言时间段（频率）"):
+    with gr.Tab("发言时间段（频率/偏好程度）"):
         with gr.Group():
             chat_record_input = gr.Textbox(label="输入待分析的聊天记录", placeholder="只看指定用户：用discordmate分离功能 拼接多个记录：用csv拼接功能")
         gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
