@@ -28,7 +28,7 @@ function App(): JSX.Element {
 
         <NavBar />
 
-        <div className="ml-12"> {/* 添加 ml-12 类，为左侧的navbar留出空间 */}
+        <div className="ml-12"> {/* 添加 ml-12 类，为左侧的navbar留出空间。暂时写死，想活可以用css变量。 */}
         <Routes>
           {
             routes.map(route => <Route key={route.path} path={route.path} element={<route.component />} />)

@@ -106,18 +106,26 @@ def calculate_user_preference(user_time_freq, channel_time_freq):
     channel_df = pd.read_csv(StringIO(channel_time_freq), sep='\s+', header=0, names=['Time', 'ChannelCount'], on_bad_lines='skip')
     
     # 确保时间格式一致
-    user_df['Time'] = pd.to_datetime(user_df['Time'], errors='coerce')
-    channel_df['Time'] = pd.to_datetime(channel_df['Time'], errors='coerce')
+    user_df['Time'] = pd.to_datetime(user_df['Time'], errors='coerce').dt.time
+    channel_df['Time'] = pd.to_datetime(channel_df['Time'], errors='coerce').dt.time
     
     # 删除无法解析的时间行
     user_df = user_df.dropna(subset=['Time'])
     channel_df = channel_df.dropna(subset=['Time'])
     
+    # 按时间段分组并汇总
+    user_df = user_df.groupby('Time').sum().reset_index()
+    channel_df = channel_df.groupby('Time').sum().reset_index()
+    
     user_df['UserPercentage'] = (user_df['UserCount'] / user_df['UserCount'].sum()) * 100
     channel_df['ChannelPercentage'] = (channel_df['ChannelCount'] / channel_df['ChannelCount'].sum()) * 100
     
     merged_df = pd.merge(user_df, channel_df, on='Time', how='outer').fillna(0)
-    merged_df['Preference'] = merged_df['UserPercentage'] - merged_df['ChannelPercentage']
+    
+    # 计算偏好度
+    merged_df['Preference'] = merged_df.apply(
+        lambda row: (row['UserPercentage'] / row['ChannelPercentage']) if row['ChannelPercentage'] != 0 else 0, axis=1
+    )
     
     # 统一小数位数
     merged_df['UserCount'] = merged_df['UserCount'].astype(int)
