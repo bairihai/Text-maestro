@@ -135,3 +135,34 @@ def calculate_user_preference(user_time_freq, channel_time_freq):
     merged_df.columns = ['时间段', '这一时间段内该用户发言条数', '这一时间段内该用户发言与该用户总发言的百分比', '这一时间段内频道发言条数', '这一时间段内频道发言与频道总发言的百分比', '该用户在该时段发言的偏好度']
     
     return merged_df.to_string(index=False)
+
+# 功能：多文档拼接
+
+def concatenate_text_files(file_paths):
+    result = ""
+    for path in file_paths.split('\n'):
+        path = path.strip()
+        if path:
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    result += f.read() + "\n\n"
+            except Exception as e:
+                result += f"Error reading {path}: {str(e)}\n\n"
+    return result
+
+def concatenate_csv_files(file_paths):
+    dfs = []
+    for path in file_paths.split('\n'):
+        path = path.strip()
+        if path:
+            try:
+                df = pd.read_csv(path)
+                dfs.append(df)
+            except Exception as e:
+                print(f"Error reading {path}: {str(e)}")
+    
+    if dfs:
+        result = pd.concat(dfs, ignore_index=True)
+        return result.to_csv(index=False)
+    else:
+        return "No valid CSV files found."
