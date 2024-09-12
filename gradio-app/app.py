@@ -292,5 +292,12 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         preference_output = gr.Textbox(label="发言偏好度统计结果", lines=10)
         gr.Button("统计").click(utils.calculate_user_preference, inputs=[user_time_freq_input, channel_time_freq_input], outputs=preference_output)
 
+    # 全文查找并替换（人名地名优化版）
+    gr.Markdown("## 人名/地名 全文查找并替换")
+
+
+    # 小说洗稿
+    gr.Markdown("## 番茄/起点小说搬运洗稿")
+    gr.Markdown("影视解说洗稿、视频拆解等功能之后制作。部分功能需要使用ai，鉴于目前ai市场比较混乱，就不内置ai功能了，模型选用费用控制都是大问题。  \n 所以，最后采用的方案是把prompt格式化拼接好，你自己找个合适的模型让他处理，想用哪个模型（gpt4o 01 或是claude之类）都可以，只要给我输出就行了。")
 
 demo.launch()

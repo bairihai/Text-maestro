@@ -166,3 +166,10 @@ def concatenate_csv_files(file_paths):
         return result.to_csv(index=False)
     else:
         return "No valid CSV files found."
+
+import opencc
+
+# 功能：简体转繁体
+def simplify_to_traditional(text):
+    converter = opencc.OpenCC('s2t.json')  # 简体到繁体
+    return converter.convert(text)
