@@ -3,6 +3,8 @@ import About from '@renderer/pages/about'
 import Playground from '@renderer/pages/playground'
 import Setting from '@renderer/pages/setting'
 
+// import routesForum from './routesForum'
+
 const routes = [
   {
     path: "/",
@@ -20,10 +22,7 @@ const routes = [
     path: "/setting",
     component: Setting
   },
-//   {
-//     path: "*",
-//     component: NotFoundPage
-//   }
+  // ...routesForum
 ];
 
 export default routes
