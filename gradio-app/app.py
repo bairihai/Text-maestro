@@ -295,6 +295,17 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     # 全文查找并替换（人名地名优化版）
     gr.Markdown("## 人名/地名 全文查找并替换")
 
+    # 简繁互转
+    gr.Markdown("## 简繁互转")
+    with gr.Tab("简体转繁体"):
+        simplify_input = gr.Textbox(label="输入简体中文", lines=3, placeholder="请输入要转换的简体中文文本", value="赤心巡天是很值得被洗稿之后搬运到番茄小说的。推荐的流程是1.人名地名词典替换 2.简繁转换 3.ai原意提取 4.ai关键词近义化 5.ai重写")
+        traditional_output = gr.Textbox(label="繁体中文输出", lines=3)
+        gr.Button("转换").click(utils.simplify_to_traditional, inputs=simplify_input, outputs=traditional_output)
+        
+    with gr.Tab("繁体转简体"):
+        traditional_input = gr.Textbox(label="输入繁体中文", lines=3, placeholder="請輸入要轉換的繁體中文文本")
+        simplify_output = gr.Textbox(label="简体中文输出", lines=3)
+        gr.Button("转换").click(utils.traditional_to_simplify, inputs=traditional_input, outputs=simplify_output)
 
     # 小说洗稿
     gr.Markdown("## 番茄/起点小说搬运洗稿")

@@ -173,3 +173,8 @@ import opencc
 def simplify_to_traditional(text):
     converter = opencc.OpenCC('s2t.json')  # 简体到繁体
     return converter.convert(text)
+
+# 功能：繁体转简体
+def traditional_to_simplify(text):
+    converter = opencc.OpenCC('t2s.json')  # 繁体到简体
+    return converter.convert(text)
