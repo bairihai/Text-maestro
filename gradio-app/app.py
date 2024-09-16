@@ -295,7 +295,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     # 全文查找并替换（人名地名优化版），注意往gradio里面写html元素需要双引号改为单引号
     gr.Markdown("## 人名/地名替换")
-    with gr.Tab("待替换内容识别<span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'>AI</span>"):
+    with gr.Tab("待替换内容识别\u3008span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'\u3009AI\u3008/span\u3009"):
         simplify_input = gr.Textbox(label="输入待洗稿的文章，ai识别其中需要替换的内容", lines=3, placeholder="文章正文", value="赤心巡天是很值得被洗稿之后搬运到番茄小说的")
         traditional_output = gr.Textbox(label="繁体中文输出", lines=3)
         gr.Button("转换").click(utils.simplify_to_traditional, inputs=simplify_input, outputs=traditional_output)     
