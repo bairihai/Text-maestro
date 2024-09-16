@@ -22,8 +22,8 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         <h2>公告区</h2>
         <p>目前正在使用最基础的gradio版本，electron版本的制作请等待后续通知。</p>
         <p><strong>注意：</strong> 请确保运行本面板的机器（后端）和打开面板的机器（前端）相同。<strong>涉及到本地文件部分的功能并不能仅靠一个gradio面板在前端使用。</strong></p>
-        <p><strong>注意：</strong> 部分被标注为<span style="background-color: #FF8000; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">everything</span>的功能需要你后台启用everything以加快搜索速度。<strong>如未启动everything，这些功能无法使用。</strong> 详见README.md以及README-project.md</p>
-        <p><strong>注意：</strong> 部分被标注为<span style="background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">AI</span>的功能需要你自备一个语言大模型。我们会把prompt给你整理好，你只要让你的大模型把结果给你，然后输入到这里。<strong>没有AI，这些功能无法使用。</strong> 具体模型不做要求</p>
+        <p><strong>注意：</strong> 部分被标注为 <span style="background-color: #FF8000; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">everything</span> 的功能需要你后台启用everything以加快搜索速度。<strong>如未启动everything，这些功能无法使用。</strong> 详见README.md以及README-project.md</p>
+        <p><strong>注意：</strong> 部分被标注为 <span style="background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.85em;">AI</span> 的功能需要你自备一个语言大模型。我们会把prompt给你整理好，你只要让你的大模型把结果给你，然后输入到这里。<strong>没有AI，这些功能无法使用。</strong> 具体模型不做要求</p>
         <p>接下来的electron版本会启用api并进行整理。</p>
         <p>就不做清空按钮、自动填入测试样例之类的东西了，因为这里只是一个“api大全”，electron应用里面再做吧。</p>
     </div>
@@ -293,11 +293,11 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         preference_output = gr.Textbox(label="发言偏好度统计结果", lines=10)
         gr.Button("统计").click(utils.calculate_user_preference, inputs=[user_time_freq_input, channel_time_freq_input], outputs=preference_output)
 
-    # 全文查找并替换（人名地名优化版），注意往gradio里面写html元素需要双引号改为单引号
-    gr.Markdown("## 人名/地名替换")
-    with gr.Tab("待替换内容识别\u3008span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'\u3009AI\u3008/span\u3009"):
+    # 全文查找并替换（人名地名优化版），注意往gradio里面写html元素需要双引号改为单引号。gr.tab里面没法写元素，算了吧。
+    gr.Markdown("## 人名/地名替换 <span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'>AI</span>")
+    with gr.Tab("待替换内容识别"):
         simplify_input = gr.Textbox(label="输入待洗稿的文章，ai识别其中需要替换的内容", lines=3, placeholder="文章正文", value="赤心巡天是很值得被洗稿之后搬运到番茄小说的")
-        traditional_output = gr.Textbox(label="繁体中文输出", lines=3)
+        traditional_output = gr.Textbox(label="prompt", lines=3)
         gr.Button("转换").click(utils.simplify_to_traditional, inputs=simplify_input, outputs=traditional_output)     
 
     # 简繁互转
@@ -312,12 +312,37 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         simplify_output = gr.Textbox(label="简体中文输出", lines=3)
         gr.Button("转换").click(utils.traditional_to_simplify, inputs=traditional_input, outputs=simplify_output)
 
-    # 文章大纲统一
-    gr.Markdown("## 文章大纲统一")
-    with gr.Group():
-        articles_input = gr.Textbox(label="待统一大纲的文章（md/txt）", lines=10, placeholder="文章的绝对路径，每行一个，默认file协议")
-        processed_articles_output = gr.Textbox(label="处理后的文章", lines=10)
-        unified_outline_output = gr.Textbox(label="统一后的大纲", lines=5)
+    # 文章大纲（TOC）统一
+    gr.Markdown("## 文章大纲（TOC）统一及相关功能")
+    gr.Markdown("就好像练一下背负投就要拆开练抢把、打入、转身、摔法，实现一个大功能也要拆解目标先做好一堆小功能。现在你就明白我为什么总是把功能拆很碎，看起来急着做electron版了。就不说什么习得性无助之类的话了。 ——2024年9月17日 01点16分 白日海")
+    
+    with gr.Tab("提取md文章大纲"):
+        md_input = gr.Textbox(label="输入Markdown文章", lines=4, placeholder="请输入Markdown格式的文章内容")
+        outline_output = gr.Textbox(label="提取的大纲", lines=4)
+        gr.Button("提取大纲").click(utils.extract_markdown_outline, inputs=md_input, outputs=outline_output)
+
+    with gr.Tab("两大纲合并"):
+        with gr.Row():
+            doc1_input = gr.Textbox(label="大纲1内容", lines=5, placeholder="请输入第一个大纲的内容。md语言。", value="""## 大章节1 
+### 小章节2
+## 大章节3
+""")
+            doc2_input = gr.Textbox(label="大纲2内容", lines=5, placeholder="请输入第二个大纲的内容。md语言。", value="""## 大章节3 
+### 小章节a
+## 大章节1
+### 小章节b                                    
+""")
+        merged_output = gr.Textbox(label="合并后的大纲", lines=5)
+        # gr.Button("合并").click(utils.merge_two_docs, inputs=[doc1_input, doc2_input], outputs=merged_output)
+
+    with gr.Tab("对一篇文章使用新大纲"):
+        merged_output = gr.Textbox(label="使用后的大纲", lines=5)
+        # gr.Button("合并").click(utils.merge_two_docs, inputs=[doc1_input, doc2_input], outputs=merged_output)
+
+    with gr.Tab("多文档合并"):
+        articles_input = gr.Textbox(label="待统一大纲的文章（md/txt）", lines=5, placeholder="文章的绝对路径，每行一个，默认file协议")
+        processed_articles_output = gr.Textbox(label="处理后的文章", lines=5)
+        unified_outline_output = gr.Textbox(label="统一后的大纲", lines=3)
   
 
     # 小说洗稿

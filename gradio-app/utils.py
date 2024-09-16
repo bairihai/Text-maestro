@@ -178,3 +178,17 @@ def simplify_to_traditional(text):
 def traditional_to_simplify(text):
     converter = opencc.OpenCC('t2s.json')  # 繁体到简体
     return converter.convert(text)
+
+# 功能：提取Markdown文章大纲
+def extract_markdown_outline(markdown_text):
+    # 使用正则表达式匹配标题行
+    pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
+    matches = pattern.finditer(markdown_text)
+    
+    outline = []
+    for match in matches:
+        level = len(match.group(1))  # 标题级别
+        title = match.group(2)  # 标题内容
+        outline.append('#' * level + ' ' + title)
+    
+    return '\n'.join(outline)
