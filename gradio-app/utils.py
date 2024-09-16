@@ -192,3 +192,26 @@ def extract_markdown_outline(markdown_text):
         outline.append('#' * level + ' ' + title)
     
     return '\n'.join(outline)
+
+# 功能：两大纲合并
+def merge_two_docs(doc1, doc2):
+    # 分割每个文档为行
+    lines1 = doc1.split('\n')
+    lines2 = doc2.split('\n')
+    
+    # 合并所有行
+    all_lines = lines1 + lines2
+    
+    # 去重并保持顺序
+    seen = set()
+    merged = []
+    for line in all_lines:
+        stripped = line.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            merged.append(line)
+    
+    # 按标题级别排序
+    merged.sort(key=lambda x: (x.count('#'), x))
+    
+    return '\n'.join(merged)

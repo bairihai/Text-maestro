@@ -314,7 +314,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     # 文章大纲（TOC）统一
     gr.Markdown("## 文章大纲（TOC）统一及相关功能")
-    gr.Markdown("就好像练一下背负投就要拆开练抢把、打入、转身、摔法，实现一个大功能也要拆解目标先做好一堆小功能。现在你就明白我为什么总是把功能拆很碎，看起来急着做electron版了。就不说什么习得性无助之类的话了。 ——2024年9月17日 01点16分 白日海")
+    gr.Markdown("就好像练一下背负投就要拆开练抢把、打入、转身、摔法，实现一个大功能也要拆解目标先做好一堆小功能。  \n 现在你就明白我为什么总是把功能拆很碎，看起来急着做electron版了。 \n  就不说什么习得性无助之类的话了。  \n  ——2024年9月17日 01点16分 白日海  \n 注：这个功能没做什么鲁棒性，不要捣乱，比如一个小标题同时出现在大标题A和B里这种情况。唉，可能最后还是得AI。  ")
     
     with gr.Tab("提取md文章大纲"):
         md_input = gr.Textbox(label="输入Markdown文章", lines=4, placeholder="请输入Markdown格式的文章内容")
@@ -323,17 +323,17 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     with gr.Tab("两大纲合并"):
         with gr.Row():
-            doc1_input = gr.Textbox(label="大纲1内容", lines=5, placeholder="请输入第一个大纲的内容。md语言。", value="""## 大章节1 
-### 小章节2
-## 大章节3
-""")
-            doc2_input = gr.Textbox(label="大纲2内容", lines=5, placeholder="请输入第二个大纲的内容。md语言。", value="""## 大章节3 
+            doc1_input = gr.Textbox(label="大纲1内容", lines=5, placeholder="请输入第一个大纲的内容。md语言。", value="""## 大章节A 
 ### 小章节a
-## 大章节1
+## 大章节B
+""")
+            doc2_input = gr.Textbox(label="大纲2内容", lines=5, placeholder="请输入第二个大纲的内容。md语言。", value="""## 大章节B 
+### 小章节c
+## 大章节A
 ### 小章节b                                    
 """)
         merged_output = gr.Textbox(label="合并后的大纲", lines=5)
-        # gr.Button("合并").click(utils.merge_two_docs, inputs=[doc1_input, doc2_input], outputs=merged_output)
+        gr.Button("合并").click(utils.merge_two_docs, inputs=[doc1_input, doc2_input], outputs=merged_output)
 
     with gr.Tab("对一篇文章使用新大纲"):
         merged_output = gr.Textbox(label="使用后的大纲", lines=5)
