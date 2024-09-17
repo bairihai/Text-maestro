@@ -13,6 +13,8 @@ import utils_everything
 import utils_jieba
 import utils_wordcloud
 
+
+
 # 页面构建（gradio interface），功能引入
 with gr.Blocks(title="Text-maestro api大全") as demo:
 
@@ -294,8 +296,10 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         gr.Button("统计").click(utils.calculate_user_preference, inputs=[user_time_freq_input, channel_time_freq_input], outputs=preference_output)
 
     # 全文查找并替换（人名地名优化版），注意往gradio里面写html元素需要双引号改为单引号。gr.tab里面没法写元素，算了吧。
-    gr.Markdown("## 人名/地名替换 <span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'>AI</span>")
+    # 真想往里面加元素其实最好的办法是用一套icon-font。不过太麻烦了。我会再看看……
+    gr.Markdown("## 人名/地名替换 <span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'>AI（部分功能）</span>")
     with gr.Tab("待替换内容识别"):
+        gr.Markdown("<span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'>AI</span>这一tab内是一项AI功能。没有做到tab的label里是因为gradio的限制，改了很久也没有办法……")
         simplify_input = gr.Textbox(label="输入待洗稿的文章，ai识别其中需要替换的内容", lines=3, placeholder="文章正文", value="赤心巡天是很值得被洗稿之后搬运到番茄小说的")
         traditional_output = gr.Textbox(label="prompt", lines=3)
         gr.Button("转换").click(utils.simplify_to_traditional, inputs=simplify_input, outputs=traditional_output)     
@@ -313,7 +317,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         gr.Button("转换").click(utils.traditional_to_simplify, inputs=traditional_input, outputs=simplify_output)
 
     # 文章大纲（TOC）统一
-    gr.Markdown("## 文章大纲（TOC）统一及相关功能")
+    gr.Markdown("## 文章大纲整理（TOC） <span style='background-color: #81D8D0; border-radius: 5px; padding: 1px 3px; font-size: 0.7em;'>AI（部分功能）</span>")
     gr.Markdown("就好像练一下背负投就要拆开练抢把、打入、转身、摔法，实现一个大功能也要拆解目标先做好一堆小功能。  \n 现在你就明白我为什么总是把功能拆很碎，看起来急着做electron版了。 \n  就不说什么习得性无助之类的话了。  \n  ——2024年9月17日 01点16分 白日海  \n 注：这个功能没做什么鲁棒性，不要捣乱，比如一个小标题同时出现在大标题A和B里这种情况。唉，可能最后还是得AI。  ")
     
     with gr.Tab("提取md文章大纲"):

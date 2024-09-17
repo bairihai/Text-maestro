@@ -195,23 +195,29 @@ def extract_markdown_outline(markdown_text):
 
 # 功能：两大纲合并
 def merge_two_docs(doc1, doc2):
-    # 分割每个文档为行
-    lines1 = doc1.split('\n')
-    lines2 = doc2.split('\n')
-    
-    # 合并所有行
-    all_lines = lines1 + lines2
-    
-    # 去重并保持顺序
-    seen = set()
-    merged = []
-    for line in all_lines:
-        stripped = line.strip()
-        if stripped and stripped not in seen:
-            seen.add(stripped)
-            merged.append(line)
-    
-    # 按标题级别排序
-    merged.sort(key=lambda x: (x.count('#'), x))
-    
-    return '\n'.join(merged)
+    def parse_outline(doc):
+        lines = doc.split('\n')
+        outline = {}
+        current_section = None
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('##') and not stripped.startswith('###'):
+                current_section = stripped
+                outline[current_section] = []
+            elif stripped.startswith('#') and current_section:
+                outline[current_section].append(stripped)
+        return outline
+
+    outline1 = parse_outline(doc1)
+    outline2 = parse_outline(doc2)
+
+    merged_outline = {}
+    for section in set(outline1.keys()) | set(outline2.keys()):
+        merged_outline[section] = list(set(outline1.get(section, []) + outline2.get(section, [])))
+
+    result = []
+    for section, subsections in sorted(merged_outline.items()):
+        result.append(section)
+        result.extend(sorted(subsections))
+
+    return '\n'.join(result)
