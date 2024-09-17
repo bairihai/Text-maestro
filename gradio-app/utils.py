@@ -221,3 +221,48 @@ def merge_two_docs(doc1, doc2):
         result.extend(sorted(subsections))
 
     return '\n'.join(result)
+
+# 功能：对一篇文章使用新大纲
+def reorganize_article(original_text, new_outline):
+    # 解析原文
+    original_sections = parse_markdown(original_text)
+    
+    # 解析新大纲
+    new_structure = parse_outline(new_outline)
+    
+    # 重组文章
+    reorganized = []
+    for section in new_structure:
+        level, title = section
+        content = original_sections.get(title, '')
+        reorganized.append(f"{'#' * level} {title}\n{content}")
+    
+    return '\n\n'.join(reorganized)
+
+def parse_markdown(text):
+    sections = {}
+    current_title = None
+    current_content = []
+    
+    for line in text.split('\n'):
+        if line.startswith('#'):
+            if current_title:
+                sections[current_title] = '\n'.join(current_content).strip()
+            current_title = line.lstrip('#').strip()
+            current_content = []
+        else:
+            current_content.append(line)
+    
+    if current_title:
+        sections[current_title] = '\n'.join(current_content).strip()
+    
+    return sections
+
+def parse_outline(outline):
+    structure = []
+    for line in outline.split('\n'):
+        if line.strip():
+            level = len(line) - len(line.lstrip('#'))
+            title = line.lstrip('#').strip()
+            structure.append((level, title))
+    return structure

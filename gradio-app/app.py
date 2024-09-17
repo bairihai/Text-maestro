@@ -340,8 +340,27 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         gr.Button("合并").click(utils.merge_two_docs, inputs=[doc1_input, doc2_input], outputs=merged_output)
 
     with gr.Tab("对一篇文章使用新大纲"):
-        merged_output = gr.Textbox(label="使用后的大纲", lines=5)
-        # gr.Button("合并").click(utils.merge_two_docs, inputs=[doc1_input, doc2_input], outputs=merged_output)
+        with gr.Row():
+            original_text = gr.Textbox(label="原文内容", lines=5,value="""## 大章节B 
+正文BBB                                       
+### 小章节c
+正文ccc                                       
+## 大章节A
+正文AAA
+### 小章节b
+正文bbb""")
+            new_outline = gr.Textbox(label="新大纲", lines=5,value="""## 大章节A
+### 小章节a
+### 小章节b
+## 大章节B
+### 小章节c""")
+        reorganized_text = gr.Textbox(label="重组后的文章", lines=5)
+        
+        gr.Button("重组文章").click(
+            utils.reorganize_article,
+            inputs=[original_text, new_outline],
+            outputs=reorganized_text
+        )
 
     with gr.Tab("多文档合并"):
         articles_input = gr.Textbox(label="待统一大纲的文章（md/txt）", lines=5, placeholder="文章的绝对路径，每行一个，默认file协议")
