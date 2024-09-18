@@ -72,16 +72,18 @@ app.whenReady().then(() => {
   const userDataPath = app.getPath('userData');
   const preferencesPath = path.join(userDataPath, 'preferences.json');
 
+  // 读取preferences偏好设置。注意，我们顶部导入的是fs.promises异步方法，不能sync
+  // main进程没有热重载，有问题的话重启试试
   function readPreferences() {
     try {
-      return JSON.parse(fs.readFileSync(preferencesPath, 'utf-8'));
+      return JSON.parse(fs.readFile(preferencesPath, 'utf-8'));
     } catch (error) {
       return {};
     }
   }
 
   function writePreferences(preferences) {
-    fs.writeFileSync(preferencesPath, JSON.stringify(preferences, null, 2));
+    fs.writeFile(preferencesPath, JSON.stringify(preferences, null, 2));
   }
 
   ipcMain.handle('get-preferences', (_, key) => {
