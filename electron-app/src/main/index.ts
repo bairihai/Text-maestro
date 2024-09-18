@@ -56,18 +56,44 @@ app.whenReady().then(() => {
   ipcMain.on('ping', () => console.log('pong!hello world!'))
   ipcMain.on('ping-playground', () => console.log('pong!hello playground!'))
 
-// IPC 读取文件
-ipcMain.on('read-file', async (event, filePath) => {
-  try {
-    // 确保路径正确
-    const fullPath = path.resolve(filePath);
-    const data = await fs.readFile(fullPath, 'utf8');
-    event.reply('file-content', data);
-  } catch (err) {
-    const errorMessage = (err as Error).message;
-    event.reply('file-content', `Error: ${errorMessage}`);
+  // IPC 读取文件
+  ipcMain.on('read-file', async (event, filePath) => {
+    try {
+      // 确保路径正确
+      const fullPath = path.resolve(filePath);
+      const data = await fs.readFile(fullPath, 'utf8');
+      event.reply('file-content', data);
+    } catch (err) {
+      const errorMessage = (err as Error).message;
+      event.reply('file-content', `Error: ${errorMessage}`);
+    }
+  });
+
+  const userDataPath = app.getPath('userData');
+  const preferencesPath = path.join(userDataPath, 'preferences.json');
+
+  function readPreferences() {
+    try {
+      return JSON.parse(fs.readFileSync(preferencesPath, 'utf-8'));
+    } catch (error) {
+      return {};
+    }
   }
-});
+
+  function writePreferences(preferences) {
+    fs.writeFileSync(preferencesPath, JSON.stringify(preferences, null, 2));
+  }
+
+  ipcMain.handle('get-preferences', (_, key) => {
+    const preferences = readPreferences();
+    return preferences[key];
+  });
+
+  ipcMain.handle('set-preferences', (_, newPreferences) => {
+    const preferences = readPreferences();
+    Object.assign(preferences, newPreferences);
+    writePreferences(preferences);
+  });
 
   createWindow()
 
