@@ -197,28 +197,41 @@ def extract_markdown_outline(markdown_text):
 def merge_two_docs(doc1, doc2):
     def parse_outline(doc):
         lines = doc.split('\n')
-        outline = {}
+        outline = []
         current_section = None
         for line in lines:
             stripped = line.strip()
             if stripped.startswith('##') and not stripped.startswith('###'):
-                current_section = stripped
-                outline[current_section] = []
+                if current_section:
+                    outline.append(current_section)
+                current_section = [stripped, []]
             elif stripped.startswith('#') and current_section:
-                outline[current_section].append(stripped)
+                current_section[1].append(stripped)
+        if current_section:
+            outline.append(current_section)
         return outline
 
     outline1 = parse_outline(doc1)
     outline2 = parse_outline(doc2)
 
-    merged_outline = {}
-    for section in set(outline1.keys()) | set(outline2.keys()):
-        merged_outline[section] = list(set(outline1.get(section, []) + outline2.get(section, [])))
+    merged_outline = []
+    sections = set()
+    
+    for outline in [outline1, outline2]:
+        for section in outline:
+            if section[0] not in sections:
+                merged_outline.append(section)
+                sections.add(section[0])
+            else:
+                for existing_section in merged_outline:
+                    if existing_section[0] == section[0]:
+                        existing_section[1] = list(set(existing_section[1] + section[1]))
+                        break
 
     result = []
-    for section, subsections in sorted(merged_outline.items()):
-        result.append(section)
-        result.extend(sorted(subsections))
+    for section in merged_outline:
+        result.append(section[0])
+        result.extend(sorted(section[1]))
 
     return '\n'.join(result)
 
