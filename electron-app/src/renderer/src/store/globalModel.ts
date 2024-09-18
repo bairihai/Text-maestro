@@ -6,6 +6,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 const initialState = {
   appName: '简历应用平台',
+  theme: 'light',
 };
 
 const globalSlice = createSlice({

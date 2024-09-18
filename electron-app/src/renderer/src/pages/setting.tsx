@@ -3,6 +3,9 @@ import { Button, Switch, Select, Input, Typography, Card, Checkbox } from '@arco
 
 import StatusCheck from '@renderer/components/StatusCheck';
 
+// import { useSelector, useDispatch } from 'react-redux';
+// import { setState } from '@renderer/store/globalModel';
+
 // 设置透明度和blur毛玻璃效果。毛玻璃需要再调一下，没背景不生效。
 const cardStyle = {
   borderRadius: '10px',
@@ -13,6 +16,13 @@ const cardStyle = {
 };
 
 function Setting() {
+  // const dispatch = useDispatch();
+  // const theme = useSelector((state: any) => state.global.theme);
+
+  // const handleThemeChange = (value) => {
+  //   dispatch(setState({ theme: value }));
+  // };
+
   return (
     <div className="h-screen overflow-y-auto p-4">
       <div id="nurp5mzn1d" className="space-y-6">
@@ -55,10 +65,14 @@ function Setting() {
           </div>
         </Card>
         <Card title="界面主题" style={cardStyle}>
-          <Select placeholder="选择主题" style={{ width: '100%' }}>
-            <Select.Option value="light">浅色模式</Select.Option>
-            <Select.Option value="dark">深色模式</Select.Option>
-            <Select.Option value="system">跟随系统</Select.Option>
+        <Select 
+          placeholder="选择主题" 
+          style={{ width: '100%' }}
+          // value={theme}
+          // onChange={handleThemeChange}
+        >
+          <Select.Option value="light">浅色模式</Select.Option>
+          <Select.Option value="dark">深色模式</Select.Option>
           </Select>
         </Card>
         <Card title="服务协议" style={cardStyle}>
