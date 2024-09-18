@@ -82,6 +82,7 @@ app.whenReady().then(() => {
     }
   }
 
+  // 写入preferences偏好设置。确保是写入其中的preferences.json文件而不是没有后缀名的preferences文件
   function writePreferences(preferences) {
     fs.writeFile(preferencesPath, JSON.stringify(preferences, null, 2));
   }

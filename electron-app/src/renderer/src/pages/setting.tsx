@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button, Switch, Select, Input, Typography, Card, Checkbox } from '@arco-design/web-react';
 
 import StatusCheck from '@renderer/components/StatusCheck';
 
-// import { useSelector, useDispatch } from 'react-redux';
-// import { setState } from '@renderer/store/globalModel';
+import { useSelector, useDispatch } from 'react-redux';
+import { setState } from '@renderer/store/globalModel';
 
 // 设置透明度和blur毛玻璃效果。毛玻璃需要再调一下，没背景不生效。
 const cardStyle = {
@@ -16,12 +16,28 @@ const cardStyle = {
 };
 
 function Setting() {
-  // const dispatch = useDispatch();
-  // const theme = useSelector((state: any) => state.global.theme);
+  const [theme, setTheme] = useState('light');
 
-  // const handleThemeChange = (value) => {
-  //   dispatch(setState({ theme: value }));
-  // };
+  useEffect(() => {
+    window.electron.ipcRenderer.invoke('get-preferences', 'theme').then((savedTheme) => {
+      setTheme(savedTheme || 'light');
+    });
+  }, []);
+
+  // 当用户改变主题时，handleThemeChange 函数被调用，它会触发 set-preferences IPC 调用。——2024年9月19日 03点25分 cursor claude
+  const handleThemeChange = (value) => {
+    setTheme(value);
+    window.electron.ipcRenderer.invoke('set-preferences', { theme: value });
+    applyTheme(value);
+  };
+
+  const applyTheme = (theme) => {
+    if (theme === 'dark') {
+      document.body.setAttribute('arco-theme', 'dark');
+    } else {
+      document.body.removeAttribute('arco-theme');
+    }
+  };
 
   return (
     <div className="h-screen overflow-y-auto p-4">
@@ -65,14 +81,14 @@ function Setting() {
           </div>
         </Card>
         <Card title="界面主题" style={cardStyle}>
-        <Select 
-          placeholder="选择主题" 
-          style={{ width: '100%' }}
-          // value={theme}
-          // onChange={handleThemeChange}
-        >
-          <Select.Option value="light">浅色模式</Select.Option>
-          <Select.Option value="dark">深色模式</Select.Option>
+          <Select 
+            placeholder="选择主题" 
+            style={{ width: '100%' }}
+            value={theme}
+            onChange={handleThemeChange}
+          >
+            <Select.Option value="light">浅色模式</Select.Option>
+            <Select.Option value="dark">深色模式</Select.Option>
           </Select>
         </Card>
         <Card title="服务协议" style={cardStyle}>
