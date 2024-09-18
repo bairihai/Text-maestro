@@ -98,13 +98,20 @@ Vite 使用的是 Rollup 作为其底层打包工具，而不是像 Webpack 那�
 
 
 
-## 配置redux-toolkit,
+## 【暂停使用】配置redux-toolkit
 
 我们要用redux写持久化存储，必须使用redux仓库。
 
+redux还可以实现全局变量管理相关问题（见小册）
+
+知乎言曰：个人觉得目前 react 全局状态管理最好用的解决方案：仅需要全局状态，Jotai；需要store，Zustand；状态流非常复杂需要可视化，XState
 
 
 相关知识见我的学习积累，略。
+
+
+
+2024年9月18日 18点26分：因为这个逻辑很繁琐，所以redux先停用了，暂不使用。
 
 ## 为什么配置everything 如何配置everything
 

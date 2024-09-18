@@ -1,14 +1,23 @@
 import React from 'react';
 import { Button, Switch, Select, Input, Typography, Card, Checkbox } from '@arco-design/web-react';
 
-const cardOpacity = 'opacity-90';
-const glassEffect = 'backdrop-filter backdrop-blur-lg bg-white/30';
+import StatusCheck from '@renderer/components/StatusCheck';
+
+// 设置透明度和blur毛玻璃效果。毛玻璃需要再调一下，没背景不生效。
+const cardStyle = {
+  borderRadius: '10px',
+  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+  opacity: '0.9',
+  backdropFilter: 'blur(10px)',
+  backgroundColor: 'rgba(255, 255, 255, 0.3)',
+};
 
 function Setting() {
   return (
     <div className="h-screen overflow-y-auto p-4">
-      <div id="nurp5mzn1d" className="space-y-8">
-        <Card title="版本信息" className={`shadow-md rounded-lg ${cardOpacity} ${glassEffect}`}>
+      <div id="nurp5mzn1d" className="space-y-6">
+        <StatusCheck />
+        <Card title="版本信息" style={cardStyle}>
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <div className="flex items-center space-x-4">
@@ -36,16 +45,23 @@ function Setting() {
             <label htmlFor="auto-update">启动时自动检查更新并提示</label>
           </div>
         </Card>
-        <Card title="语言" className={`shadow-md rounded-lg ${cardOpacity} ${glassEffect}`}>
+        <Card title="语言" style={cardStyle}>
           <Select placeholder="选择语言" style={{ width: '100%' }} />
         </Card>
-        <Card title="开机自启" className={`shadow-md rounded-lg ${cardOpacity} ${glassEffect}`}>
+        <Card title="开机自启" style={cardStyle}>
           <div className="flex items-center space-x-2">
             <Switch id="auto-start" />
             <label htmlFor="auto-start">在系统启动时自动启动软件</label>
           </div>
         </Card>
-        <Card title="服务协议" className={`shadow-md rounded-lg ${cardOpacity} ${glassEffect}`}>
+        <Card title="界面主题" style={cardStyle}>
+          <Select placeholder="选择主题" style={{ width: '100%' }}>
+            <Select.Option value="light">浅色模式</Select.Option>
+            <Select.Option value="dark">深色模式</Select.Option>
+            <Select.Option value="system">跟随系统</Select.Option>
+          </Select>
+        </Card>
+        <Card title="服务协议" style={cardStyle}>
           <Typography.Text type="secondary">
             请仔细阅读并同意我们的服务协议,以便继续使用本软件。
           </Typography.Text>
@@ -58,7 +74,7 @@ function Setting() {
             </Checkbox>
           </div>
         </Card>
-        <Card title="代理设置" className={`shadow-md rounded-lg ${cardOpacity} ${glassEffect}`}>
+        <Card title="代理设置" style={cardStyle}>
           <div className="grid gap-4">
             <div className="flex items-center space-x-2">
               <Switch id="use-proxy" />
