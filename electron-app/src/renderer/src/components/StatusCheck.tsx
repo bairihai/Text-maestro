@@ -4,25 +4,35 @@ import { Card } from '@arco-design/web-react';
 // 每5000毫秒检查一次服务器（7860端口的gradio服务）状态
 const StatusCheck: React.FC = () => {
   const [isServerRunning, setIsServerRunning] = useState(false);
+  const [failCount, setFailCount] = useState(0);
+
+  const checkServerStatus = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:7860');
+      setIsServerRunning(response.ok);
+      setFailCount(0);
+    } catch (error) {
+      setIsServerRunning(false);
+      setFailCount(prev => prev + 1);
+    }
+  };
 
   useEffect(() => {
-    const checkServerStatus = async () => {
-      try {
-        const response = await fetch('http://127.0.0.1:7860');
-        setIsServerRunning(response.ok);
-      } catch (error) {
-        setIsServerRunning(false);
-      }
-    };
+    if (failCount >= 3) return;
 
     checkServerStatus();
     const interval = setInterval(checkServerStatus, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [failCount]);
+
+  const handleClick = () => {
+    setFailCount(0);
+    checkServerStatus();
+  };
 
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm">
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm" onClick={handleClick}>
       <div className="flex items-center gap-4 p-4">
         <div className={`h-4 w-4 rounded-full ${isServerRunning ? 'bg-green-500' : 'bg-red-500'}`} />
         <div>
@@ -30,6 +40,11 @@ const StatusCheck: React.FC = () => {
           <div className="text-sm text-muted-foreground">
             {isServerRunning ? '127.0.0.1:7860 正在运行' : '127.0.0.1:7860 未运行'}
           </div>
+          {failCount >= 3 && (
+            <div className="text-xs text-muted-foreground">
+              为防止CSP的XSS问题，连续失败后将暂停检查，手动点击以重新检查
+            </div>
+          )}
         </div>
       </div>
     </div>
