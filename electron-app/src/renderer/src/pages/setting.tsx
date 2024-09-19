@@ -40,9 +40,9 @@ function Setting() {
   };
 
   return (
-    <div className="h-screen overflow-y-auto p-4">
-      <div id="nurp5mzn1d" className="space-y-6">
-        <StatusCheck />
+    <div className="h-screen overflow-y-auto p-4">        <StatusCheck />
+    <div id="nurp5mzn1d" className="grid grid-cols-1 md:grid-cols-2 gap-6"> 
+{/* 在宽度足够（中等屏幕及以上）的情况下，每行展示两个卡片 */}
         <Card title="版本信息" style={cardStyle}>
           <div className="flex items-center justify-between">
             <div className="space-y-1">
