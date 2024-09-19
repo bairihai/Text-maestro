@@ -29,7 +29,7 @@ const applyTheme = (theme: string) => {
 function App(): JSX.Element {
   const [theme, setTheme] = useState<string>('light');
 
-  // 6. 主题初始化 effect
+  // 6. ColorTheme初始化 effect 副作用，设置深色/浅色主题。
   useEffect(() => {
     window.electron.ipcRenderer.invoke('get-preferences', 'theme').then((savedTheme) => {
       const currentTheme = savedTheme || 'light';
