@@ -134,6 +134,7 @@ app.whenReady().then(() => {
   //   }
   // });
 
+  // 用nc命令检查连通性，带端口号。
   function checkPort(host: string, port: number): Promise<boolean> {
     console.log(`Main: 开始检查 ${host}:${port}`);
     return new Promise((resolve) => {
