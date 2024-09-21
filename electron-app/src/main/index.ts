@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 
 const fs = require('fs').promises;
 const path = require('path');
+const { exec } = require('child_process'); // exec可以在一个shell中运行命令，并在完成后通过回调函数传递stdout和stderr
 
 function createWindow(): void {
   // Create the browser window.
@@ -100,6 +101,63 @@ app.whenReady().then(() => {
     const preferences = readPreferences();
     Object.assign(preferences, newPreferences);
     writePreferences(preferences);
+  });
+
+  // // 添加ping方法
+  // function pingServer(host: string): Promise<string> {
+  //   console.log(`Main: 开始 ping ${host}`);
+  //   return new Promise((resolve, reject) => {
+  //     exec(`ping -c 4 ${host}`, (error, stdout, stderr) => {
+  //       if (error) {
+  //         console.error(`Main: Ping 执行出错: ${error.message}`);
+  //         reject(`执行出错: ${error.message}`);
+  //         return;
+  //       }
+  //       if (stderr) {
+  //         console.error(`Main: Ping stderr: ${stderr}`);
+  //         reject(`stderr: ${stderr}`);
+  //         return;
+  //       }
+  //       console.log(`Main: Ping 成功, 结果: ${stdout.substring(0, 100)}...`);
+  //       resolve(stdout);
+  //     });
+  //   });
+  // }
+
+  // // 在app.whenReady()中添加IPC处理器
+  // ipcMain.handle('ping-server', async (_, host) => {
+  //   try {
+  //     const result = await pingServer(host);
+  //     return result;
+  //   } catch (error) {
+  //     return `Ping失败: ${error}`;
+  //   }
+  // });
+
+  function checkPort(host: string, port: number): Promise<boolean> {
+    console.log(`Main: 开始检查 ${host}:${port}`);
+    return new Promise((resolve) => {
+      exec(`nc -z -w1 ${host} ${port}`, (error) => {
+        if (error) {
+          console.log(`Main: ${host}:${port} 不可达`);
+          resolve(false);
+        } else {
+          console.log(`Main: ${host}:${port} 可达`);
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  ipcMain.handle('check-server', async (_, host, port) => {
+    console.log(`Main: 收到检查请求，目标: ${host}:${port}`);
+    try {
+      const isRunning = await checkPort(host, port);
+      return isRunning ? '服务器运行中' : '服务器未运行';
+    } catch (error) {
+      console.error(`Main: 检查失败: ${error}`);
+      return `检查失败: ${error}`;
+    }
   });
 
   createWindow()

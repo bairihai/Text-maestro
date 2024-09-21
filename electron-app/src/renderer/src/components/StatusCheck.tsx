@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@arco-design/web-react';
 
-// 每5000毫秒检查一次服务器（7860端口的gradio服务）状态
+// 每5000毫秒检查一次服务器（7860端口的gradio服务）状态。由于更换使用了main方法避免CSP问题，确保在 preload 脚本中均已经暴露。
 const StatusCheck: React.FC = () => {
   const [isServerRunning, setIsServerRunning] = useState(false);
   const [failCount, setFailCount] = useState(0);
 
   const checkServerStatus = async () => {
+    console.log('Renderer: 开始检查服务器状态');
     try {
-      const response = await fetch('http://127.0.0.1:7860');
-      setIsServerRunning(response.ok);
+      const result = await window.electron.ipcRenderer.invoke('check-server', '127.0.0.1', 7860);
+      console.log('Renderer: 检查结果:', result);
+      setIsServerRunning(result === '服务器运行中');
       setFailCount(0);
     } catch (error) {
+      console.error('Renderer: 检查失败:', error);
       setIsServerRunning(false);
       setFailCount(prev => prev + 1);
     }
