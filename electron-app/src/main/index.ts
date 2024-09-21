@@ -74,10 +74,13 @@ app.whenReady().then(() => {
 
   // 读取preferences偏好设置。注意，我们顶部导入的是fs.promises异步方法，不能sync
   // main进程没有热重载，有问题的话重启试试
-  function readPreferences() {
+  async function readPreferences() {
     try {
-      return JSON.parse(fs.readFile(preferencesPath, 'utf-8'));
+      const data = await fs.readFile(preferencesPath, 'utf-8');
+      console.log('Main: Read preferences data:', data);
+      return JSON.parse(data);
     } catch (error) {
+      console.error('Main: Error reading preferences:', error);
       return {};
     }
   }
@@ -87,8 +90,9 @@ app.whenReady().then(() => {
     fs.writeFile(preferencesPath, JSON.stringify(preferences, null, 2));
   }
 
-  ipcMain.handle('get-preferences', (_, key) => {
-    const preferences = readPreferences();
+  ipcMain.handle('get-preferences', async (_, key) => {
+    const preferences = await readPreferences();
+    console.log('Main: Get preferences for key:', key, 'Value:', preferences[key]);
     return preferences[key];
   });
 

@@ -25,10 +25,13 @@ function Setting() {
   }, []);
 
   // 当用户改变主题时，handleThemeChange 函数被调用，它会触发 set-preferences IPC 调用。——2024年9月19日 03点25分 cursor claude
+  // 这里的逻辑和那个保存与读取相互独立。无论是否成功，都会执行applyTheme，不受影响。
   const handleThemeChange = (value) => {
+    // console.log('Setting: Theme changed to:', value); // 【调试】
     setTheme(value);
     window.electron.ipcRenderer.invoke('set-preferences', { theme: value });
     applyTheme(value);
+    // console.log('Setting: Theme applied'); // 【调试】
   };
 
   const applyTheme = (theme) => {
