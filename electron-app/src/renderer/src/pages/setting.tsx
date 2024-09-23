@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Switch, Select, Input, Typography, Card, Checkbox } from '@arco-design/web-react';
+import { Button, Switch, Select, Input, Typography, Card, Checkbox, Divider } from '@arco-design/web-react';
 
 import StatusCheck from '@renderer/components/StatusCheck';
 
@@ -45,7 +45,9 @@ function Setting() {
   };
 
   return (
-    <div className="h-screen overflow-y-auto p-4">        <StatusCheck />
+    <div className="h-screen overflow-y-auto p-4">
+        <StatusCheck />
+        <Divider orientation="left" style={{margin: '10px 0', fontSize: '10px', fontWeight: 'bold'}}>偏好设置</Divider>
     <div id="nurp5mzn1d" className="grid grid-cols-1 md:grid-cols-2 gap-6"> 
 {/* 在宽度足够（中等屏幕及以上）的情况下，每行展示两个卡片 */}
         <Card title="版本信息" style={cardStyle}>

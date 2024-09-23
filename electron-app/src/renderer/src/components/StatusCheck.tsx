@@ -42,7 +42,7 @@ const StatusCheck: React.FC = () => {
       <div className="flex items-center gap-4 p-4">
         <div className={`h-4 w-4 rounded-full ${isServerRunning ? 'bg-green-500' : 'bg-red-500'}`} />
         <div>
-          <div className="font-medium">服务器状态</div>
+          <div className="font-medium">Gradio面板服务状态</div>
           <div className="text-sm text-muted-foreground">
             {isServerRunning ? '127.0.0.1:7860 正在运行' : '127.0.0.1:7860 未运行'}
           </div>
@@ -57,6 +57,46 @@ const StatusCheck: React.FC = () => {
   );
 };
 
-// const OnlineCheck:
+const OnlineCheck = () => {
+  return (
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm">
+      <div className="flex items-center gap-4 p-4">
+        <div className="h-4 w-4 rounded-full bg-gray-500" />
+        <div>
+          <div className="font-medium">在线状态</div>
+          <div className="text-sm text-muted-foreground">在线检查组件占位</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EverythingCheck = () => {
+  return (
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm">
+      <div className="flex items-center gap-4 p-4">
+        <div className="h-4 w-4 rounded-full bg-gray-500" />
+        <div>
+          <div className="font-medium">Everything状态</div>
+          <div className="text-sm text-muted-foreground">Everything检查组件占位</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const WordCloudAdvancedCheck = () => {
+  return (
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm">
+      <div className="flex items-center gap-4 p-4">
+        <div className="h-4 w-4 rounded-full bg-gray-500" />
+        <div>
+          <div className="font-medium">词云-advanced组件包</div>
+          <div className="text-sm text-muted-foreground">WordCloud高级检查组件占位</div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default StatusCheck;
