@@ -6,6 +6,8 @@ import StatusCheck from '@renderer/components/StatusCheck';
 import { useSelector, useDispatch } from 'react-redux';
 import { setState } from '@renderer/store/globalModel';
 
+import { IconSun,IconMoon } from '@arco-design/web-react/icon';
+
 // 设置透明度和blur毛玻璃效果。毛玻璃需要再调一下，没背景不生效。
 const cardStyle = {
   borderRadius: '10px',
@@ -90,8 +92,8 @@ function Setting() {
             value={theme}
             onChange={handleThemeChange}
           >
-            <Select.Option value="light">浅色模式</Select.Option>
-            <Select.Option value="dark">深色模式</Select.Option>
+            <Select.Option value="light"><IconSun /> 浅色模式</Select.Option>
+            <Select.Option value="dark"><IconMoon /> 深色模式</Select.Option>
           </Select>
         </Card>
         <Card title="服务协议" style={cardStyle}>

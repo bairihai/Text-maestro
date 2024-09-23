@@ -57,4 +57,6 @@ const StatusCheck: React.FC = () => {
   );
 };
 
+// const OnlineCheck:
+
 export default StatusCheck;
