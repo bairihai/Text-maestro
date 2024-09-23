@@ -38,7 +38,8 @@ const StatusCheck: React.FC = () => {
   };
 
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm" onClick={handleClick}>
+    // 使用m-2来设置外边距margin，使用max-w-sm来设置最大宽度，使用w-full来设置宽度为100%
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm m-2" onClick={handleClick}> 
       <div className="flex items-center gap-4 p-4">
         <div className={`h-4 w-4 rounded-full ${isServerRunning ? 'bg-green-500' : 'bg-red-500'}`} />
         <div>
@@ -59,7 +60,7 @@ const StatusCheck: React.FC = () => {
 
 const OnlineCheck = () => {
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm">
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm m-2">
       <div className="flex items-center gap-4 p-4">
         <div className="h-4 w-4 rounded-full bg-gray-500" />
         <div>
@@ -73,7 +74,7 @@ const OnlineCheck = () => {
 
 const EverythingCheck = () => {
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm">
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm m-2">
       <div className="flex items-center gap-4 p-4">
         <div className="h-4 w-4 rounded-full bg-gray-500" />
         <div>
@@ -87,7 +88,7 @@ const EverythingCheck = () => {
 
 const WordCloudAdvancedCheck = () => {
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm">
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm m-2">
       <div className="flex items-center gap-4 p-4">
         <div className="h-4 w-4 rounded-full bg-gray-500" />
         <div>
@@ -99,4 +100,4 @@ const WordCloudAdvancedCheck = () => {
   );
 };
 
-export default StatusCheck;
+export {StatusCheck, OnlineCheck, EverythingCheck, WordCloudAdvancedCheck};
