@@ -11,6 +11,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 // 这里使用的是移植来自vscode官方、用一个function包裹起来的参考api，精简了部分暂时用不到的内容
 // 详见https://github.com/microsoft/vscode/blob/8c66a69a465e29af2e6dab9147ea051c2c2f4e41/src/vs/base/parts/sandbox/electron-sandbox/preload.js#L17
 
+import log from 'electron-log'; // 暴露log脚本
+
 const { webFrame, ipcRenderer } = require('electron');
 function validateIPC(channel) {
   if (!channel || !channel.startsWith('vscode:')) {
@@ -53,7 +55,8 @@ const globals = {
         webFrame.setZoomLevel(level);
       }
     }
-  }
+  },
+  log: log
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

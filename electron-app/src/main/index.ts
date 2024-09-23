@@ -7,6 +7,12 @@ const fs = require('fs').promises;
 const path = require('path');
 const { exec } = require('child_process'); // exec可以在一个shell中运行命令，并在完成后通过回调函数传递stdout和stderr
 
+import log from 'electron-log';
+
+// 配置日志
+log.transports.file.level = 'info';
+log.transports.console.level = 'debug';
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -78,7 +84,7 @@ app.whenReady().then(() => {
   async function readPreferences() {
     try {
       const data = await fs.readFile(preferencesPath, 'utf-8');
-      console.log('Main: Read preferences data:', data);
+      log.info('Main: Read preferences data:', data);
       return JSON.parse(data);
     } catch (error) {
       console.error('Main: Error reading preferences:', error);
@@ -93,7 +99,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-preferences', async (_, key) => {
     const preferences = await readPreferences();
-    console.log('Main: Get preferences for key:', key, 'Value:', preferences[key]);
+    log.info('Main: Get preferences for key:', key, 'Value:', preferences[key]);
     return preferences[key];
   });
 
@@ -134,16 +140,16 @@ app.whenReady().then(() => {
   //   }
   // });
 
-  // 用nc命令检查连通性，带端口号。
+  // 用nc命令检查连通性，带端口号，并对函数挂载。
   function checkPort(host: string, port: number): Promise<boolean> {
-    console.log(`Main: 开始检查 ${host}:${port}`);
+    log.info(`Main: 开始检查 ${host}:${port}`);
     return new Promise((resolve) => {
       exec(`nc -z -w1 ${host} ${port}`, (error) => {
         if (error) {
-          console.log(`Main: ${host}:${port} 不可达`);
+          log.info(`Main: ${host}:${port} 不可达`);
           resolve(false);
         } else {
-          console.log(`Main: ${host}:${port} 可达`);
+          log.info(`Main: ${host}:${port} 可达`);
           resolve(true);
         }
       });
@@ -151,7 +157,7 @@ app.whenReady().then(() => {
   }
 
   ipcMain.handle('check-server', async (_, host, port) => {
-    console.log(`Main: 收到检查请求，目标: ${host}:${port}`);
+    log.info(`Main: 收到检查请求，目标: ${host}:${port}`);
     try {
       const isRunning = await checkPort(host, port);
       return isRunning ? '服务器运行中' : '服务器未运行';
