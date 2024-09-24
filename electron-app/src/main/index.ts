@@ -8,6 +8,7 @@ const path = require('path');
 const { exec } = require('child_process'); // exec可以在一个shell中运行命令，并在完成后通过回调函数传递stdout和stderr
 
 import log from 'electron-log';
+import net from 'net';
 
 // 配置日志
 log.transports.file.level = 'info';
@@ -141,17 +142,28 @@ app.whenReady().then(() => {
   // });
 
   // 用nc命令检查连通性，带端口号，并对函数挂载。
+  // 2024年9月24日 10点20分 取消nc命令改用net模块。原因：nc命令需要另行安装以及添加到环境变量，难以跨平台兼容。
   function checkPort(host: string, port: number): Promise<boolean> {
     log.info(`Main: 开始检查 ${host}:${port}`);
     return new Promise((resolve) => {
-      exec(`nc -z -w1 ${host} ${port}`, (error) => {
-        if (error) {
-          log.info(`Main: ${host}:${port} 不可达`);
-          resolve(false);
-        } else {
-          log.info(`Main: ${host}:${port} 可达`);
-          resolve(true);
-        }
+      const socket = new net.Socket();
+      socket.setTimeout(1000);  // 1秒超时
+      
+      socket.connect(port, host, () => {
+        socket.destroy();
+        log.info(`Main: ${host}:${port} 可达`);
+        resolve(true);
+      });
+
+      socket.on('error', () => {
+        log.info(`Main: ${host}:${port} 不可达`);
+        resolve(false);
+      });
+
+      socket.on('timeout', () => {
+        socket.destroy();
+        log.info(`Main: ${host}:${port} 连接超时`);
+        resolve(false);
       });
     });
   }
