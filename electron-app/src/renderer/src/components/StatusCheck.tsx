@@ -5,36 +5,39 @@ import { IconRefresh } from '@arco-design/web-react/icon';
 // 每5000毫秒检查一次服务器（7860端口的gradio服务）状态。由于更换使用了main方法避免CSP问题，确保在 preload 脚本中均已经暴露。
 const StatusCheck: React.FC = () => {
   const [isServerRunning, setIsServerRunning] = useState(false);
-  const [failCount, setFailCount] = useState(0);
+  const [checkCount, setCheckCount] = useState(0);
+  const [isChecking, setIsChecking] = useState(true);
+  const [isDetecting, setIsDetecting] = useState(false);
 
   const checkServerStatus = useCallback(async () => {
+    if (checkCount >= 3) {
+      setIsChecking(false);
+      return;
+    }
+
+    setIsDetecting(true);
     try {
       const result = await window.electron.ipcRenderer.invoke('check-server', '127.0.0.1', 7860);
-      if (result === '服务器运行中') {
-        setIsServerRunning(true);
-        setFailCount(0);
-      } else {
-        setIsServerRunning(false);
-        setFailCount(prevCount => prevCount + 1);
-      }
+      setIsServerRunning(result === '服务器运行中');
     } catch (error) {
       console.error('检查失败:', error);
       setIsServerRunning(false);
-      setFailCount(prevCount => prevCount + 1);
     }
-  }, []);
+    setIsDetecting(false);
+    setCheckCount(prevCount => prevCount + 1);
+  }, [checkCount]);
 
   useEffect(() => {
-    if (failCount >= 3) return;
+    if (isChecking) {
+      checkServerStatus();
+      const interval = setInterval(checkServerStatus, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [checkServerStatus, isChecking]);
 
-    checkServerStatus();
-    const interval = setInterval(checkServerStatus, 5000);
-
-    return () => clearInterval(interval);
-  }, [failCount]);
-
-  const handleClick = () => {
-    setFailCount(0);
+  const handleManualCheck = () => {
+    setCheckCount(0);
+    setIsChecking(true);
     checkServerStatus();
   };
 
@@ -43,11 +46,15 @@ const StatusCheck: React.FC = () => {
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm m-2"> 
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-4">
-          <div className={`h-4 w-4 rounded-full ${isServerRunning ? 'bg-green-500' : 'bg-red-500'}`} />
+          <div className={`h-4 w-4 rounded-full ${
+            isDetecting ? 'bg-yellow-500' : 
+            isServerRunning ? 'bg-green-500' : 'bg-red-500'
+          }`} />
           <div>
             <div className="font-medium">Gradio面板服务状态</div>
             <div className="text-sm text-muted-foreground">
-              {isServerRunning ? '127.0.0.1:7860 正在运行' : '127.0.0.1:7860 未运行'}
+              {isDetecting ? '检测中...' : 
+               isServerRunning ? '127.0.0.1:7860 正在运行' : '127.0.0.1:7860 未运行'}
             </div>
             {/* {failCount >= 3 && (
               <div className="text-xs text-muted-foreground">
@@ -58,7 +65,7 @@ const StatusCheck: React.FC = () => {
         </div>
         <IconRefresh 
           className="cursor-pointer text-gray-500 hover:text-gray-700" 
-          onClick={handleClick}
+          onClick={handleManualCheck}
         />
       </div>
     </div>
