@@ -75,8 +75,8 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             title: '文与图',
             icon: <IconDriveFile />,
             items: [
-                { key: '3_0', label: '手写信生成' },
-                { key: '3_1', label: '学信网学历截图（有造假水印）' }
+                { key: '4_0', label: '手写信生成' },
+                { key: '4_1', label: '学信网学历截图（有造假水印）' }
             ]
         },
         {
