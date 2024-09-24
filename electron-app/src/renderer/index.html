@@ -7,7 +7,7 @@
     <!-- 这个CSP策略是给gradio面板用的，如果需要给其他服务用，需要修改这里。 如果还是不成功就添加一个nonce -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:7860"
+      content="default-src 'self' http://localhost:7860; script-src 'self' 'unsafe-inline' http://localhost:7860; style-src 'self' 'unsafe-inline' http://localhost:7860; img-src 'self' data: http://localhost:7860; connect-src 'self' http://localhost:7860 http://127.0.0.1:7860; frame-src http://localhost:7860;"
     />
   </head>
 

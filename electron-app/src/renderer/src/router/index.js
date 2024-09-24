@@ -2,8 +2,11 @@
 import About from '@renderer/pages/about'
 import Playground from '@renderer/pages/playground'
 import Setting from '@renderer/pages/setting'
+import routesCommon from './routesCommon'
 
 // import routesForum from './routesForum'
+
+import FolderTree from '@renderer/pages/features/foldertree'
 
 const routes = [
   {
@@ -23,6 +26,7 @@ const routes = [
     component: Setting
   },
   // ...routesForum
+  ...routesCommon
 ];
 
 export default routes

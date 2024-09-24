@@ -26,7 +26,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
     to?: string // 可选项，route导航。
     title: string // 或者命名为label。
     icon: JSX.Element // 写一个元素，形如</div>。另一种写法是IconName组件类型，但是兼容性不好，所以不了。
-    items?: { key: string; label: string }[]; // 可选项，子菜单。
+    items?: { key: string; label: string; to?: string }[]; // 可选项，子菜单。to（跳转路由）对象字面量类型检查，自选。
 }[] = [
         {
             key: '0',
@@ -62,7 +62,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             title: '通用文档',
             icon: <IconDriveFile />,
             items: [
-                { key: '3_0', label: '任一文件夹的结构树' },
+                { key: '3_0', label: '任一文件夹的结构树', to: '/common/folder-tree' },
                 { key: '3_1', label: 'obsidian 单篇文档分析' },
                 { key: '3_2', label: 'obsidian 多文档分析' },
                 { key: '3_3', label: '掘金小册 上云action生成' },
@@ -125,7 +125,9 @@ export const NavBar = () => {
                             }
                         >
                             {link.items.map((item) => (
-                                <MenuItem key={item.key}>{item.label}</MenuItem>
+                                <MenuItem key={item.key} onClick={() => item.to && handleNavigation(item.to)}>
+                                    {item.label}
+                                </MenuItem>
                             ))}
                         </SubMenu>
                     );

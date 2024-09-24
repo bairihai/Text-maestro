@@ -54,7 +54,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     # 目录统计与树状图
     gr.Markdown("## 目录统计与树状图")
-    with gr.Group():
+    with gr.Group(elem_id="folder-tree-section"): # 使用elem_id进行选区标记，以便electron中定位
         path_input = gr.Textbox(label="输入目录路径", placeholder="例如： /home/user")
         options = gr.CheckboxGroup(label="选择功能", choices=["生成目录树", "统计目录信息"], value=["生成目录树", "统计目录信息"])
         with gr.Row():
