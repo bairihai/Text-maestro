@@ -47,10 +47,13 @@ function Setting() {
   return (
     <div className="h-screen overflow-y-auto p-4">
       <Divider orientation="left" style={{margin: '10px 0', fontSize: '10px', fontWeight: 'bold'}}>服务状态</Divider>
-      <StatusCheck />
-      <OnlineCheck />
-      <EverythingCheck />
-      <WordCloudAdvancedCheck />
+      <div className="columns-2 sm:columns-2 md:columns-2 gap-2">
+        {[StatusCheck, OnlineCheck, EverythingCheck, WordCloudAdvancedCheck].map((Component, index) => (
+          <div key={index} className="break-inside-avoid mb-2">
+            <Component />
+          </div>
+        ))}
+      </div>
       <Divider orientation="left" style={{margin: '10px 0', fontSize: '10px', fontWeight: 'bold'}}>偏好设置</Divider>
     <div id="nurp5mzn1d" className="grid grid-cols-1 md:grid-cols-2 gap-6"> 
 {/* 在宽度足够（中等屏幕及以上）的情况下，每行展示两个卡片 */}
