@@ -7,6 +7,8 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 const initialState = {
   appName: '简历应用平台',
   theme: 'light',
+  gradioUrl: 'http://localhost:7860',
+  gradioStatus: 'running',
 };
 
 const globalSlice = createSlice({
