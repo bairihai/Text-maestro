@@ -97,6 +97,7 @@ const FolderTree: React.FC = () => {
   }, []);
 
   return (
+    // 位置是小问题，大不了我再嵌套一层。当务之急是删掉多余的内容。
     // 将网页引入。正文部分div的className="gradio-container"，这里是外围。
     <div id="webview" style={{ position: 'relative', width: '120%', height: '200%' }}>
       <iframe
