@@ -13,20 +13,20 @@ const FolderTree: React.FC = () => {
       const iframeDocument = iframe.contentDocument;
       if (!iframeDocument) return;
 
-      const folderTreeSection = iframeDocument.getElementById('folder-tree-section');
-      if (folderTreeSection) {
-        // 移除 Gradio 界面中不需要的元素
-        const elementsToRemove = iframeDocument.querySelectorAll('body > *:not(#folder-tree-section)');
-        elementsToRemove.forEach(el => el.remove());
-
-        // 调整样式以适应 Electron 应用
-        const style = iframeDocument.createElement('style');
-        style.textContent = `
-          body { margin: 0; padding: 0; }
-          #folder-tree-section { width: 100%; height: 100%; }
-        `;
-        iframeDocument.head.appendChild(style);
+      // 只保留文件树组件
+      const folderTree = iframeDocument.querySelector('.gradio-container');
+      if (folderTree) {
+        iframeDocument.body.innerHTML = '';
+        iframeDocument.body.appendChild(folderTree);
       }
+
+      // 优化样式
+      const style = iframeDocument.createElement('style');
+      style.textContent = `
+        body { margin: 0; overflow: hidden; }
+        .gradio-container { height: 100vh; }
+      `;
+      iframeDocument.head.appendChild(style);
     };
 
     iframe.addEventListener('load', handleLoad);
