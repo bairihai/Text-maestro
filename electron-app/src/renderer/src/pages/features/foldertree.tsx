@@ -14,38 +14,97 @@ const FolderTree: React.FC = () => {
     const iframe = iframeRef.current;
     if (!iframe) return;
 
+    // iframe加载完成后执行的函数
     const handleLoad = () => {
+      console.log('iframe加载完成');
       const iframeDocument = iframe.contentDocument;
       if (!iframeDocument) return;
 
+      // 注入脚本以清理iframe内容.删除div id=webview里面所有的id 不等于folder-tree-section 的div
       const script = iframeDocument.createElement('script');
       script.textContent = `
+        console.log('开始清理iframe内容');
         const targetElement = document.querySelector('.gradio-container');
         if (targetElement) {
+          console.log('将保留的元素:', targetElement);
+          console.log('即将被移除的元素:', Array.from(document.body.children).filter(child => child !== targetElement));
           while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
           }
           document.body.appendChild(targetElement);
+        } else {
+          console.log('未找到.gradio-container元素');
         }
+          
+        console.log('iframe内容清理完成');
       `;
       iframeDocument.head.appendChild(script);
     };
 
     iframe.addEventListener('load', handleLoad);
-    return () => iframe.removeEventListener('load', handleLoad);
+
+    // 清理函数
+    const cleanWebview = () => {
+      const webview = document.getElementById('webview') as Electron.WebviewTag;
+      if (!webview) {
+        console.log('未找到webview元素');
+        return;
+      }
+
+      webview.addEventListener('dom-ready', () => {
+        webview.executeJavaScript(`
+          const divsToRemove = document.querySelectorAll('div');
+          console.log('需要移除的div数量:', divsToRemove.length);
+          divsToRemove.forEach(div => div.remove());
+          console.log('清理完成');
+        `);
+      });
+    };
+
+    // 设置定期执行清理操作
+    const intervalId = setInterval(cleanWebview, 5000); // 每5秒执行一次
+
+    // 组件卸载时的清理
+    return () => {
+      console.log('组件卸载，清理资源');
+      iframe.removeEventListener('load', handleLoad);
+      clearInterval(intervalId);
+    };
+  }, []);
+
+//   useEffect(() => {
+//     const folderTreeSection = document.getElementById('folder-tree-section');
+//     if (folderTreeSection) {
+//       console.log('找到 folder-tree-section:', folderTreeSection);
+//     } else {
+//       console.log('未找到 folder-tree-section 元素');
+//     }
+//   }, []);
+
+  // 检查folder-tree-section元素是否存在，如果不存在，则每隔1秒检查一次，直到找到为止。
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      const folderTreeSection = document.getElementById('folder-tree-section');
+      if (folderTreeSection) {
+        console.log('找到 folder-tree-section:', folderTreeSection);
+        clearInterval(checkInterval);
+      } else {
+        console.log('未找到 folder-tree-section 元素');
+      }
+    }, 1000); // 每秒检查一次
+
+    return () => clearInterval(checkInterval);
   }, []);
 
   return (
-    <div id="webview" style={{ position: 'relative', width: '100%', height: '100%' }}>
+    // 将网页引入。正文部分div的className="gradio-container"，这里是外围。
+    <div id="webview" style={{ position: 'relative', width: '120%', height: '200%' }}>
       <iframe
         ref={iframeRef}
         src="http://localhost:7860"
         style={{
-        //   position: 'absolute',
-        //   top: 0,
-        //   left: 0,
-          width: '100%',
-          height: '100%',
+          width: '120%',
+          height: '200%',
           border: 'none',
         }}
       />
@@ -54,15 +113,3 @@ const FolderTree: React.FC = () => {
 };
 
 export default FolderTree;
-
-// 对于当前页面，重复一个操作：删除div id=webview里面所有的id 不等于folder-tree-section 的div
-function cleanWebview() {
-  const webview = document.getElementById('webview');
-  if (!webview) return;
-
-  const divsToRemove = webview.querySelectorAll('div:not(#folder-tree-section)');
-  divsToRemove.forEach(div => div.remove());
-}
-
-// 定期执行清理操作
-setInterval(cleanWebview, 1000); // 每秒执行一次
