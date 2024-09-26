@@ -5,6 +5,13 @@
 // 不然ml-12（app.tsx里面）逻辑会出问题，原本预留给menu-demo-round的空间会右移，致使这里的
 // iframe左侧出现一个空位。
 
+// 2024年9月25日 14点36分 不要闹了
+// 获取iframe中的dom对象，如果 iframe 和 iframe 的父文档是同源，则返回 一个 Document
+// （即内嵌框架的嵌套浏览上下文中的活动文档），否则返回null。
+// 所以，没有任何方法可以用js获取iframe内部的dom对象。别试了，停手吧。
+// 只能回到gradio里面下手，在里面写一个“一旦收到就触发”的清理脚本
+// 然后在这里触发。
+
 import React, { useEffect, useRef } from 'react';
 
 const FolderTree: React.FC = () => {
