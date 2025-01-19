@@ -164,6 +164,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     # 词频统计功能
     gr.Markdown("## 词频统计功能")
     gr.Markdown("目前还不太能自定义，还是按照预设的名词、两个字以上、停用词、自定义词典进行统计。暂不支持自定义")
+    gr.Markdown("建议使用更成熟的 [wordcloud-webui](https://github.com/AlionSSS/wordcloud-webui) gradio词云。真是造化弄人哈！被我爸戏耍，我的高中学业彻底的葬送了。在国庆前后到2025年的1月，整整四个月我爸既不说让我上学，也不说不上，只是在家干耗着，为了等待入学这些项目连碰都不敢碰了。当然，这一年结束了，并没有什么区别，我的鸿图伟愿也都埋进土里去了。在支那，低人权的中学生一旦偏离了预设的轨迹，可怜的容错率就会将你引以为傲的才能磨成粉身碎骨。总之，另请高明，抱歉我，能力有限了。🇹🇼我立下誓言，永远与毁灭了我高中学业以及一整个人生的中共不共戴天。🇹🇼 算了，何必匹夫狂怒。总之我没资格可怜别人。")
 
 
     with gr.Tab("生成频率表"):
@@ -368,8 +369,37 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         unified_outline_output = gr.Textbox(label="统一后的大纲", lines=3)
   
 
-    # 小说洗稿
+    # 小说洗稿 2025.1.19的四个月前
     gr.Markdown("## 番茄/起点小说搬运洗稿")
     gr.Markdown("影视解说洗稿、视频拆解等功能之后制作。部分功能需要使用ai，鉴于目前ai市场比较混乱，就不内置ai功能了，模型选用费用控制都是大问题。  \n 所以，最后采用的方案是把prompt格式化拼接好，你自己找个合适的模型让他处理，想用哪个模型（gpt4o 01 或是claude之类）都可以，只要给我输出就行了。")
+
+    # 生成周文件夹 2025.1.19
+    gr.Markdown("## 生成周文件夹")
+    bat_code = '''@echo off
+setlocal enabledelayedexpansion
+
+:: 设置年份和起始日期
+set YEAR=2023
+set START_DATE=2023-01-01
+
+:: 计算这一年有多少周
+powershell -command "&{$startDate = [datetime]'%START_DATE%'; $endDate = [datetime]'%YEAR%-12-31'; $weeks = [Math]::Ceiling(($endDate - $startDate).TotalDays / 7); echo $weeks}" > temp.txt
+set /p TOTAL_WEEKS=<temp.txt
+del temp.txt
+
+:: 创建文件夹
+for /l %%i in (1,1,%TOTAL_WEEKS%) do (
+    powershell -command "&{$startDate = [datetime]'%START_DATE%'; $weekStart = $startDate.AddDays((%%i-1)*7); $weekEnd = $weekStart.AddDays(6); echo $weekStart.ToString('M.d') + '-' + $weekEnd.ToString('M.d')}" > temp.txt
+    set /p DATE_RANGE=<temp.txt
+    del temp.txt
+    
+    md "!DATE_RANGE! %YEAR%,第%%i周"
+)
+
+echo 完成创建%TOTAL_WEEKS%个周文件夹。
+pause'''
+    
+    gr.Markdown("将以下代码保存为.bat文件，修改YEAR的值后双击运行即可创建周文件夹：")
+    gr.Textbox(value=bat_code, lines=20, label="BAT文件代码")
 
 demo.launch()
