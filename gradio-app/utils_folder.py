@@ -78,21 +78,35 @@ def get_current_directory():
     
 #     return created_folders
 
-def create_weekly_folders_bat(year, base_path="."):
+def create_weekly_folders_bat(year, base_path=".", week_start_type="skip_partial"):
     """
-    生成按周创建文件夹的bat命令，从每年第一个完整的周一开始
+    生成按周创建文件夹的bat命令
     :param year: 年份(int)
     :param base_path: 基础路径，默认为当前目录
+    :param week_start_type: 周数计算方式
+        - "first_week": 将本年1月1日至当周周天视为第1周
+        - "zero_week": 将本年1月1日至当周周天视为第0周
+        - "skip_partial": 跳过第一个不完整的周，从第一个周一算起
     :return: bat命令字符串
     """
     from datetime import datetime, timedelta
     
     # 设置起始日期为该年第一天
     start_date = datetime(year, 1, 1)
+    first_monday = start_date
+    while first_monday.weekday() != 0:  # 找到第一个周一
+        first_monday += timedelta(days=1)
     
-    # 调整到第一个周一
-    while start_date.weekday() != 0:  # 0 表示周一
-        start_date += timedelta(days=1)
+    # 根据不同的周数计算方式设置起始日期和周数
+    if week_start_type == "first_week":
+        current_date = start_date
+        week = 1
+    elif week_start_type == "zero_week":
+        current_date = start_date
+        week = 0
+    else:  # skip_partial
+        current_date = first_monday
+        week = 1
     
     # 设置结束日期为下一年第一个周一之前
     end_date = datetime(year + 1, 1, 1)
@@ -102,17 +116,17 @@ def create_weekly_folders_bat(year, base_path="."):
     # 生成bat命令
     bat_commands = ["@echo off", "chcp 65001", ""]
     
-    current_date = start_date
-    week = 1
-    
     while current_date < end_date:
-        week_end = current_date + timedelta(days=6)
+        # 计算本周结束日期
+        days_to_sunday = 6 - current_date.weekday() if current_date.weekday() <= 6 else 0
+        week_end = current_date + timedelta(days=days_to_sunday)
+        
         folder_name = f"{current_date.strftime('%m.%d')}-{week_end.strftime('%m.%d')} {year},第{week}周"
         folder_path = f'"{base_path}\\{folder_name}"'
-        
         bat_commands.append(f"md {folder_path}")
         
-        current_date += timedelta(days=7)
+        # 移动到下一周的开始
+        current_date = week_end + timedelta(days=1)
         week += 1
     
     bat_commands.append("pause")
