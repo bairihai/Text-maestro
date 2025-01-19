@@ -370,45 +370,43 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
   
 
     # 小说洗稿 2025.1.19的四个月前
-    gr.Markdown("## 番茄/起点小说搬运洗稿")
+    gr.Markdown("## 番茄/起点小说搬运洗稿 2025.1.19的约三四个月前")
     gr.Markdown("影视解说洗稿、视频拆解等功能之后制作。部分功能需要使用ai，鉴于目前ai市场比较混乱，就不内置ai功能了，模型选用费用控制都是大问题。  \n 所以，最后采用的方案是把prompt格式化拼接好，你自己找个合适的模型让他处理，想用哪个模型（gpt4o 01 或是claude之类）都可以，只要给我输出就行了。")
 
     # 生成周文件夹bat代码 2025.1.19
-    gr.Markdown("## 生成周文件夹bat代码")
+    gr.Markdown("## 生成周文件夹bat代码 2025.1.19")
     with gr.Group():
         with gr.Row():
-            with gr.Column():
-                year_input = gr.Number(label="年份", value=2025)
-                path_input = gr.Textbox(label="保存路径（可选）", placeholder="默认为当前目录")
-                week_type_input = gr.Radio(
-                    label="周数计算方式",
-                    choices=[
-                        "将1月1日至当周周天视为第1周",
-                        "将1月1日至当周周天视为第0周", 
-                        "跳过第一个不完整的周，从第一个周一算起"
-                    ],
-                    value="跳过第一个不完整的周，从第一个周一算起"
-                )
-            
-            with gr.Column():
-                bat_output = gr.Textbox(label="bat代码", lines=10)
-                
-        gr.Button("生成bat代码").click(
-            create_folders_bat,
-            inputs=[year_input, path_input, week_type_input],
-            outputs=bat_output
-        )
+            year_input = gr.Number(label="年份", value=2025)
+            path_input = gr.Textbox(label="保存路径（可选）", placeholder="默认为当前目录")
         
         def create_folders_bat(year, path=".", week_type="skip_partial"):
             type_map = {
                 "将1月1日至当周周天视为第1周": "first_week",
                 "将1月1日至当周周天视为第0周": "zero_week",
-                "跳过第一个不完整的周，从第一个周一算起": "skip_partial"
+                "跳过第一个不完整的周，从第一个周一算起（推荐）": "skip_partial"
             }
             return utils_folder.create_weekly_folders_bat(
                 int(year),
                 path if path.strip() else ".",
                 type_map[week_type]
             )
+
+        week_type_input = gr.Radio(
+            label="周数计算方式",
+            choices=[
+                "将1月1日至当周周天视为第1周",
+                "将1月1日至当周周天视为第0周", 
+                "跳过第一个不完整的周，从第一个周一算起（推荐）"
+            ],
+            value="跳过第一个不完整的周，从第一个周一算起（推荐）"
+        )
+        bat_output = gr.Textbox(label="bat代码", lines=8)
+        
+        gr.Button("生成bat代码").click(
+            create_folders_bat,
+            inputs=[year_input, path_input, week_type_input],
+            outputs=bat_output
+        )
 
 demo.launch()
