@@ -1,5 +1,6 @@
 import os
 import shutil
+from datetime import datetime, timedelta
 
 # utils_folder.py 目录和文件夹相关的操作功能
 
@@ -43,3 +44,76 @@ def generate_tree_and_stats(path, style="tree", max_depth=None):
 # 功能：获取当前工作目录
 def get_current_directory():
     return os.getcwd()
+
+# # 功能：按周创建文件夹
+# def create_weekly_folders(year, base_path="."):
+#     """
+#     在指定路径下创建按周划分的文件夹
+#     :param year: 年份(int)
+#     :param base_path: 基础路径，默认为当前目录
+#     :return: 创建的文件夹列表
+#     """
+#     # 设置起始日期和结束日期
+#     start_date = datetime(year, 1, 1)
+#     end_date = datetime(year, 12, 31)
+    
+#     # 计算总周数
+#     total_weeks = ((end_date - start_date).days + 7) // 7
+    
+#     # 存储创建的文件夹列表
+#     created_folders = []
+    
+#     # 创建文件夹
+#     for week in range(1, total_weeks + 1):
+#         week_start = start_date + timedelta(days=(week-1)*7)
+#         week_end = week_start + timedelta(days=6)
+        
+#         # 格式化文件夹名称
+#         folder_name = f"{week_start.strftime('%-m.%-d')}-{week_end.strftime('%-m.%-d')} {year},第{week}周"
+#         folder_path = os.path.join(base_path, folder_name)
+        
+#         # 创建文件夹
+#         os.makedirs(folder_path, exist_ok=True)
+#         created_folders.append(folder_name)
+    
+#     return created_folders
+
+def create_weekly_folders_bat(year, base_path="."):
+    """
+    生成按周创建文件夹的bat命令，从每年第一个完整的周一开始
+    :param year: 年份(int)
+    :param base_path: 基础路径，默认为当前目录
+    :return: bat命令字符串
+    """
+    from datetime import datetime, timedelta
+    
+    # 设置起始日期为该年第一天
+    start_date = datetime(year, 1, 1)
+    
+    # 调整到第一个周一
+    while start_date.weekday() != 0:  # 0 表示周一
+        start_date += timedelta(days=1)
+    
+    # 设置结束日期为下一年第一个周一之前
+    end_date = datetime(year + 1, 1, 1)
+    while end_date.weekday() != 0:
+        end_date += timedelta(days=1)
+    
+    # 生成bat命令
+    bat_commands = ["@echo off", "chcp 65001", ""]
+    
+    current_date = start_date
+    week = 1
+    
+    while current_date < end_date:
+        week_end = current_date + timedelta(days=6)
+        folder_name = f"{current_date.strftime('%m.%d')}-{week_end.strftime('%m.%d')} {year},第{week}周"
+        folder_path = f'"{base_path}\\{folder_name}"'
+        
+        bat_commands.append(f"md {folder_path}")
+        
+        current_date += timedelta(days=7)
+        week += 1
+    
+    bat_commands.append("pause")
+    return "\n".join(bat_commands)

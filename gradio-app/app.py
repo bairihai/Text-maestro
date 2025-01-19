@@ -373,33 +373,16 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     gr.Markdown("## 番茄/起点小说搬运洗稿")
     gr.Markdown("影视解说洗稿、视频拆解等功能之后制作。部分功能需要使用ai，鉴于目前ai市场比较混乱，就不内置ai功能了，模型选用费用控制都是大问题。  \n 所以，最后采用的方案是把prompt格式化拼接好，你自己找个合适的模型让他处理，想用哪个模型（gpt4o 01 或是claude之类）都可以，只要给我输出就行了。")
 
-    # 生成周文件夹 2025.1.19
-    gr.Markdown("## 生成周文件夹")
-    bat_code = '''@echo off
-setlocal enabledelayedexpansion
-
-:: 设置年份和起始日期
-set YEAR=2023
-set START_DATE=2023-01-01
-
-:: 计算这一年有多少周
-powershell -command "&{$startDate = [datetime]'%START_DATE%'; $endDate = [datetime]'%YEAR%-12-31'; $weeks = [Math]::Ceiling(($endDate - $startDate).TotalDays / 7); echo $weeks}" > temp.txt
-set /p TOTAL_WEEKS=<temp.txt
-del temp.txt
-
-:: 创建文件夹
-for /l %%i in (1,1,%TOTAL_WEEKS%) do (
-    powershell -command "&{$startDate = [datetime]'%START_DATE%'; $weekStart = $startDate.AddDays((%%i-1)*7); $weekEnd = $weekStart.AddDays(6); echo $weekStart.ToString('M.d') + '-' + $weekEnd.ToString('M.d')}" > temp.txt
-    set /p DATE_RANGE=<temp.txt
-    del temp.txt
-    
-    md "!DATE_RANGE! %YEAR%,第%%i周"
-)
-
-echo 完成创建%TOTAL_WEEKS%个周文件夹。
-pause'''
-    
-    gr.Markdown("将以下代码保存为.bat文件，修改YEAR的值后双击运行即可创建周文件夹：")
-    gr.Textbox(value=bat_code, lines=20, label="BAT文件代码")
+    # 生成周文件夹bat代码 2025.1.19
+    gr.Markdown("## 生成周文件夹bat代码")
+    with gr.Group():
+        year_input = gr.Number(label="年份", value=2024)
+        path_input = gr.Textbox(label="保存路径（可选）", placeholder="默认为当前目录")
+        bat_output = gr.Textbox(label="bat代码", lines=10)
+        
+        def create_folders_bat(year, path="."):
+            return utils_folder.create_weekly_folders_bat(int(year), path if path.strip() else ".")
+        
+        gr.Button("生成bat代码").click(create_folders_bat, inputs=[year_input, path_input], outputs=bat_output)
 
 demo.launch()
