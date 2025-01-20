@@ -2,6 +2,7 @@ import os
 import shutil
 import gradio as gr
 from difflib import Differ
+import re
 
 # from tools import utils
 
@@ -14,6 +15,22 @@ import utils_jieba
 import utils_wordcloud
 
 
+def auto_detect_time_format(file_list):
+    """
+    自动识别时间格式
+    """
+    patterns = [
+        (r'\d{2}\.\d{2}-\d{4}\s[上下]午', 'MM.DD-HHmm a'),
+        # 添加更多模式
+    ]
+
+    for line in file_list.splitlines():
+        filename = os.path.basename(line)
+        name, _ = os.path.splitext(filename)
+        for pattern, fmt in patterns:
+            if re.match(pattern, name):
+                return fmt
+    return "无法识别的格式"
 
 # 页面构建（gradio interface），功能引入
 with gr.Blocks(title="Text-maestro api大全") as demo:
@@ -410,30 +427,40 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         )
 
     # 整理说说/动态进入对应的周回。 24.1.21
-    gr.Markdown("## 整理说说/动态进入对应的周回。 24.1.21")
-    # 让用户输入自己的文件的时间格式，https://momentjs.com/docs/#/displaying/format/ 查看参考。 默认为MM.DD-HHmm a
+    gr.Markdown("## 整理说说/动态移动至对应的周回。 24.1.21 请放心，没有越权，这里都是生成bat让你自行执行")
+    # 让用户输入自己的文件的时间格式，https://momentjs.com/docs/#/displaying/format/ 查看参考。 默认为MM.DD-HHmm a 注意不要被转义
     with gr.Group():
         file_list_input = gr.Textbox(
             label="待整理的文件列表", 
             lines=3,
-            placeholder="每行一个文件的绝对路径。可使用上面的文件搜索功能生成"
+            placeholder="每行一个文件的绝对路径。可使用上面的文件搜索（everything）功能生成"
         )
+        auto_detect_button = gr.Button("自动识别时间格式")
         time_format_input = gr.Textbox(
             label="文件名中的时间格式",
             value="MM.DD-HHmm a",
             placeholder="参考 momentjs 格式: https://momentjs.com/docs/#/displaying/format/"
         )
+        auto_detect_button.click(
+            auto_detect_time_format,
+            inputs=file_list_input,
+            outputs=time_format_input
+        )
         target_folder_input = gr.Textbox(
             label="目标文件夹路径",
-            placeholder="包含周文件夹的根目录路径"
+            placeholder="""包含周文件夹的根目录路径。这个根目录下面需要包含周回文件夹，可以使用上面的bat功能生成，格式类似 md ".\\01.01-01.07 2024,第1周"
+md ".\\01.08-01.14 2024,第2周"
+md ".\\01.15-01.21 2024,第3周"
+md ".\\01.22-01.28 2024,第4周"
+md ".\\01.29-02.04 2024,第5周"""
         )
         result_output = gr.Textbox(label="整理结果")
         
-        # gr.Button("开始整理").click(
-        #     utils_folder.organize_files_by_week,
-        #     inputs=[file_list_input, time_format_input, target_folder_input],
-        #     outputs=result_output
-        # )
+        gr.Button("开始整理").click(
+            utils_folder.organize_files_by_week,
+            inputs=[file_list_input, time_format_input, target_folder_input],
+            outputs=result_output
+        )
 
 
 
