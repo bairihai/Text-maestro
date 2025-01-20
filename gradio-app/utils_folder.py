@@ -1,6 +1,7 @@
 import os
 import shutil
 from datetime import datetime, timedelta
+import re
 
 # utils_folder.py 目录和文件夹相关的操作功能
 
@@ -132,68 +133,33 @@ def create_weekly_folders_bat(year, base_path=".", week_start_type="skip_partial
     bat_commands.append("pause")
     return "\n".join(bat_commands)
 
-def organize_files_by_week(file_list_str, time_format, target_folder):
-    """
-    生成将文件移动到对应周文件夹的bat命令
-    :param file_list_str: 文件路径列表字符串，每行一个路径
-    :param time_format: 文件名中的时间格式
-    :param target_folder: 目标文件夹路径（包含周文件夹的根目录）
-    :return: bat命令字符串
-    """
-    import re
-    from datetime import datetime
-    
-    # 解析文件列表
-    file_paths = [path.strip() for path in file_list_str.split('\n') if path.strip()]
-    
-    # 获取所有周文件夹信息
-    week_folders = []
-    for folder in os.listdir(target_folder):
-        match = re.match(r'(\d{2}\.\d{2})-(\d{2}\.\d{2}) \d{4},第(\d+)周', folder)
-        if match:
-            start_str, end_str, week_num = match.groups()
-            start_date = datetime.strptime(f"{start_str}.{datetime.now().year}", "%m.%d.%Y")
-            end_date = datetime.strptime(f"{end_str}.{datetime.now().year}", "%m.%d.%Y")
-            week_folders.append({
-                'name': folder,
-                'start': start_date,
-                'end': end_date,
-                'week': int(week_num)
-            })
-    
-    # 生成bat命令
-    bat_commands = ["@echo off", "chcp 65001", ""]
-    bat_commands.append(":: 文件移动命令")
-    
-    for file_path in file_paths:
+def organize_files_by_week(file_paths, time_format, target_folder):
+    bat_commands = ['@echo off']
+    for path in file_paths.splitlines():
+        path = path.strip()
+        if not path:
+            continue
+        filename = os.path.basename(path)
         try:
-            file_name = os.path.basename(file_path)
-            py_format = time_format.replace('MM', '%m').replace('DD', '%d').replace('HH', '%H')\
-                                 .replace('mm', '%M').replace('a', '%p')
-            time_str = re.search(r'\d{2}\.\d{2}-\d{2}\d{2} [AP]M', file_name)
-            if not time_str:
-                bat_commands.append(f"echo 跳过 {file_name}: 无法识别时间格式")
-                continue
-                
-            file_time = datetime.strptime(time_str.group(), py_format)
+            date_str = os.path.splitext(filename)[0]
+            date_str = date_str.replace('上午', 'AM').replace('下午', 'PM').replace('晚上', 'PM')
+            file_datetime = datetime.strptime(date_str, '%m.%d-%H%M %p')
             
-            # 找到对应的周文件夹
-            target_week = None
-            for week in week_folders:
-                if week['start'] <= file_time <= week['end']:
-                    target_week = week
-                    break
+            target_folder = target_folder.strip().strip('"').strip("'")
             
-            if target_week:
-                dest_path = os.path.join(target_folder, target_week['name'], file_name)
-                bat_commands.append(f'move "{file_path}" "{dest_path}"')
-                bat_commands.append(f'echo 移动: {file_name} -^> 第{target_week["week"]}周')
-            else:
-                bat_commands.append(f'echo 错误: {file_name} 找不到对应的周文件夹')
-                
+            week_number = file_datetime.isocalendar()[1]
+            year = file_datetime.year
+            week_start = file_datetime - timedelta(days=file_datetime.weekday())
+            week_end = week_start + timedelta(days=6)
+            week_folder = f"{week_start.strftime('%m.%d')}-{week_end.strftime('%m.%d')} {year},第{week_number}周"
+            dest_folder = os.path.join(target_folder, week_folder)
+            
+            # 生成 bat 命令而不是直接移动文件
+            bat_commands.extend([
+                f'if not exist "{dest_folder}" mkdir "{dest_folder}"',
+                f'move "{path}" "{dest_folder}"'
+            ])
         except Exception as e:
-            bat_commands.append(f'echo 错误: {file_name} - {str(e)}')
+            bat_commands.append(f'echo 错误处理 {filename}: {str(e)}')
     
-    bat_commands.append("")
-    bat_commands.append("pause")
     return "\n".join(bat_commands)
