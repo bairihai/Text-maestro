@@ -431,37 +431,39 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     # 让用户输入自己的文件的时间格式，https://momentjs.com/docs/#/displaying/format/ 查看参考。 默认为MM.DD-HHmm a 注意不要被转义
     # 自动识别反推时间格式功能还待补全，等我再看看吧
     with gr.Group():
-        file_list_input = gr.Textbox(
-            label="待整理的文件列表", 
-            lines=3,
-            placeholder="每行一个文件的绝对路径。可使用上面的文件搜索（everything）功能生成",
-            value="""C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1525 下午.md
+        with gr.Row():
+            file_list_input = gr.Textbox(
+                label="待整理的文件列表", 
+                lines=3,
+                placeholder="每行一个文件的绝对路径。可使用上面的文件搜索（everything）功能生成",
+                value="""C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1525 下午.md
 C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1612 下午.md
 C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-2147 晚上.md"""
-        )
-        with gr.Row():
+            )
             auto_detect_button = gr.Button("自动识别时间格式")
             time_format_input = gr.Textbox(
                 label="文件名中的时间格式", 
                 value="MM.DD-HHmm a",
                 placeholder="参考 momentjs 格式: https://momentjs.com/docs/#/displaying/format/"
             )
-        auto_detect_button.click(
-            auto_detect_time_format,
-            inputs=file_list_input,
-            outputs=time_format_input
-        )
-        year_input = gr.Number(label="年份", value=2025)
-        target_folder_input = gr.Textbox(
-            label="目标文件夹路径",
-            placeholder="""一个父文件夹，在这个目录下面需要包含所有周回文件夹的根目录路径。
+
+        with gr.Row():
+            auto_detect_button.click(
+                auto_detect_time_format,
+                inputs=file_list_input,
+                outputs=time_format_input
+            )
+            target_folder_input = gr.Textbox(
+                label="目标文件夹路径",
+                placeholder="""一个父文件夹，在这个目录下面需要包含所有周回文件夹的根目录路径。
 你的周回文件夹如果需要批量自动化创建，可使用上面的bat功能生成，格式类似 md ".\\01.01-01.07 2024,第1周"
 md ".\\01.08-01.14 2024,第2周"
 md ".\\01.15-01.21 2024,第3周"
-md ".\\01.22-01.28 2024,第4周"
-md ".\\01.29-02.04 2024,第5周""",
-            value="./"
-        )
+md ".\\01.22-01.28 2024,第4周" """,
+                value="./"
+            )
+            year_input = gr.Number(label="这个目标文件夹存放的子文件夹构成了一个年份，这一年是", value=2025)
+
         result_output = gr.Textbox(label="生成BAT代码")
         
         gr.Button("生成BAT代码").click(
