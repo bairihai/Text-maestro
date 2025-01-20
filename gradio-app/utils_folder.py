@@ -80,61 +80,24 @@ def get_current_directory():
 #     return created_folders
 
 def create_weekly_folders_bat(year, base_path=".", week_start_type="skip_partial"):
-    """
-    生成按周创建文件夹的bat命令
-    :param year: 年份(int)
-    :param base_path: 基础路径，默认为当前目录
-    :param week_start_type: 周数计算方式
-        - "first_week": 将本年1月1日至当周周天视为第1周
-        - "zero_week": 将本年1月1日至当周周天视为第0周
-        - "skip_partial": 跳过第一个不完整的周，从第一个周一算起
-    :return: bat命令字符串
-    """
-    from datetime import datetime, timedelta
-    
-    # 设置起始日期为该年第一天
-    start_date = datetime(year, 1, 1)
-    first_monday = start_date
-    while first_monday.weekday() != 0:  # 找到第一个周一
-        first_monday += timedelta(days=1)
-    
-    # 根据不同的周数计算方式设置起始日期和周数
-    if week_start_type == "first_week":
-        current_date = start_date
-        week = 1
-    elif week_start_type == "zero_week":
-        current_date = start_date
-        week = 0
-    else:  # skip_partial
-        current_date = first_monday
-        week = 1
-    
-    # 设置结束日期为下一年第一个周一之前
-    end_date = datetime(year + 1, 1, 1)
-    while end_date.weekday() != 0:
-        end_date += timedelta(days=1)
-    
-    # 生成bat命令
+    calculator = WeekCalculator(year, week_start_type)
     bat_commands = ["@echo off", "chcp 65001", ""]
     
+    current_date = calculator.first_monday if week_start_type == "skip_partial" else calculator.start_date
+    end_date = datetime(year + 1, 1, 1)
+    
     while current_date < end_date:
-        # 计算本周结束日期
-        days_to_sunday = 6 - current_date.weekday() if current_date.weekday() <= 6 else 0
-        week_end = current_date + timedelta(days=days_to_sunday)
-        
-        folder_name = f"{current_date.strftime('%m.%d')}-{week_end.strftime('%m.%d')} {year},第{week}周"
-        folder_path = f'"{base_path}\\{folder_name}"'
-        bat_commands.append(f"md {folder_path}")
-        
-        # 移动到下一周的开始
-        current_date = week_end + timedelta(days=1)
-        week += 1
+        folder_name = calculator.get_folder_name(current_date)
+        bat_commands.append(f'md "{base_path}\\{folder_name}"')
+        current_date += timedelta(days=7)
     
     bat_commands.append("pause")
     return "\n".join(bat_commands)
 
-def organize_files_by_week(file_paths, time_format, target_folder, year):
+def organize_files_by_week(file_paths, time_format, target_folder, year, auto_create_folders):
+    calculator = WeekCalculator(year)
     bat_commands = ['@echo off']
+    
     for path in file_paths.splitlines():
         path = path.strip()
         if not path:
@@ -148,17 +111,45 @@ def organize_files_by_week(file_paths, time_format, target_folder, year):
             
             target_folder = target_folder.strip().strip('"').strip("'")
             
-            week_number = file_datetime.isocalendar()[1]
-            week_start = file_datetime - timedelta(days=file_datetime.weekday())
-            week_end = week_start + timedelta(days=6)
-            week_folder = f"{week_start.strftime('%m.%d')}-{week_end.strftime('%m.%d')} {year},第{week_number}周"
-            dest_folder = os.path.join(target_folder, week_folder)
+            dest_folder = os.path.join(target_folder, calculator.get_folder_name(file_datetime))
             
-            bat_commands.extend([
-                f'if not exist "{dest_folder}" mkdir "{dest_folder}"',
-                f'move "{path}" "{dest_folder}"'
-            ])
+            if auto_create_folders:
+                bat_commands.append(f'if not exist "{dest_folder}" mkdir "{dest_folder}"')
+            bat_commands.append(f'move "{path}" "{dest_folder}"')
         except Exception as e:
             bat_commands.append(f'echo 错误处理 {filename}: {str(e)}')
     
     return "\n".join(bat_commands)
+
+class WeekCalculator:
+    def __init__(self, year, week_start_type="skip_partial"):
+        self.year = year
+        self.start_date = datetime(year, 1, 1)
+        self.first_monday = self._get_first_monday()
+        self.week_start_type = week_start_type
+        
+    def _get_first_monday(self):
+        first_monday = self.start_date
+        while first_monday.weekday() != 0:
+            first_monday += timedelta(days=1)
+        return first_monday
+        
+    def get_week_info(self, date):
+        """返回给定日期的周信息(周起始日,周结束日,周数)"""
+        if self.week_start_type == "first_week":
+            week_number = date.isocalendar()[1]
+        elif self.week_start_type == "zero_week":
+            week_number = date.isocalendar()[1] - 1
+        else:  # skip_partial
+            if date < self.first_monday:
+                week_number = 0
+            else:
+                week_number = (date - self.first_monday).days // 7 + 1
+                
+        week_start = date - timedelta(days=date.weekday())
+        week_end = week_start + timedelta(days=6)
+        return week_start, week_end, week_number
+
+    def get_folder_name(self, date):
+        week_start, week_end, week_number = self.get_week_info(date)
+        return f"{week_start.strftime('%m.%d')}-{week_end.strftime('%m.%d')} {self.year},第{week_number}周"
