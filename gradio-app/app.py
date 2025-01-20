@@ -390,88 +390,149 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     gr.Markdown("## 番茄/起点小说搬运洗稿 2025.1.19的约三四个月前")
     gr.Markdown("影视解说洗稿、视频拆解等功能之后制作。部分功能需要使用ai，鉴于目前ai市场比较混乱，就不内置ai功能了，模型选用费用控制都是大问题。  \n 所以，最后采用的方案是把prompt格式化拼接好，你自己找个合适的模型让他处理，想用哪个模型（gpt4o 01 或是claude之类）都可以，只要给我输出就行了。")
 
-    # 生成周文件夹bat代码 2025.1.19
-    gr.Markdown("## 生成周文件夹bat代码 2025.1.19")
+#     # 生成周文件夹bat代码 2025.1.19
+#     gr.Markdown("## 生成周文件夹bat代码 2025.1.19")
+#     with gr.Group():
+#         with gr.Row():
+#             year_input = gr.Number(label="年份", value=2025)
+#             path_input = gr.Textbox(label="保存路径（可选）", placeholder="默认为当前目录")
+        
+#         def create_folders_bat(year, path=".", week_type="skip_partial"):
+#             type_map = {
+#                 "将1月1日至当周周天视为第1周": "first_week",
+#                 "将1月1日至当周周天视为第0周": "zero_week",
+#                 "跳过第一个不完整的周，从第一个周一算起（推荐）": "skip_partial"
+#             }
+#             return utils_folder.create_weekly_folders_bat(
+#                 int(year),
+#                 path if path.strip() else ".",
+#                 type_map[week_type]
+#             )
+
+#         week_type_input = gr.Radio(
+#             label="周数计算方式",
+#             choices=[
+#                 "将1月1日至当周周天视为第1周",
+#                 "将1月1日至当周周天视为第0周", 
+#                 "跳过第一个不完整的周，从第一个周一算起（推荐）"
+#             ],
+#             value="跳过第一个不完整的周，从第一个周一算起（推荐）"
+#         )
+#         bat_output = gr.Textbox(label="bat代码", lines=8)
+        
+#         gr.Button("生成bat代码").click(
+#             create_folders_bat,
+#             inputs=[year_input, path_input, week_type_input],
+#             outputs=bat_output
+#         )
+
+#     # 整理说说/动态进入对应的周回。 24.1.21
+#     gr.Markdown("## 整理说说/动态移动至对应的周回。 24.1.21 请放心，没有越权，这里都是生成bat让你自行执行，也不会读取你的任何本地文件！！！")
+#     # 让用户输入自己的文件的时间格式，https://momentjs.com/docs/#/displaying/format/ 查看参考。 默认为MM.DD-HHmm a 注意不要被转义
+#     # 自动识别反推时间格式功能还待补全，等我再看看吧
+#     with gr.Group():
+#         with gr.Row():
+#             file_list_input = gr.Textbox(
+#                 label="待整理的文件列表", 
+#                 lines=3,
+#                 placeholder="每行一个文件的绝对路径。可使用上面的文件搜索（everything）功能生成",
+#                 value="""C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1525 下午.md
+# C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1612 下午.md
+# C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-2147 晚上.md"""
+#             )
+#             auto_detect_button = gr.Button("自动识别时间格式")
+#             time_format_input = gr.Textbox(
+#                 label="文件名中的时间格式", 
+#                 value="MM.DD-HHmm a",
+#                 placeholder="参考 momentjs 格式: https://momentjs.com/docs/#/displaying/format/"
+#             )
+
+#         with gr.Row():
+#             auto_detect_button.click(
+#                 auto_detect_time_format,
+#                 inputs=file_list_input,
+#                 outputs=time_format_input
+#             )
+#             target_folder_input = gr.Textbox(
+#                 label="目标文件夹路径",
+#                 placeholder="""一个父文件夹，在这个目录下面需要包含所有周回文件夹的根目录路径。
+# 你的周回文件夹如果需要批量自动化创建，可使用上面的bat功能生成，格式类似 md ".\\01.01-01.07 2024,第1周"
+# md ".\\01.08-01.14 2024,第2周"
+# md ".\\01.15-01.21 2024,第3周"
+# md ".\\01.22-01.28 2024,第4周" """,
+#                 value="./"
+#             )
+#             year_input = gr.Number(label="这个目标文件夹存放的子文件夹构成了一个年份，这一年是", value=2025)
+
+#         result_output = gr.Textbox(label="生成BAT代码")
+        
+#         gr.Button("生成BAT代码").click(
+#             utils_folder.organize_files_by_week,
+#             inputs=[file_list_input, time_format_input, target_folder_input, year_input],
+#             outputs=result_output
+#         )
+
+    gr.Markdown("## 周回文件夹管理工具")
     with gr.Group():
+        # 共用的基础配置
         with gr.Row():
             year_input = gr.Number(label="年份", value=2025)
-            path_input = gr.Textbox(label="保存路径（可选）", placeholder="默认为当前目录")
-        
-        def create_folders_bat(year, path=".", week_type="skip_partial"):
-            type_map = {
-                "将1月1日至当周周天视为第1周": "first_week",
-                "将1月1日至当周周天视为第0周": "zero_week",
-                "跳过第一个不完整的周，从第一个周一算起（推荐）": "skip_partial"
-            }
-            return utils_folder.create_weekly_folders_bat(
-                int(year),
-                path if path.strip() else ".",
-                type_map[week_type]
+            week_type_input = gr.Radio(
+                label="周数计算方式",
+                choices=[
+                    "将1月1日至当周周天视为第1周",
+                    "将1月1日至当周周天视为第0周", 
+                    "跳过第一个不完整的周，从第一个周一算起（推荐）"
+                ],
+                value="跳过第一个不完整的周，从第一个周一算起（推荐）"
             )
 
-        week_type_input = gr.Radio(
-            label="周数计算方式",
-            choices=[
-                "将1月1日至当周周天视为第1周",
-                "将1月1日至当周周天视为第0周", 
-                "跳过第一个不完整的周，从第一个周一算起（推荐）"
-            ],
-            value="跳过第一个不完整的周，从第一个周一算起（推荐）"
-        )
-        bat_output = gr.Textbox(label="bat代码", lines=8)
-        
-        gr.Button("生成bat代码").click(
-            create_folders_bat,
-            inputs=[year_input, path_input, week_type_input],
-            outputs=bat_output
-        )
+        # Tab分页
+        with gr.Tabs():
+            # 创建文件夹Tab
+            with gr.Tab("创建周回文件夹"):
+                path_input = gr.Textbox(label="保存路径", placeholder="默认为当前目录", value=".")
+                create_folder_output = gr.Textbox(label="bat代码", lines=8)
+                gr.Button("生成创建文件夹bat").click(
+                    create_folders_bat,
+                    inputs=[year_input, path_input, week_type_input],
+                    outputs=create_folder_output
+                )
 
-    # 整理说说/动态进入对应的周回。 24.1.21
-    gr.Markdown("## 整理说说/动态移动至对应的周回。 24.1.21 请放心，没有越权，这里都是生成bat让你自行执行，也不会读取你的任何本地文件！！！")
-    # 让用户输入自己的文件的时间格式，https://momentjs.com/docs/#/displaying/format/ 查看参考。 默认为MM.DD-HHmm a 注意不要被转义
-    # 自动识别反推时间格式功能还待补全，等我再看看吧
-    with gr.Group():
-        with gr.Row():
-            file_list_input = gr.Textbox(
-                label="待整理的文件列表", 
-                lines=3,
-                placeholder="每行一个文件的绝对路径。可使用上面的文件搜索（everything）功能生成",
-                value="""C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1525 下午.md
-C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1612 下午.md
-C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-2147 晚上.md"""
-            )
-            auto_detect_button = gr.Button("自动识别时间格式")
-            time_format_input = gr.Textbox(
-                label="文件名中的时间格式", 
-                value="MM.DD-HHmm a",
-                placeholder="参考 momentjs 格式: https://momentjs.com/docs/#/displaying/format/"
-            )
-
-        with gr.Row():
-            auto_detect_button.click(
-                auto_detect_time_format,
-                inputs=file_list_input,
-                outputs=time_format_input
-            )
-            target_folder_input = gr.Textbox(
-                label="目标文件夹路径",
-                placeholder="""一个父文件夹，在这个目录下面需要包含所有周回文件夹的根目录路径。
-你的周回文件夹如果需要批量自动化创建，可使用上面的bat功能生成，格式类似 md ".\\01.01-01.07 2024,第1周"
-md ".\\01.08-01.14 2024,第2周"
-md ".\\01.15-01.21 2024,第3周"
-md ".\\01.22-01.28 2024,第4周" """,
-                value="./"
-            )
-            year_input = gr.Number(label="这个目标文件夹存放的子文件夹构成了一个年份，这一年是", value=2025)
-
-        result_output = gr.Textbox(label="生成BAT代码")
-        
-        gr.Button("生成BAT代码").click(
-            utils_folder.organize_files_by_week,
-            inputs=[file_list_input, time_format_input, target_folder_input],
-            outputs=result_output
-        )
-
-
+            # 文件整理Tab
+            with gr.Tab("整理文件到周回"):
+                file_list_input = gr.Textbox(
+                    label="待整理的文件列表", 
+                    lines=3,
+                    placeholder="每行一个文件的绝对路径"
+                )
+                with gr.Row():
+                    time_format_input = gr.Textbox(
+                        label="文件名中的时间格式", 
+                        value="MM.DD-HHmm a"
+                    )
+                    auto_detect_button = gr.Button("自动识别时间格式")
+                
+                target_folder_input = gr.Textbox(
+                    label="目标文件夹路径",
+                    value="./",
+                    placeholder="周回文件夹的根目录路径"
+                )
+                auto_create_folders = gr.Checkbox(
+                    label="自动创建不存在的周回文件夹",
+                    value=True
+                )
+                move_files_output = gr.Textbox(label="生成BAT代码")
+                
+                auto_detect_button.click(
+                    auto_detect_time_format,
+                    inputs=file_list_input,
+                    outputs=time_format_input
+                )
+                gr.Button("生成移动文件bat").click(
+                    utils_folder.organize_files_by_week,
+                    inputs=[file_list_input, time_format_input, target_folder_input, year_input, auto_create_folders],
+                    outputs=move_files_output
+                )
 
 demo.launch()

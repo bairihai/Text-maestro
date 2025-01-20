@@ -133,7 +133,7 @@ def create_weekly_folders_bat(year, base_path=".", week_start_type="skip_partial
     bat_commands.append("pause")
     return "\n".join(bat_commands)
 
-def organize_files_by_week(file_paths, time_format, target_folder):
+def organize_files_by_week(file_paths, time_format, target_folder, year):
     bat_commands = ['@echo off']
     for path in file_paths.splitlines():
         path = path.strip()
@@ -143,18 +143,17 @@ def organize_files_by_week(file_paths, time_format, target_folder):
         try:
             date_str = os.path.splitext(filename)[0]
             date_str = date_str.replace('上午', 'AM').replace('下午', 'PM').replace('晚上', 'PM')
-            file_datetime = datetime.strptime(date_str, '%m.%d-%H%M %p')
+            # 解析日期时添加年份
+            file_datetime = datetime.strptime(f"{date_str} {year}", '%m.%d-%H%M %p %Y')
             
             target_folder = target_folder.strip().strip('"').strip("'")
             
             week_number = file_datetime.isocalendar()[1]
-            year = file_datetime.year
             week_start = file_datetime - timedelta(days=file_datetime.weekday())
             week_end = week_start + timedelta(days=6)
             week_folder = f"{week_start.strftime('%m.%d')}-{week_end.strftime('%m.%d')} {year},第{week_number}周"
             dest_folder = os.path.join(target_folder, week_folder)
             
-            # 生成 bat 命令而不是直接移动文件
             bat_commands.extend([
                 f'if not exist "{dest_folder}" mkdir "{dest_folder}"',
                 f'move "{path}" "{dest_folder}"'
