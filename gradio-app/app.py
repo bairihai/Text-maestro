@@ -392,7 +392,7 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     gr.Markdown("## 周回文件夹管理工具")
     gr.Markdown("我计划将来搞一个图解什么的，目前的说明太复杂了。唉。我先试着生成个mermaid吧。")
-
+    gr.Markdown("无论如何，我们这里的bat只进行了创建文件夹并移动的操作，绝无删除，放心放心！")
 
     # 按照周回整理日记的功能。
     with gr.Row():

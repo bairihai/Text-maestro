@@ -98,15 +98,33 @@ def organize_files_by_week(file_paths, time_format, target_folder, year, auto_cr
     calculator = WeekCalculator(year)
     bat_commands = ['@echo off']
     
+    time_mapping = {
+        '凌晨': 'AM',
+        '早上': 'AM',
+        '上午': 'AM',
+        '下午': 'PM',
+        '晚上': 'PM'
+    }
+    
     for path in file_paths.splitlines():
         path = path.strip()
         if not path:
             continue
         filename = os.path.basename(path)
         try:
-            date_part = filename[:13]  # 通过切片提取前13个字符 "MM.DD-HHMM" 【feature】:也许这里不该写死？唉。真难啊！
-            date_str = date_part.replace('上午', 'AM').replace('下午', 'PM').replace('晚上', 'PM')
-            # 解析日期时添加年份
+            # 【feature:】这部分逻辑还需要再看看！claude写的
+            # 提取日期时间部分（MM.DD-HHMM）
+            date_part = re.match(r'(\d{2}\.\d{2}-\d{4})', filename)
+            if not date_part:
+                raise ValueError("无法识别日期格式")
+            date_str = date_part.group(1)
+            
+            # 检测时间段标识
+            for cn_time, en_time in time_mapping.items():
+                if cn_time in filename:
+                    date_str += f" {en_time}"
+                    break
+            
             file_datetime = datetime.strptime(f"{date_str} {year}", '%m.%d-%H%M %p %Y')
             
             target_folder = target_folder.strip().strip('"').strip("'")
