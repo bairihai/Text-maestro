@@ -409,4 +409,32 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
             outputs=bat_output
         )
 
+    # 整理说说/动态进入对应的周回。 24.1.21
+    gr.Markdown("## 整理说说/动态进入对应的周回。 24.1.21")
+    # 让用户输入自己的文件的时间格式，https://momentjs.com/docs/#/displaying/format/ 查看参考。 默认为MM.DD-HHmm a
+    with gr.Group():
+        file_list_input = gr.Textbox(
+            label="待整理的文件列表", 
+            lines=3,
+            placeholder="每行一个文件的绝对路径。可使用上面的文件搜索功能生成"
+        )
+        time_format_input = gr.Textbox(
+            label="文件名中的时间格式",
+            value="MM.DD-HHmm a",
+            placeholder="参考 momentjs 格式: https://momentjs.com/docs/#/displaying/format/"
+        )
+        target_folder_input = gr.Textbox(
+            label="目标文件夹路径",
+            placeholder="包含周文件夹的根目录路径"
+        )
+        result_output = gr.Textbox(label="整理结果")
+        
+        # gr.Button("开始整理").click(
+        #     utils_folder.organize_files_by_week,
+        #     inputs=[file_list_input, time_format_input, target_folder_input],
+        #     outputs=result_output
+        # )
+
+
+
 demo.launch()
