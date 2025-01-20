@@ -392,38 +392,22 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
 
     gr.Markdown("## 周回文件夹管理工具")
     gr.Markdown("我计划将来搞一个图解什么的，目前的说明太复杂了。唉。我先试着生成个mermaid吧。")
-    gr.Markdown("""
-    ```mermaid
-    graph TD
-        A[输入年份] --> B{选择功能}
-        B -->|创建文件夹| C[创建周回文件夹]
-        B -->|整理文件| D[移动文件到周回]
-        
-        C --> C1[选择周数计算方式]
-        C1 --> C2[指定保存路径]
-        C2 --> C3[生成bat代码]
-        
-        D --> D1[输入文件列表]
-        D1 --> D2[识别/指定时间格式]
-        D2 --> D3[指定目标文件夹]
-        D3 --> D4[是否自动创建文件夹]
-        D4 --> D5[生成移动文件bat]
-    ```
-    """)
 
-    # with gr.Group():
-        # 共用的基础配置
+
+    # 按照周回整理日记的功能。
     with gr.Row():
-        year_input = gr.Number(label="年份。 \n 如果是【创建文件夹】，那么就会创建这一年份周回的文件夹。  \n  如果是【移动整理文件至文件夹】，那么就意味着你在告知我你接下来将要输入的这目标文件夹是一个父文件夹，存放的子文件夹构成了一个年份，你预先告知我这一年是", value=2025)
+        year_input = gr.Number(label="年份", value=2025)
+        split_year = gr.Checkbox(label="跨年时拆分周", value=True, 
+                               info="选中则从1月1日起算新的一周，否则保持完整周")
         week_type_input = gr.Radio(
             label="周数计算方式",
-            choices=[
-                "将1月1日至当周周天视为第1周",
-                "将1月1日至当周周天视为第0周", 
-                "跳过第一个不完整的周，从第一个周一算起（推荐）"
-            ],
+            choices=["将1月1日至当周周天视为第1周",
+                    "将1月1日至当周周天视为第0周", 
+                    "跳过第一个不完整的周，从第一个周一算起（推荐）"],
             value="跳过第一个不完整的周，从第一个周一算起（推荐）"
         )
+    # 【bug】 选择视为第1周时，移动功能依旧计算为第0周。先这样吧。
+    # 是以跨年拆分当周从当年的1月1日算起，还是不拆分周从上一年的最后一个周一算起
 
     # Tab分页
     with gr.Tabs():
@@ -443,9 +427,9 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
                 label="待整理的文件列表", 
                 lines=3,
                 placeholder="每行一个文件的绝对路径",
-                value="""C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1525 下午.md
-C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1612 下午.md
-C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-2147 晚上.md"""
+                value="""C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.04-1525 下午 这事儿真有意思.md
+C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.06-1612 下午 标记了一些【bug】【feature】.md
+C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.08-2147 晚上 技术债什么的，留给electron版。然而生活债怎么办呢？.md"""
             )
             with gr.Row():
                 time_format_input = gr.Textbox(

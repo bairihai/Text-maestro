@@ -104,8 +104,8 @@ def organize_files_by_week(file_paths, time_format, target_folder, year, auto_cr
             continue
         filename = os.path.basename(path)
         try:
-            date_str = os.path.splitext(filename)[0]
-            date_str = date_str.replace('上午', 'AM').replace('下午', 'PM').replace('晚上', 'PM')
+            date_part = filename[:13]  # 通过切片提取前13个字符 "MM.DD-HHMM" 【feature】:也许这里不该写死？唉。真难啊！
+            date_str = date_part.replace('上午', 'AM').replace('下午', 'PM').replace('晚上', 'PM')
             # 解析日期时添加年份
             file_datetime = datetime.strptime(f"{date_str} {year}", '%m.%d-%H%M %p %Y')
             
@@ -122,11 +122,12 @@ def organize_files_by_week(file_paths, time_format, target_folder, year, auto_cr
     return "\n".join(bat_commands)
 
 class WeekCalculator:
-    def __init__(self, year, week_start_type="skip_partial"):
+    def __init__(self, year, week_start_type="skip_partial", split_year=True):
         self.year = year
         self.start_date = datetime(year, 1, 1)
         self.first_monday = self._get_first_monday()
         self.week_start_type = week_start_type
+        self.split_year = split_year  # 是否在跨年时拆分周
         
     def _get_first_monday(self):
         first_monday = self.start_date
@@ -135,7 +136,17 @@ class WeekCalculator:
         return first_monday
         
     def get_week_info(self, date):
-        """返回给定日期的周信息(周起始日,周结束日,周数)"""
+        """返回给定日期的周信息"""
+        week_start = date - timedelta(days=date.weekday())
+        week_end = week_start + timedelta(days=6)
+        
+        # 跨年处理
+        if self.split_year:
+            if week_end.year > self.year:
+                week_end = datetime(self.year, 12, 31)
+            if week_start.year < self.year:
+                week_start = datetime(self.year, 1, 1)
+        
         if self.week_start_type == "first_week":
             week_number = date.isocalendar()[1]
         elif self.week_start_type == "zero_week":
@@ -146,8 +157,6 @@ class WeekCalculator:
             else:
                 week_number = (date - self.first_monday).days // 7 + 1
                 
-        week_start = date - timedelta(days=date.weekday())
-        week_end = week_start + timedelta(days=6)
         return week_start, week_end, week_number
 
     def get_folder_name(self, date):
