@@ -102,6 +102,7 @@ def organize_files_by_week(file_paths, time_format, target_folder, year, auto_cr
         '凌晨': 'AM',
         '早上': 'AM',
         '上午': 'AM',
+        '中午': 'PM',
         '下午': 'PM',
         '晚上': 'PM'
     }
