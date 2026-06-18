@@ -13,6 +13,7 @@ import utils_folder
 import utils_everything
 import utils_jieba
 import utils_wordcloud
+import utils_social_media
 
 
 def auto_detect_time_format(file_list):
@@ -386,6 +387,25 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         unified_outline_output = gr.Textbox(label="统一后的大纲", lines=3)
   
 
+    # Twitch 直播间弹幕分析
+    gr.Markdown("## Twitch 直播间弹幕高阶分析")
+    gr.Markdown("分析 Twitch 直播间的聊天数据，包括活跃度统计、高光时刻识别、核心粉丝分析以及粉丝成分画像")
+    
+    with gr.Tabs():
+        with gr.Tab("从JSON文件导入"):
+            twitch_file_path_input = gr.Textbox(label="输入Twitch聊天 JSON 文件路径", placeholder="例如： D:\\twitch_chat_data.json")
+            twitch_file_output = gr.Textbox(label="分析结果", lines=15)
+            gr.Button("分析").click(utils_social_media.analyze_twitch_chat, inputs=twitch_file_path_input, outputs=twitch_file_output)
+        
+        with gr.Tab("从JSON文本导入"):
+            twitch_text_input = gr.Textbox(
+                label="粘贴 Twitch 聊天 JSON 内容", 
+                lines=10,
+                placeholder='{"comments": [{"commenter": {...}, "content_offset_seconds": 0, "message": {...}}, ...]}'
+            )
+            twitch_text_output = gr.Textbox(label="分析结果", lines=15)
+            gr.Button("分析").click(utils_social_media.analyze_twitch_chat_from_text, inputs=twitch_text_input, outputs=twitch_text_output)
+
     # 小说洗稿 2025.1.19的四个月前
     gr.Markdown("## 番茄/起点小说搬运洗稿 2025.1.19的约三四个月前")
     gr.Markdown("影视解说洗稿、视频拆解等功能之后制作。部分功能需要使用ai，鉴于目前ai市场比较混乱，就不内置ai功能了，模型选用费用控制都是大问题。  \n 所以，最后采用的方案是把prompt格式化拼接好，你自己找个合适的模型让他处理，想用哪个模型（gpt4o 01 或是claude之类）都可以，只要给我输出就行了。")
@@ -412,14 +432,14 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
     # Tab分页
     with gr.Tabs():
         # 创建文件夹Tab
-        with gr.Tab("创建周回文件夹"):
-            path_input = gr.Textbox(label="保存路径", placeholder="默认为当前目录", value=".")
-            create_folder_output = gr.Textbox(label="bat代码", lines=8)
-            gr.Button("生成创建文件夹bat").click(
-                create_folders_bat,
-                inputs=[year_input, path_input, week_type_input],
-                outputs=create_folder_output
-            )
+        # with gr.Tab("创建周回文件夹"):
+        #     path_input = gr.Textbox(label="保存路径", placeholder="默认为当前目录", value=".")
+        #     create_folder_output = gr.Textbox(label="bat代码", lines=8)
+        #     gr.Button("生成创建文件夹bat").click(
+        #         create_folders_bat,
+        #         inputs=[year_input, path_input, week_type_input],
+        #         outputs=create_folder_output
+        #     )
 
         # 文件整理Tab
         with gr.Tab("整理文件到周回"):
@@ -459,5 +479,10 @@ C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.
                 inputs=[file_list_input, time_format_input, target_folder_input, year_input, auto_create_folders],
                 outputs=move_files_output
             )
+
+
+            # 标题序号降级
+
+            # 
 
 demo.launch()
