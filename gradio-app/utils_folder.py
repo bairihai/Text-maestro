@@ -94,8 +94,15 @@ def create_weekly_folders_bat(year, base_path=".", week_start_type="skip_partial
     bat_commands.append("pause")
     return "\n".join(bat_commands)
 
-def organize_files_by_week(file_paths, time_format, target_folder, year, auto_create_folders):
-    calculator = WeekCalculator(year)
+def organize_files_by_week(file_paths, time_format, target_folder, year, auto_create_folders, week_start_type="skip_partial"):
+    # UI 中文单选值映射到 WeekCalculator 内部键值
+    week_type_mapping = {
+        "将1月1日至当周周天视为第1周": "first_week",
+        "将1月1日至当周周天视为第0周": "zero_week",
+        "跳过第一个不完整的周，从第一个周一算起（推荐）": "skip_partial",
+    }
+    week_start_type = week_type_mapping.get(week_start_type, week_start_type)
+    calculator = WeekCalculator(year, week_start_type)
     bat_commands = ['@echo off']
     
     time_mapping = {

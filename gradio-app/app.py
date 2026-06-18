@@ -281,11 +281,6 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
             frequency_output = gr.Textbox(label="发言频率统计结果", lines=3)
         gr.Button("统计").click(utils.count_message_frequency, inputs=[chat_record_input, time_granularity_input], outputs=frequency_output)
 
-    with gr.Tab("发言相邻的用户（频率）"):
-        with gr.Group():
-            chat_record_input = gr.Textbox(label="输入待分析的聊天记录", lines=3, placeholder="不要给出只有一两个用户的聊天记录，那样估计啥也分析不出来。")
-        gr.Button("分析").click(filter_files, inputs=[chat_record_input, regex_input], outputs=filter_output)
-
     gr.Markdown("## discordmate聊天记录画像分析")
     with gr.Tab("发言时间段（频率）"):
         with gr.Group():
@@ -476,7 +471,7 @@ C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.
             )
             gr.Button("生成移动文件bat").click(
                 utils_folder.organize_files_by_week,
-                inputs=[file_list_input, time_format_input, target_folder_input, year_input, auto_create_folders],
+                inputs=[file_list_input, time_format_input, target_folder_input, year_input, auto_create_folders, week_type_input],
                 outputs=move_files_output
             )
 
