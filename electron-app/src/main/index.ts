@@ -1,14 +1,21 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+﻿import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { electronApp, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 const fs = require('fs').promises;
 const path = require('path');
-const { exec } = require('child_process'); // exec可以在一个shell中运行命令，并在完成后通过回调函数传递stdout和stderr
 
 import log from 'electron-log';
 import net from 'net';
+
+// 目录树节点类型
+type TreeNode = {
+  name: string;
+  type: 'directory' | 'file';
+  size?: number;
+  children?: TreeNode[];
+};
 
 // 配置日志
 log.transports.file.level = 'info';
@@ -39,11 +46,49 @@ function createWindow(): void {
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  // 优先用环境变量；否则直接尝试 dev server URL，失败再 loadFile
+  const devUrl = process.env['ELECTRON_RENDERER_URL'] || 'http://localhost:5180/';
+  mainWindow.loadURL(devUrl).catch(() => {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+  });
+}
+
+// 目录树生成：用 Node fs 递归读取目录结构
+async function buildTree(dirPath: string, maxDepth: number, currentDepth: number, includeStats: boolean): Promise<TreeNode> {
+  const name = path.basename(dirPath);
+  const stat = await fs.stat(dirPath);
+  const node: TreeNode = {
+    name,
+    type: 'directory',
+  };
+  if (includeStats) {
+    node.size = stat.size;
   }
+  if (currentDepth >= maxDepth) {
+    return node;
+  }
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  const children: TreeNode[] = [];
+  for (const entry of entries) {
+    const entryPath = path.join(dirPath, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        children.push(await buildTree(entryPath, maxDepth, currentDepth + 1, includeStats));
+      } else if (entry.isFile()) {
+        const childNode: TreeNode = { name: entry.name, type: 'file' };
+        if (includeStats) {
+          const fileStat = await fs.stat(entryPath);
+          childNode.size = fileStat.size;
+        }
+        children.push(childNode);
+      }
+    } catch (err) {
+      // 跳过无权限访问的条目
+      log.warn(`Main: 跳过无权限条目: ${entryPath}`, err);
+    }
+  }
+  node.children = children;
+  return node;
 }
 
 // This method will be called when Electron has finished
@@ -104,10 +149,14 @@ app.whenReady().then(() => {
     return preferences[key];
   });
 
-  ipcMain.handle('set-preferences', (_, newPreferences) => {
-    const preferences = readPreferences();
-    Object.assign(preferences, newPreferences);
-    writePreferences(preferences);
+  ipcMain.handle('set-preferences', async (_, newPreferences) => {
+    try {
+      const preferences = await readPreferences();
+      Object.assign(preferences, newPreferences);
+      writePreferences(preferences);
+    } catch (error) {
+      log.error('Main: Error writing preferences:', error);
+    }
   });
 
   // // 添加ping方法
@@ -176,6 +225,48 @@ app.whenReady().then(() => {
     } catch (error) {
       console.error(`Main: 检查失败: ${error}`);
       return `检查失败: ${error}`;
+    }
+  });
+
+  ipcMain.handle('generate-tree', async (_, dirPath: string, maxDepth: number = 3, includeStats: boolean = false) => {
+    try {
+      const fullPath = path.resolve(dirPath);
+      const stat = await fs.stat(fullPath);
+      if (!stat.isDirectory()) {
+        return { error: '指定路径不是目录' };
+      }
+      const tree = await buildTree(fullPath, maxDepth, 0, includeStats);
+      const result: any = { tree };
+      if (includeStats) {
+        // 计算目录总大小（递归）
+        const calcSize = async (node: TreeNode): Promise<number> => {
+          if (node.type === 'file') return node.size || 0;
+          if (!node.children) return 0;
+          let total = 0;
+          for (const child of node.children) {
+            total += await calcSize(child);
+          }
+          return total;
+        };
+        const totalSize = await calcSize(tree);
+        // 硬盘信息：Node 用 fs.statfs（Node 18+，Electron 31 自带 Node 20+）
+        const statfs: any = await fs.statfs(fullPath);
+        const diskTotal = statfs.blocks * statfs.bsize;
+        const diskFree = statfs.bfree * statfs.bsize;
+        const diskUsed = diskTotal - diskFree;
+        result.stats = {
+          totalSize,
+          diskTotal,
+          diskUsed,
+          diskFree,
+          percentUsed: (totalSize / diskTotal) * 100
+        };
+      }
+      return result;
+    } catch (error) {
+      const msg = (error as Error).message;
+      log.error(`Main: generate-tree 失败: ${msg}`);
+      return { error: msg };
     }
   });
 

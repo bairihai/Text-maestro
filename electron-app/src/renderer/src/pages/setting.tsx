@@ -1,10 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Switch, Select, Input, Typography, Card, Checkbox, Divider } from '@arco-design/web-react';
 
 import { StatusCheck, OnlineCheck, EverythingCheck, WordCloudAdvancedCheck } from '@renderer/components/StatusCheck';
-
-import { useSelector, useDispatch } from 'react-redux';
-import { setState } from '@renderer/store/globalModel';
 
 import { IconSun,IconMoon } from '@arco-design/web-react/icon';
 

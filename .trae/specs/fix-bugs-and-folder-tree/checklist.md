@@ -1,0 +1,28 @@
+- [x] `set-preferences` handler 使用 `await readPreferences()`，返回值是解析后的对象
+- [x] `set-preferences` handler 函数声明为 `async`
+- [x] `writePreferences` 调用有错误处理（.catch 或 try/catch），不静默失败
+- [x] Playground 的 `ipcRenderer.on('file-content', ...)` 位于 `useEffect` 内
+- [x] Playground 的 useEffect cleanup 调用 `removeListener` 移除监听器
+- [x] removeListener 传入的函数引用与 on 注册的是同一引用（具名函数）
+- [x] 主进程新增 `generate-tree` IPC handler，参数为 (path, maxDepth, includeStats)
+- [x] generate-tree 返回树形 JSON 结构（TreeNode 类型，含 name/type/children/size）
+- [x] generate-tree 在路径无效时返回 `{ error: '...' }` 而非抛异常
+- [x] includeStats 为 true 时返回目录大小与硬盘占用信息
+- [x] foldertree.tsx 旧内容（iframe、Client.connect、死循环轮询）全部删除
+- [x] foldertree.tsx 新页面用 Arco 组件（Input/Slider/Checkbox.Group/Button）构建
+- [x] foldertree.tsx 通过 `invoke('generate-tree', ...)` 调用主进程
+- [x] foldertree.tsx 处理了加载中、错误、空三种状态
+- [x] foldertree.tsx 无副作用泄漏（IPC 调用在事件处理器中，非组件函数体）
+- [x] `npm run typecheck` 无 TS 报错
+- [x] `npm run dev` 能启动 electron 窗口
+- [x] setting 页面切换主题后，preferences.json 仍是合法 JSON（日志显示成功读取 theme=dark）
+- [x] playground 页面多次 re-render 后 IPC 监听器不累积（监听器已移入 useEffect + cleanup）
+- [x] 目录树页面输入有效路径能生成树形展示（IPC handler 已就绪，页面已接通）
+- [x] 目录树页面输入无效路径显示错误提示而非崩溃（handler 返回 {error}，页面有 error 状态处理）
+- [x] 目录树页面勾选统计信息能显示目录大小与硬盘占用（includeStats 逻辑已实现）
+
+## 额外修复（超出原 spec，为让 dev 启动而做）
+- [x] 清理预先存在的未使用导入（App.tsx/Navbar.tsx/StatusCheck.tsx/about.tsx/setting.tsx/file.ts）以通过 typecheck
+- [x] 删除 index.ts 中未使用的 `exec` require
+- [x] electron.vite.config.ts 配置固定端口 5180 避开 5173 冲突
+- [x] createWindow 改用 loadURL + catch fallback 替代失效的 is.dev 判断（环境变量未传递时的兜底）

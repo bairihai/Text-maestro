@@ -1,9 +1,9 @@
-- [ ] `gradio-app/utils_twitch.py` 已删除
-- [ ] `gradio-app/app.py` 中 `import utils_social_media` 仍能正常工作（无 import 错误）
-- [ ] "发言相邻的用户（频率）" tab 已从 app.py 中移除，文件筛选 tab 的 `regex_input` / `filter_output` 不再被其他 tab 复用
-- [ ] `organize_files_by_week` 函数签名包含 `week_start_type` 参数
-- [ ] `WeekCalculator` 构造时接收到了 `week_start_type`（不再是硬编码默认值）
-- [ ] "生成移动文件bat" 按钮的 click inputs 包含 `week_type_input`
-- [ ] UI 中文单选值能正确映射到 `first_week` / `zero_week` / `skip_partial`
-- [ ] 改动已提交到 git（`git status` 显示工作区干净或仅剩无关改动）
-- [ ] `gradio app.py` 能在本地启动，无 ImportError 与运行时异常，输出本地访问 URL
+- [x] `gradio-app/utils_twitch.py` 已删除
+- [x] `gradio-app/app.py` 中 `import utils_social_media` 仍能正常工作（无 import 错误）
+- [x] "发言相邻的用户（频率）" tab 已从 app.py 中移除，文件筛选 tab 的 `regex_input` / `filter_output` 不再被其他 tab 复用
+- [x] `organize_files_by_week` 函数签名包含 `week_start_type` 参数
+- [x] `WeekCalculator` 构造时接收到了 `week_start_type`（不再是硬编码默认值）
+- [x] "生成移动文件bat" 按钮的 click inputs 包含 `week_type_input`
+- [x] UI 中文单选值能正确映射到 `first_week` / `zero_week` / `skip_partial`
+- [x] 改动已提交到 git（`git status` 显示工作区干净或仅剩无关改动）
+- [x] `gradio app.py` 能在本地启动，无 ImportError 与运行时异常，输出本地访问 URL

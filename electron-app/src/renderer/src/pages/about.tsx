@@ -1,4 +1,3 @@
-import React from 'react';
 // import './index.less';
 
 import Versions from '@renderer/components/Versions'

@@ -6,13 +6,9 @@
 // 另：因为要对arco自带的样式做修改，所以虽然用了tailwind，但还是得加个style文件。
 // arco的样式在app.tsx里面被引入，这里无需重复引入。
 
-import React, { useEffect } from 'react';
+import { Menu } from "@arco-design/web-react";
+import { IconDriveFile, IconSafe, IconSettings } from "@arco-design/web-react/icon";
 
-import { Tabs, Typography, Menu } from "@arco-design/web-react";
-import { IconDriveFile, IconFolder, IconSafe, IconSettings, IconFire } from "@arco-design/web-react/icon";
-
-const { Text } = Typography;
-const { TabPane } = Tabs;
 const { SubMenu } = Menu;
 
 const MenuItem = Menu.Item; // as重命名
@@ -110,7 +106,7 @@ export const NavBar = () => {
     };
 
     return (
-        <div className="menu-demo-round" style={{ height: '100%', width: '245px', position: 'fixed', top: 0, left: 0 }}>
+        <div className="menu-demo-round" style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000, height: '100vh' }}>
         <Menu style={{ height: '100%', width: 245 }} mode='vertical' hasCollapseButton>
             {LINKS.map((link) => {
                 if (link.items) {

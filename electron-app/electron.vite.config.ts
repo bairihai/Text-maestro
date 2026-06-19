@@ -17,6 +17,9 @@ export default defineConfig({
       }
     },
     plugins: [react()],
+    server: {
+      port: 5180
+    }
     // build: {
     //   // 设置构建目标为浏览器
     //   target: 'web'

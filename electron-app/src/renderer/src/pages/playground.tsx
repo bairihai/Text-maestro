@@ -1,5 +1,5 @@
 // 引入样式组件。arco的css文件于App.tsx中引入。
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@arco-design/web-react';
 
 // 修改 redux 的值。在redux 官方文档提到：唯一改变 state 的方法就是触发 action。
@@ -24,10 +24,16 @@ function Playground() {
     window.electron.ipcRenderer.send('read-file', filePath);
   };
 
-
-  window.electron.ipcRenderer.on('file-content', (event, content) => {
-    setFileContent(content);
-  });
+  // IPC 监听器移入 useEffect，避免 re-render 时累积监听器
+  useEffect(() => {
+    const handleFileContent = (_event: unknown, content: string) => {
+      setFileContent(content);
+    };
+    window.electron.ipcRenderer.on('file-content', handleFileContent);
+    return () => {
+      window.electron.ipcRenderer.removeListener('file-content', handleFileContent);
+    };
+  }, []);
 
   console.log('appName = ', appName);
   return (

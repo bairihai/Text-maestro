@@ -1,13 +1,45 @@
 @import './base.css';
 
 body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  margin: 0;
+  padding: 0;
   background-image: url('./wavy-lines.svg');
   background-size: cover;
-  user-select: none;
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* 允许所有交互元素正常选中和交互 */
+input,
+button,
+textarea,
+select,
+label {
+  user-select: auto;
+  -webkit-user-select: auto;
+  pointer-events: auto;
+}
+
+/* 自定义滚动条样式：替换默认粗丑滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.7);
+}
+
+/* 可复制文本区域：覆盖 body 的 user-select: none */
+pre, .selectable {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 code {
@@ -27,13 +59,8 @@ code {
 }
 
 #root {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  margin-bottom: 80px;
-  width: 100vw; /* 使宽度铺满窗口 */
-  height: 100vh; /* 使高度铺满窗口 */
+  width: 100%;
+  min-height: 100vh;
 }
 
 .logo {
