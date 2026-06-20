@@ -67,6 +67,17 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             ]
         },
         {
+            key: '3a',
+            title: '通用工具',
+            icon: <IconDriveFile />,
+            items: [
+                { key: '3a_0', label: 'Unicode / 中文 转换', to: '/tools/unicode' },
+                { key: '3a_1', label: 'RGB / Hex 颜色码转换', to: '/tools/color-converter' },
+                { key: '3a_2', label: '简体 / 繁体 中文转换', to: '/tools/simplified-traditional' },
+                { key: '3a_3', label: '正则筛选 / 文件列表过滤', to: '/tools/regex-filter' },
+            ]
+        },
+        {
             key: '4',
             title: '文与图',
             icon: <IconDriveFile />,

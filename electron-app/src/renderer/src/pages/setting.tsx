@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Button, Switch, Select, Input, Typography, Card, Checkbox, Divider } from '@arco-design/web-react';
 
 import { StatusCheck, OnlineCheck, EverythingCheck, WordCloudAdvancedCheck } from '@renderer/components/StatusCheck';
+import { useTheme } from '@renderer/context/ThemeContext';
 
-import { IconSun,IconMoon } from '@arco-design/web-react/icon';
+import { IconSun, IconMoon, IconDesktop } from '@arco-design/web-react/icon';
 
 // 设置透明度和blur毛玻璃效果。毛玻璃需要再调一下，没背景不生效。
 const cardStyle = {
@@ -15,31 +15,7 @@ const cardStyle = {
 };
 
 function Setting() {
-  const [theme, setTheme] = useState('light');
-
-  useEffect(() => {
-    window.electron.ipcRenderer.invoke('get-preferences', 'theme').then((savedTheme) => {
-      setTheme(savedTheme || 'light');
-    });
-  }, []);
-
-  // 当用户改变主题时，handleThemeChange 函数被调用，它会触发 set-preferences IPC 调用。——2024年9月19日 03点25分 cursor claude
-  // 这里的逻辑和那个保存与读取相互独立。无论是否成功，都会执行applyTheme，不受影响。
-  const handleThemeChange = (value) => {
-    // console.log('Setting: Theme changed to:', value); // 【调试】
-    setTheme(value);
-    window.electron.ipcRenderer.invoke('set-preferences', { theme: value });
-    applyTheme(value);
-    // console.log('Setting: Theme applied'); // 【调试】
-  };
-
-  const applyTheme = (theme) => {
-    if (theme === 'dark') {
-      document.body.setAttribute('arco-theme', 'dark');
-    } else {
-      document.body.removeAttribute('arco-theme');
-    }
-  };
+  const { mode, resolvedTheme, setMode } = useTheme();
 
   return (
     <div className="h-screen overflow-y-auto p-4">
@@ -95,12 +71,18 @@ function Setting() {
           <Select 
             placeholder="选择主题" 
             style={{ width: '100%' }}
-            value={theme}
-            onChange={handleThemeChange}
+            value={mode}
+            onChange={setMode}
           >
             <Select.Option value="light"><IconSun /> 浅色模式</Select.Option>
             <Select.Option value="dark"><IconMoon /> 深色模式</Select.Option>
+            <Select.Option value="system"><IconDesktop /> 跟随系统</Select.Option>
           </Select>
+          {mode === 'system' && (
+            <Typography.Text type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
+              当前系统主题：{resolvedTheme === 'dark' ? '深色' : '浅色'}
+            </Typography.Text>
+          )}
         </Card>
         <Card title="服务协议" style={cardStyle}>
           <Typography.Text type="secondary">
