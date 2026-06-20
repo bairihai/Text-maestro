@@ -137,21 +137,34 @@ export const NavBar = () => {
     const DEFAULT_WIDTH = 245;
     const MIN_WIDTH = 180;
     const MAX_WIDTH = 500;
+    const COLLAPSED_WIDTH = 48;
 
     const [navWidth, setNavWidth] = useState<number>(() => {
         const saved = localStorage.getItem('navWidth');
         return saved ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parseInt(saved))) : DEFAULT_WIDTH;
+    });
+    const [collapsed, setCollapsed] = useState<boolean>(() => {
+        const saved = localStorage.getItem('navCollapsed');
+        return saved === '1';
     });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartX = useRef(0);
     const dragStartWidth = useRef(navWidth);
     const currentWidthRef = useRef(navWidth);
 
-    // 同步宽度到 CSS 变量（供内容区使用）
+    // 实际渲染宽度：折叠时用 COLLAPSED_WIDTH，展开时用 navWidth
+    const effectiveWidth = collapsed ? COLLAPSED_WIDTH : navWidth;
+
+    // 同步宽度到 CSS 变量
     useEffect(() => {
-        document.documentElement.style.setProperty('--nav-width', `${navWidth}px`);
+        document.documentElement.style.setProperty('--nav-width', `${effectiveWidth}px`);
         currentWidthRef.current = navWidth;
-    }, [navWidth]);
+    }, [effectiveWidth, navWidth]);
+
+    // 持久化折叠状态
+    useEffect(() => {
+        localStorage.setItem('navCollapsed', collapsed ? '1' : '0');
+    }, [collapsed]);
 
     // 拖拽监听
     useEffect(() => {
@@ -186,6 +199,7 @@ export const NavBar = () => {
     }, [isDragging]);
 
     const startDrag = (e: React.MouseEvent) => {
+        if (collapsed) return; // 折叠时不允许拖拽
         e.preventDefault();
         dragStartX.current = e.clientX;
         dragStartWidth.current = navWidth;
@@ -193,8 +207,14 @@ export const NavBar = () => {
     };
 
     return (
-        <div className="menu-demo-round" style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000, height: '100vh', width: navWidth }}>
-        <Menu style={{ height: '100%', width: '100%' }} mode='vertical' hasCollapseButton>
+        <div className="menu-demo-round" style={{ position: 'fixed', top: 0, left: 0, zIndex: 50, height: '100vh', width: effectiveWidth }}>
+        <Menu
+            style={{ height: '100%', width: '100%' }}
+            mode='vertical'
+            hasCollapseButton
+            collapse={collapsed}
+            onCollapseChange={setCollapsed}
+        >
             {LINKS.map((link) => {
                 if (link.items) {
                     return (
@@ -225,23 +245,24 @@ export const NavBar = () => {
                 }
             })}
         </Menu>
-        {/* 拖拽手柄 */}
-        <div
-            onMouseDown={startDrag}
-            style={{
-                position: 'absolute',
-                top: 0,
-                right: 0,
-                width: '5px',
-                height: '100%',
-                cursor: 'ew-resize',
-                background: isDragging ? 'rgba(47, 129, 235, 0.4)' : 'transparent',
-                transition: 'background 0.15s',
-                zIndex: 1001,
-            }}
-            onMouseEnter={(e) => { if (!isDragging) (e.currentTarget as HTMLDivElement).style.background = 'rgba(47, 129, 235, 0.15)'; }}
-            onMouseLeave={(e) => { if (!isDragging) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
-        />
+        {/* 拖拽手柄 —— 仅展开状态显示 */}
+        {!collapsed && (
+            <div
+                onMouseDown={startDrag}
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    width: '5px',
+                    height: '100%',
+                    cursor: 'ew-resize',
+                    background: isDragging ? 'rgba(47, 129, 235, 0.4)' : 'transparent',
+                    transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => { if (!isDragging) (e.currentTarget as HTMLDivElement).style.background = 'rgba(47, 129, 235, 0.15)'; }}
+                onMouseLeave={(e) => { if (!isDragging) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+            />
+        )}
         </div>
     );
 }

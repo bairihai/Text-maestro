@@ -19,7 +19,7 @@ function App(): JSX.Element {
         <EverythingProvider>
           <Router>
             <NavBar />
-            <div style={{ marginLeft: 'var(--nav-width, 245px)', minHeight: '100vh', transition: 'margin-left 0.15s' }}>
+            <div style={{ marginLeft: '48px', minHeight: '100vh' }}>
               <Routes>
                 {
                   routes.map(route => <Route key={route.path} path={route.path} element={<route.component />} />)

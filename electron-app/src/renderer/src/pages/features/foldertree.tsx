@@ -137,6 +137,7 @@ const FolderTree: React.FC = () => {
   const [path, setPath] = useState('');
   const [maxDepth, setMaxDepth] = useState(3);
   const [options, setOptions] = useState<string[]>(['生成目录树', '统计目录信息']);
+  const [useEverythingAccel, setUseEverythingAccel] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
@@ -146,12 +147,9 @@ const FolderTree: React.FC = () => {
   const [pathFocused, setPathFocused] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Everything 快速搜索状态
-  const [quickSearchPath, setQuickSearchPath] = useState('');
+  // Everything 快速搜索
   const [quickSearchResults, setQuickSearchResults] = useState<string[]>([]);
   const [quickSearchLoading, setQuickSearchLoading] = useState(false);
-  const [quickSearched, setQuickSearched] = useState(false);
-  const [quickSearchFocused, setQuickSearchFocused] = useState(false);
 
   const toggleOption = (opt: string) => {
     setOptions((prev) => prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]);
@@ -160,25 +158,31 @@ const FolderTree: React.FC = () => {
   const handleGenerate = async () => {
     if (!path.trim()) { setError('请输入文件夹路径'); return; }
     setLoading(true); setError(null);
+    setTree(null);
+    setStats(null);
     try {
       const includeStats = options.includes('统计目录信息');
       const result = await (window as any).electron.ipcRenderer.invoke('generate-tree', path, maxDepth, includeStats);
-      if (result.error) { setError(result.error); setTree(null); setStats(null); }
+      if (result.error) { setError(result.error); }
       else { setTree(result.tree); setStats(result.stats || null); }
     } catch (err) { setError((err as Error).message); }
     finally { setLoading(false); }
+
+    // 如果启用了 Everything 加速，并行触发搜索
+    if (useEverythingAccel && isConnected) {
+      handleQuickSearch();
+    }
   };
 
   // Everything 快速搜索
   const handleQuickSearch = async () => {
-    if (!quickSearchPath.trim()) { return; }
+    if (!useEverythingAccel || !isConnected || !path.trim()) { return; }
     setQuickSearchLoading(true);
-    setQuickSearched(true);
     setQuickSearchResults([]);
     try {
       const results = await (window as any).electron.ipcRenderer.invoke(
         'everything-search',
-        quickSearchPath.trim(),
+        path.trim(),
         true,  // searchSubdirs
         false, // onlyFiles
         true   // fullPath
@@ -228,107 +232,14 @@ const FolderTree: React.FC = () => {
         </svg>
         <h1 style={titleStyle}>文件夹目录树生成</h1>
         <span style={{ color: colors.textSecondary, fontSize: 12 }}>· Directory tree generator</span>
+        {isConnected && status.indexCount > 0 && (
+          <span style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 'auto' }}>
+            Everything 已索引 {status.indexCount.toLocaleString()} 个文件
+          </span>
+        )}
       </div>
 
       <div style={contentStyle}>
-        {/* Everything 快速搜索区块 */}
-        <div style={{
-          ...getConfigBlockStyle(colors),
-          border: isConnected ? `1px solid ${colors.border}` : `1px solid #FF8000`,
-          opacity: isConnected ? 1 : 0.7,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ ...labelStyle, color: colors.textSecondary, marginBottom: 0 }}>QUICK SEARCH</span>
-            <EverythingBadge />
-            {!isConnected && (
-              <span style={{ fontSize: 11, color: '#FF8000', marginLeft: 'auto' }}>
-                未连接 Everything
-              </span>
-            )}
-            {isConnected && status.indexCount > 0 && (
-              <span style={{ fontSize: 11, color: colors.textSecondary, marginLeft: 'auto' }}>
-                已索引 {status.indexCount.toLocaleString()} 个文件
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input type="text" placeholder="输入文件夹路径进行快速搜索..."
-              value={quickSearchPath} onChange={(e) => setQuickSearchPath(e.target.value)}
-              onFocus={() => setQuickSearchFocused(true)} onBlur={() => setQuickSearchFocused(false)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleQuickSearch(); }}
-              disabled={!isConnected}
-              style={{
-                ...getInputStyle(colors),
-                ...(quickSearchFocused ? inputFocusStyle : null),
-                opacity: isConnected ? 1 : 0.5,
-                flex: 1,
-              }} />
-            <button onClick={handleQuickSearch} disabled={!isConnected || quickSearchLoading || !quickSearchPath.trim()}
-              style={{
-                ...primaryBtnStyle,
-                opacity: (!isConnected || !quickSearchPath.trim()) ? 0.5 : 1,
-              }}>
-              {quickSearchLoading ? '搜索中...' : '▸ 搜索'}
-            </button>
-          </div>
-
-          {!isConnected && (
-            <div style={{
-              marginTop: 8, padding: '8px 10px',
-              background: 'rgba(255,128,0,0.1)', borderRadius: 4,
-              fontSize: 12, color: '#FF8000',
-            }}>
-              ⚠️ 此功能需要 Everything 后台运行并启用 HTTP API
-            </div>
-          )}
-
-          {/* 快速搜索结果 */}
-          {quickSearched && (
-            <div style={{
-              marginTop: 12,
-              background: colors.pageBg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 6,
-              maxHeight: 200,
-              overflow: 'auto',
-            }}>
-              <div style={{
-                ...codeHeaderStyle,
-                padding: '6px 12px',
-                fontSize: 11,
-                color: colors.textSecondary,
-              }}>
-                <span>搜索结果</span>
-                {quickSearchResults.length > 0 && (
-                  <button onClick={handleCopyQuickResults}
-                    style={{ ...copyBtnStyle, padding: '2px 8px', fontSize: 11 }}>
-                    复制全部
-                  </button>
-                )}
-              </div>
-              <pre style={{
-                ...getCodeBodyStyle(colors),
-                padding: '10px 12px',
-                fontSize: 12,
-                maxHeight: 160,
-              }}>
-                {quickSearchResults.length > 0
-                  ? quickSearchResults.slice(0, 200).join('\n')
-                  : quickSearchLoading ? '' : '未找到文件'}
-              </pre>
-              {quickSearchResults.length > 200 && (
-                <div style={{
-                  padding: '4px 12px', fontSize: 11, color: colors.textSecondary,
-                  borderTop: `1px solid ${colors.border}`,
-                }}>
-                  ...还有 {quickSearchResults.length - 200} 个结果未显示
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         <div style={getConfigBlockStyle(colors)}>
           <div>
             <div style={{ ...labelStyle, color: colors.textSecondary }}>PATH</div>
@@ -361,6 +272,15 @@ const FolderTree: React.FC = () => {
                 <input type="checkbox" checked={options.includes('统计目录信息')}
                   onChange={() => toggleOption('统计目录信息')} style={checkboxStyle} />
                 统计目录信息
+              </label>
+              <label style={{ ...checkboxLabelStyle, color: isConnected ? colors.textPrimary : colors.textSecondary, opacity: isConnected ? 1 : 0.6 }}>
+                <input type="checkbox" checked={useEverythingAccel && isConnected}
+                  onChange={() => setUseEverythingAccel((v) => !v)} style={checkboxStyle} disabled={!isConnected} />
+                使用 Everything 加速
+                <EverythingBadge />
+                {!isConnected && (
+                  <span style={{ fontSize: 11, color: '#FF8000', marginLeft: 8 }}>（未连接）</span>
+                )}
               </label>
             </div>
           </div>
@@ -400,6 +320,37 @@ const FolderTree: React.FC = () => {
                 style={{ ...copyBtnStyle, color: copyHover ? colors.textPrimary : colors.textSecondary }}>Copy</button>
             </div>
             <pre style={getCodeBodyStyle(colors)}>{statsText}</pre>
+          </div>
+        )}
+
+        {/* Everything 搜索结果 */}
+        {useEverythingAccel && isConnected && (quickSearchResults.length > 0 || quickSearchLoading) && (
+          <div style={getCodeBlockStyle(colors)}>
+            <div style={{ ...codeHeaderStyle, color: colors.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>everything search</span>
+                <EverythingBadge />
+              </div>
+              {quickSearchResults.length > 0 && (
+                <button onClick={handleCopyQuickResults}
+                  style={{ ...copyBtnStyle, color: colors.textSecondary }}>Copy</button>
+              )}
+            </div>
+            <pre style={{ ...getCodeBodyStyle(colors), maxHeight: 300, fontSize: 13 }}>
+              {quickSearchLoading
+                ? '搜索中...'
+                : quickSearchResults.length > 0
+                  ? quickSearchResults.slice(0, 200).join('\n')
+                  : '未找到匹配文件'}
+            </pre>
+            {quickSearchResults.length > 200 && (
+              <div style={{
+                padding: '6px 12px', fontSize: 11, color: colors.textSecondary,
+                borderTop: `1px solid ${colors.border}`,
+              }}>
+                还有 {quickSearchResults.length - 200} 个结果未显示
+              </div>
+            )}
           </div>
         )}
 
