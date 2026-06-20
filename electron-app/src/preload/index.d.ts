@@ -23,6 +23,22 @@ interface GenerateTreeResult {
   error?: string;
 }
 
+// Everything 状态检测的返回类型
+interface EverythingStatus {
+  installed: boolean;
+  running: boolean;
+  indexed: boolean;
+  indexCount: number;
+  indexDate: string;
+  httpApi: boolean;
+  error?: string;
+}
+
+interface OpenEverythingResult {
+  success: boolean;
+  error?: string;
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI

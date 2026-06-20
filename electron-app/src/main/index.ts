@@ -1,10 +1,12 @@
-﻿import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 const fs = require('fs').promises;
 const path = require('path');
+const { exec } = require('child_process');
+const http = require('http');
 
 import log from 'electron-log';
 import net from 'net';
@@ -269,6 +271,228 @@ app.whenReady().then(() => {
       return { error: msg };
     }
   });
+
+  // Everything 状态检测
+  ipcMain.handle('check-everything-status', async () => {
+    console.log('[Main] check-everything-status 被调用');
+    const result: any = {
+      installed: false,
+      running: false,
+      indexed: false,
+      indexCount: 0,
+      indexDate: '',
+      httpApi: false,
+      error: ''
+    };
+
+    // 1. 检测安装状态（多重方式）
+    try {
+      // 方式 A: 检查默认安装路径
+      const possiblePaths = [
+        'C:\\Program Files\\Everything\\Everything.exe',
+        'C:\\Program Files (x86)\\Everything\\Everything.exe',
+        path.join(process.env.USERPROFILE || '', 'AppData', 'Local', 'Programs', 'Everything', 'Everything.exe'),
+      ];
+      for (const p of possiblePaths) {
+        try {
+          await fs.access(p);
+          result.installed = true;
+          break;
+        } catch (_e) {
+          // continue
+        }
+      }
+
+      // 方式 B: 注册表查询（如果方式 A 没找到）
+      if (!result.installed) {
+        const regResult = await new Promise<string>((resolve) => {
+          exec('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
+            (_err: Error | null, stdout: string) => {
+              if (!stdout) {
+                exec('reg query "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
+                  (_err2: Error | null, stdout2: string) => {
+                    resolve(stdout2 || '');
+                  });
+              } else {
+                resolve(stdout);
+              }
+            });
+        });
+        result.installed = regResult.includes('InstallLocation');
+      }
+
+      // 方式 C: 注册表卸载项（其他位置）
+      if (!result.installed) {
+        const regSimple = await new Promise<string>((resolve) => {
+          exec('reg query "HKCU\\Software\\Voidtools\\Everything" /v InstallLocation 2>nul',
+            (_err: Error | null, stdout: string) => {
+              resolve(stdout || '');
+            });
+        });
+        result.installed = regSimple.includes('InstallLocation');
+      }
+
+      log.info(`Main: Everything 安装检测 = ${result.installed}`);
+    } catch (e) {
+      log.info('Main: Everything 安装检测失败', e);
+      result.error = String(e);
+    }
+
+    // 2. 检测运行状态（优先用 tasklist 检查进程，再检查 HTTP 端口）
+    try {
+      // 方式 A: 检查进程是否运行
+      const processRunning = await new Promise<boolean>((resolve) => {
+        exec('tasklist /FI "IMAGENAME eq Everything.exe" 2>nul',
+          (_err: Error | null, stdout: string) => {
+            resolve(stdout.includes('Everything.exe'));
+          });
+      });
+
+      // 方式 B: 检查 HTTP API 端口（Everything HTTP 服务器常见端口：80, 21, 8080）
+      let httpPort = 0;
+      const commonPorts = [80, 21, 8080, 8081];
+      for (const port of commonPorts) {
+        const isOpen = await checkPort('127.0.0.1', port).catch(() => false);
+        if (isOpen) {
+          httpPort = port;
+          break;
+        }
+      }
+
+      result.running = processRunning || (httpPort > 0);
+      result.httpApi = httpPort > 0;
+      result.httpPort = httpPort;
+
+      log.info(`Main: Everything 进程运行 = ${processRunning}, HTTP API = ${httpPort > 0 ? `端口 ${httpPort}` : '未开启'}, 综合运行 = ${result.running}`);
+    } catch (e) {
+      log.info('Main: Everything 运行检测失败', e);
+      // fallback: 只靠端口检测
+      try {
+        let httpPort = 0;
+        const commonPorts = [80, 21, 8080, 8081];
+        for (const port of commonPorts) {
+          const isOpen = await checkPort('127.0.0.1', port).catch(() => false);
+          if (isOpen) {
+            httpPort = port;
+            break;
+          }
+        }
+        result.running = httpPort > 0;
+        result.httpApi = httpPort > 0;
+        result.httpPort = httpPort;
+      } catch (_e2) {
+        result.running = false;
+        result.httpApi = false;
+        result.httpPort = 0;
+      }
+    }
+
+    // 3. 获取索引状态（只有 HTTP API 可用时才能查）
+    if (result.running && result.httpApi && result.httpPort) {
+      try {
+        const apiResult = await fetchEverythingAPI(result.httpPort);
+        if (apiResult && apiResult.totalResults > 0) {
+          result.indexed = true;
+          result.indexCount = apiResult.totalResults || 0;
+          result.indexDate = apiResult.date || '';
+          log.info(`Main: Everything 索引 = ${result.indexCount} 条`);
+        } else if (apiResult) {
+          result.indexed = true;
+          log.info('Main: Everything HTTP API 可用');
+        }
+      } catch (e) {
+        log.info('Main: Everything API 获取失败', e);
+      }
+    }
+
+    return result;
+  });
+
+  // 打开 Everything
+  ipcMain.handle('open-everything', async () => {
+    try {
+      // 尝试多个默认路径
+      const possiblePaths = [
+        'C:\\Program Files\\Everything\\Everything.exe',
+        'C:\\Program Files (x86)\\Everything\\Everything.exe',
+        path.join(process.env.USERPROFILE || '', 'AppData', 'Local', 'Programs', 'Everything', 'Everything.exe'),
+      ];
+
+      for (const p of possiblePaths) {
+        const exists = await fs.access(p).then(() => true).catch(() => false);
+        if (exists) {
+          shell.openPath(p);
+          return { success: true };
+        }
+      }
+
+      // 尝试注册表查找
+      const regPaths = [
+        'reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
+        'reg query "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
+        'reg query "HKCU\\Software\\Voidtools\\Everything" /v InstallLocation 2>nul',
+      ];
+
+      for (const regCmd of regPaths) {
+        const regResult = await new Promise<string>((resolve) => {
+          exec(regCmd, (_err: Error | null, stdout: string) => {
+            resolve(stdout || '');
+          });
+        });
+        const match = regResult.match(/InstallLocation\s+REG_SZ\s+(.+)/i);
+        if (match) {
+          const installPath = match[1].trim();
+          const exePath = installPath.endsWith('.exe') ? installPath : `${installPath}Everything.exe`;
+          shell.openPath(exePath);
+          return { success: true };
+        }
+      }
+
+      // 最后尝试用 shell 打开（Windows 会用默认关联）
+      shell.openPath('Everything.exe');
+      return { success: false, error: '未找到 Everything 安装路径，已尝试系统默认' };
+    } catch (e) {
+      return { success: false, error: String(e) };
+    }
+  });
+
+  // 打开 Everything 安装页面
+  ipcMain.handle('open-everything-download', async () => {
+    shell.openExternal('https://www.voidtools.com/downloads/');
+  });
+
+  // 辅助函数：获取 Everything HTTP API 信息
+  function fetchEverythingAPI(port: number): Promise<{ totalResults: number; date: string } | null> {
+    return new Promise((resolve) => {
+      const req = http.get(`http://127.0.0.1:${port}/?search=%22%22&offset=0&count=0&reply_json=1`, (res: any) => {
+        let data = '';
+        res.on('data', (chunk: string) => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            // Everything API 返回格式: { totalResults: N, results: [...] }
+            resolve({ totalResults: json.totalResults || 0, date: new Date().toLocaleString() });
+          } catch {
+            // 尝试其他解析方式
+            const match = data.match(/totalResults["\s:]+(\d+)/);
+            if (match) {
+              resolve({ totalResults: parseInt(match[1]), date: new Date().toLocaleString() });
+            } else {
+              // 如果无法解析 JSON 但有响应，说明服务在运行
+              resolve({ totalResults: 0, date: new Date().toLocaleString() });
+            }
+          }
+        });
+      });
+      req.on('error', () => {
+        resolve(null);
+      });
+      req.setTimeout(3000, () => {
+        req.destroy();
+        resolve(null);
+      });
+    });
+  }
 
   createWindow()
 

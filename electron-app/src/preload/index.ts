@@ -59,9 +59,8 @@ const globals = {
   log: log
 };
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
+// 使用 @electron-toolkit/preload 暴露的 window.electron.ipcRenderer.invoke()
+// 具体 IPC 通道直接在渲染层组件中调用（如 check-server、generate-tree、check-everything-status）
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
@@ -73,5 +72,5 @@ if (process.contextIsolated) {
   // @ts-ignore (define in dts)
   window.electron = electronAPI
   // @ts-ignore (define in dts)
-  window.api = api
+  window.globals = globals
 }

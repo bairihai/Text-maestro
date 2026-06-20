@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { IconRefresh } from '@arco-design/web-react/icon';
+import EverythingCheck from './EverythingCheck';
 
 // 每5000毫秒检查一次服务器（7860端口的gradio服务）状态。由于更换使用了main方法避免CSP问题，确保在 preload 脚本中均已经暴露。
 const StatusCheck: React.FC = () => {
@@ -54,11 +55,6 @@ const StatusCheck: React.FC = () => {
               {isDetecting ? '检测中...' : 
                isServerRunning ? '127.0.0.1:7860 正在运行' : '127.0.0.1:7860 未运行'}
             </div>
-            {/* {failCount >= 3 && (
-              <div className="text-xs text-muted-foreground">
-                为防止CSP的XSS问题，连续失败后将暂停检查，点击刷新按钮重新检查
-              </div>
-            )} */}
           </div>
         </div>
         <IconRefresh 
@@ -84,19 +80,9 @@ const OnlineCheck = () => {
   );
 };
 
-const EverythingCheck = () => {
-  return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full max-w-sm m-2">
-      <div className="flex items-center gap-4 p-4">
-        <div className="h-4 w-4 rounded-full bg-gray-500" />
-        <div>
-          <div className="font-medium">Everything状态</div>
-          <div className="text-sm text-muted-foreground">Everything检查组件占位</div>
-        </div>
-      </div>
-    </div>
-  );
-};
+// 注意：EverythingCheck 已移至独立组件 EverythingCheck.tsx
+// 此处保持导出以兼容现有代码
+const EverythingCheckExport = EverythingCheck;
 
 const WordCloudAdvancedCheck = () => {
   return (
@@ -112,4 +98,4 @@ const WordCloudAdvancedCheck = () => {
   );
 };
 
-export {StatusCheck, OnlineCheck, EverythingCheck, WordCloudAdvancedCheck};
+export {StatusCheck, OnlineCheck, EverythingCheck, EverythingCheckExport, WordCloudAdvancedCheck};
