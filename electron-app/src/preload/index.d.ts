@@ -31,6 +31,7 @@ interface EverythingStatus {
   indexCount: number;
   indexDate: string;
   httpApi: boolean;
+  httpPort: number;
   error?: string;
 }
 

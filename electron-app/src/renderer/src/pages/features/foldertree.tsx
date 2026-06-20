@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '@renderer/context/ThemeContext';
+import { useEverything } from '@renderer/context/EverythingContext';
+import { EverythingBadge } from '@renderer/components/EverythingRequiredWrapper';
 
 // ------------- types -------------
 interface TreeNode {
@@ -131,6 +133,7 @@ const checkboxStyle: React.CSSProperties = { width: 16, height: 16, cursor: 'poi
 // ---------------- component ----------------
 const FolderTree: React.FC = () => {
   const { colors } = useTheme();
+  const { isConnected, status } = useEverything();
   const [path, setPath] = useState('');
   const [maxDepth, setMaxDepth] = useState(3);
   const [options, setOptions] = useState<string[]>(['生成目录树', '统计目录信息']);
@@ -142,6 +145,13 @@ const FolderTree: React.FC = () => {
   const [btnHover, setBtnHover] = useState(false);
   const [pathFocused, setPathFocused] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Everything 快速搜索状态
+  const [quickSearchPath, setQuickSearchPath] = useState('');
+  const [quickSearchResults, setQuickSearchResults] = useState<string[]>([]);
+  const [quickSearchLoading, setQuickSearchLoading] = useState(false);
+  const [quickSearched, setQuickSearched] = useState(false);
+  const [quickSearchFocused, setQuickSearchFocused] = useState(false);
 
   const toggleOption = (opt: string) => {
     setOptions((prev) => prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]);
@@ -157,6 +167,40 @@ const FolderTree: React.FC = () => {
       else { setTree(result.tree); setStats(result.stats || null); }
     } catch (err) { setError((err as Error).message); }
     finally { setLoading(false); }
+  };
+
+  // Everything 快速搜索
+  const handleQuickSearch = async () => {
+    if (!quickSearchPath.trim()) { return; }
+    setQuickSearchLoading(true);
+    setQuickSearched(true);
+    setQuickSearchResults([]);
+    try {
+      const results = await (window as any).electron.ipcRenderer.invoke(
+        'everything-search',
+        quickSearchPath.trim(),
+        true,  // searchSubdirs
+        false, // onlyFiles
+        true   // fullPath
+      );
+      if (Array.isArray(results)) {
+        setQuickSearchResults(results);
+      }
+    } catch (err) {
+      console.error('[FolderTree] Everything 搜索失败:', err);
+    } finally {
+      setQuickSearchLoading(false);
+    }
+  };
+
+  const handleCopyQuickResults = async () => {
+    if (quickSearchResults.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(quickSearchResults.join('\n'));
+      showToast('已复制到剪贴板');
+    } catch (err) {
+      showToast('复制失败');
+    }
   };
 
   const handleCopy = async (text: string) => {
@@ -187,6 +231,104 @@ const FolderTree: React.FC = () => {
       </div>
 
       <div style={contentStyle}>
+        {/* Everything 快速搜索区块 */}
+        <div style={{
+          ...getConfigBlockStyle(colors),
+          border: isConnected ? `1px solid ${colors.border}` : `1px solid #FF8000`,
+          opacity: isConnected ? 1 : 0.7,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ ...labelStyle, color: colors.textSecondary, marginBottom: 0 }}>QUICK SEARCH</span>
+            <EverythingBadge />
+            {!isConnected && (
+              <span style={{ fontSize: 11, color: '#FF8000', marginLeft: 'auto' }}>
+                未连接 Everything
+              </span>
+            )}
+            {isConnected && status.indexCount > 0 && (
+              <span style={{ fontSize: 11, color: colors.textSecondary, marginLeft: 'auto' }}>
+                已索引 {status.indexCount.toLocaleString()} 个文件
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input type="text" placeholder="输入文件夹路径进行快速搜索..."
+              value={quickSearchPath} onChange={(e) => setQuickSearchPath(e.target.value)}
+              onFocus={() => setQuickSearchFocused(true)} onBlur={() => setQuickSearchFocused(false)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleQuickSearch(); }}
+              disabled={!isConnected}
+              style={{
+                ...getInputStyle(colors),
+                ...(quickSearchFocused ? inputFocusStyle : null),
+                opacity: isConnected ? 1 : 0.5,
+                flex: 1,
+              }} />
+            <button onClick={handleQuickSearch} disabled={!isConnected || quickSearchLoading || !quickSearchPath.trim()}
+              style={{
+                ...primaryBtnStyle,
+                opacity: (!isConnected || !quickSearchPath.trim()) ? 0.5 : 1,
+              }}>
+              {quickSearchLoading ? '搜索中...' : '▸ 搜索'}
+            </button>
+          </div>
+
+          {!isConnected && (
+            <div style={{
+              marginTop: 8, padding: '8px 10px',
+              background: 'rgba(255,128,0,0.1)', borderRadius: 4,
+              fontSize: 12, color: '#FF8000',
+            }}>
+              ⚠️ 此功能需要 Everything 后台运行并启用 HTTP API
+            </div>
+          )}
+
+          {/* 快速搜索结果 */}
+          {quickSearched && (
+            <div style={{
+              marginTop: 12,
+              background: colors.pageBg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 6,
+              maxHeight: 200,
+              overflow: 'auto',
+            }}>
+              <div style={{
+                ...codeHeaderStyle,
+                padding: '6px 12px',
+                fontSize: 11,
+                color: colors.textSecondary,
+              }}>
+                <span>搜索结果</span>
+                {quickSearchResults.length > 0 && (
+                  <button onClick={handleCopyQuickResults}
+                    style={{ ...copyBtnStyle, padding: '2px 8px', fontSize: 11 }}>
+                    复制全部
+                  </button>
+                )}
+              </div>
+              <pre style={{
+                ...getCodeBodyStyle(colors),
+                padding: '10px 12px',
+                fontSize: 12,
+                maxHeight: 160,
+              }}>
+                {quickSearchResults.length > 0
+                  ? quickSearchResults.slice(0, 200).join('\n')
+                  : quickSearchLoading ? '' : '未找到文件'}
+              </pre>
+              {quickSearchResults.length > 200 && (
+                <div style={{
+                  padding: '4px 12px', fontSize: 11, color: colors.textSecondary,
+                  borderTop: `1px solid ${colors.border}`,
+                }}>
+                  ...还有 {quickSearchResults.length - 200} 个结果未显示
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div style={getConfigBlockStyle(colors)}>
           <div>
             <div style={{ ...labelStyle, color: colors.textSecondary }}>PATH</div>

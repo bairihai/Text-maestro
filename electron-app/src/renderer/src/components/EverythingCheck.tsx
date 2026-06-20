@@ -94,7 +94,7 @@ const EverythingCheck: React.FC = () => {
     if (!status.installed) return '未安装';
     if (!status.running) return '已安装 · 未运行';
     if (status.running && !status.httpApi) return '运行中（HTTP 服务器未开启）';
-    if (!status.indexed || status.indexCount === 0) return '运行中 · 正在索引';
+    if (!status.indexed || status.indexCount === 0) return `运行中 · HTTP: ${status.httpPort} · 正在索引`;
     return `正常运行 · ${status.indexCount.toLocaleString()} 个文件`;
   };
 
@@ -102,7 +102,7 @@ const EverythingCheck: React.FC = () => {
     if (loading || error || !status) return '';
     if (!status.installed) return '点击下载图标打开官网';
     if (!status.running) return '点击启动图标打开 Everything';
-    if (status.running && !status.httpApi) return '在 Everything 设置中开启 HTTP 服务器以获取索引数量';
+    if (status.running && !status.httpApi) return '开启 HTTP 服务器以获取索引数量';
     return '';
   };
 
@@ -176,7 +176,7 @@ const EverythingCheck: React.FC = () => {
                 <div>
                   <span style={{ color: colors.textSecondary }}>HTTP API: </span>
                   <span style={{ color: status.httpApi ? '#3fb950' : '#d29922' }}>
-                    {status.httpApi ? '已开启 (127.0.0.1:21)' : '未开启'}
+                    {status.httpApi ? `已开启 (127.0.0.1:${status.httpPort})` : '未开启'}
                   </span>
                 </div>
                 <div>
@@ -186,6 +186,14 @@ const EverythingCheck: React.FC = () => {
                   </span>
                 </div>
               </>
+            )}
+            {status.running && !status.httpApi && (
+              <div className="col-span-2 mt-2 pt-2 border-t" style={{ borderTop: `1px dashed ${colors.border}` }}>
+                <span style={{ color: colors.textSecondary }}>配置指南: </span>
+                <span style={{ color: '#d29922' }}>
+                  在 Everything 中 → 工具 → 选项 → HTTP 服务器 → 勾选「启用 HTTP 服务器」，端口可设为 80/21/8080
+                </span>
+              </div>
             )}
           </div>
         </div>

@@ -8,8 +8,25 @@
 
 import { Menu } from "@arco-design/web-react";
 import { IconDriveFile, IconSafe, IconSettings } from "@arco-design/web-react/icon";
+import React, { useState, useEffect, useRef } from 'react';
 
 const { SubMenu } = Menu;
+
+// EverythingBadge 组件
+const EverythingBadge: React.FC = () => (
+  <span style={{
+    backgroundColor: '#FF8000',
+    borderRadius: 4,
+    padding: '1px 6px',
+    fontSize: '0.7em',
+    color: '#fff',
+    fontWeight: 600,
+    marginLeft: 8,
+    verticalAlign: 'middle',
+  }}>
+    everything
+  </span>
+);
 
 const MenuItem = Menu.Item; // as重命名
 
@@ -22,7 +39,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
     to?: string // 可选项，route导航。
     title: string // 或者命名为label。
     icon: JSX.Element // 写一个元素，形如</div>。另一种写法是IconName组件类型，但是兼容性不好，所以不了。
-    items?: { key: string; label: string; to?: string }[]; // 可选项，子菜单。to（跳转路由）对象字面量类型检查，自选。
+    items?: { key: string; label: string; to?: string; needEverything?: boolean }[]; // 可选项，子菜单。to（跳转路由）对象字面量类型检查，自选。
 }[] = [
         {
             key: '0',
@@ -58,7 +75,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             title: '通用文档',
             icon: <IconDriveFile />,
             items: [
-                { key: '3_0', label: '任一文件夹的结构树', to: '/common/folder-tree' },
+                { key: '3_0', label: '任一文件夹的结构树', to: '/common/folder-tree', needEverything: true },
                 { key: '3_1', label: 'obsidian 单篇文档分析' },
                 { key: '3_2', label: 'obsidian 多文档分析' },
                 { key: '3_3', label: '掘金小册 上云action生成' },
@@ -116,9 +133,68 @@ export const NavBar = () => {
         navigateTo(path);
     };
 
+    // 可拖拽调整宽度
+    const DEFAULT_WIDTH = 245;
+    const MIN_WIDTH = 180;
+    const MAX_WIDTH = 500;
+
+    const [navWidth, setNavWidth] = useState<number>(() => {
+        const saved = localStorage.getItem('navWidth');
+        return saved ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, parseInt(saved))) : DEFAULT_WIDTH;
+    });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartX = useRef(0);
+    const dragStartWidth = useRef(navWidth);
+    const currentWidthRef = useRef(navWidth);
+
+    // 同步宽度到 CSS 变量（供内容区使用）
+    useEffect(() => {
+        document.documentElement.style.setProperty('--nav-width', `${navWidth}px`);
+        currentWidthRef.current = navWidth;
+    }, [navWidth]);
+
+    // 拖拽监听
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const delta = e.clientX - dragStartX.current;
+            const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, dragStartWidth.current + delta));
+            setNavWidth(newWidth);
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            localStorage.setItem('navWidth', currentWidthRef.current.toString());
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // 拖拽时的全局样式
+        const prevCursor = document.body.style.cursor;
+        const prevSelect = document.body.style.userSelect;
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = prevCursor;
+            document.body.style.userSelect = prevSelect;
+        };
+    }, [isDragging]);
+
+    const startDrag = (e: React.MouseEvent) => {
+        e.preventDefault();
+        dragStartX.current = e.clientX;
+        dragStartWidth.current = navWidth;
+        setIsDragging(true);
+    };
+
     return (
-        <div className="menu-demo-round" style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000, height: '100vh' }}>
-        <Menu style={{ height: '100%', width: 245 }} mode='vertical' hasCollapseButton>
+        <div className="menu-demo-round" style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000, height: '100vh', width: navWidth }}>
+        <Menu style={{ height: '100%', width: '100%' }} mode='vertical' hasCollapseButton>
             {LINKS.map((link) => {
                 if (link.items) {
                     return (
@@ -134,6 +210,7 @@ export const NavBar = () => {
                             {link.items.map((item) => (
                                 <MenuItem key={item.key} onClick={() => item.to && handleNavigation(item.to)}>
                                     {item.label}
+                                    {item.needEverything && <EverythingBadge />}
                                 </MenuItem>
                             ))}
                         </SubMenu>
@@ -148,6 +225,23 @@ export const NavBar = () => {
                 }
             })}
         </Menu>
+        {/* 拖拽手柄 */}
+        <div
+            onMouseDown={startDrag}
+            style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                width: '5px',
+                height: '100%',
+                cursor: 'ew-resize',
+                background: isDragging ? 'rgba(47, 129, 235, 0.4)' : 'transparent',
+                transition: 'background 0.15s',
+                zIndex: 1001,
+            }}
+            onMouseEnter={(e) => { if (!isDragging) (e.currentTarget as HTMLDivElement).style.background = 'rgba(47, 129, 235, 0.15)'; }}
+            onMouseLeave={(e) => { if (!isDragging) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+        />
         </div>
     );
 }

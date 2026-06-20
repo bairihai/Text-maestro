@@ -8,6 +8,7 @@ import { NavBar } from './components/Navbar'
 import routes from './router'
 import store from './store';
 import { ThemeProvider } from './context/ThemeContext';
+import { EverythingProvider } from './context/EverythingContext';
 
 // 5. App 组件定义
 function App(): JSX.Element {
@@ -15,16 +16,18 @@ function App(): JSX.Element {
   return (
     <Provider store={store}>
       <ThemeProvider>
-        <Router>
-          <NavBar />
-          <div style={{ marginLeft: '48px', minHeight: '100vh' }}>
-            <Routes>
-              {
-                routes.map(route => <Route key={route.path} path={route.path} element={<route.component />} />)
-              }
-            </Routes>
-          </div>
-        </Router>
+        <EverythingProvider>
+          <Router>
+            <NavBar />
+            <div style={{ marginLeft: 'var(--nav-width, 245px)', minHeight: '100vh', transition: 'margin-left 0.15s' }}>
+              <Routes>
+                {
+                  routes.map(route => <Route key={route.path} path={route.path} element={<route.component />} />)
+                }
+              </Routes>
+            </div>
+          </Router>
+        </EverythingProvider>
       </ThemeProvider>
     </Provider>
   )

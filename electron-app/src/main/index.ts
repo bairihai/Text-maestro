@@ -408,6 +408,49 @@ app.whenReady().then(() => {
     return result;
   });
 
+  // Everything 文件搜索
+  ipcMain.handle('everything-search', async (_, directory: string, searchSubdirs: boolean, onlyFiles: boolean, fullPath: boolean) => {
+    console.log(`[Main] everything-search: ${directory}, subdirs=${searchSubdirs}, onlyFiles=${onlyFiles}, fullPath=${fullPath}`);
+
+    // 1. 先检测 Everything HTTP API 是否可用
+    let httpPort = 0;
+    const commonPorts = [80, 21, 8080, 8081];
+    for (const port of commonPorts) {
+      const isOpen = await checkPort('127.0.0.1', port).catch(() => false);
+      if (isOpen) {
+        httpPort = port;
+        break;
+      }
+    }
+
+    if (!httpPort) {
+      return { error: 'Everything HTTP API 未启用' };
+    }
+
+    // 2. 构建搜索查询
+    // 使用 Everything HTTP API 的查询语法
+    let searchQuery = '';
+    if (searchSubdirs) {
+      searchQuery = `"${directory}\\*"`;
+    } else {
+      searchQuery = `parent:"${directory}"`;
+    }
+
+    if (onlyFiles) {
+      searchQuery = `file:${searchQuery}`;
+    }
+
+    // 3. 调用 Everything HTTP API
+    try {
+      const results = await searchEverythingFiles(httpPort, searchQuery, fullPath);
+      console.log(`[Main] everything-search 结果: ${results.length} 个文件`);
+      return results;
+    } catch (e) {
+      console.error('[Main] everything-search 失败:', e);
+      return { error: String(e) };
+    }
+  });
+
   // 打开 Everything
   ipcMain.handle('open-everything', async () => {
     try {
@@ -490,6 +533,48 @@ app.whenReady().then(() => {
       req.setTimeout(3000, () => {
         req.destroy();
         resolve(null);
+      });
+    });
+  }
+
+  // 辅助函数：搜索 Everything 文件
+  function searchEverythingFiles(port: number, searchQuery: string, fullPath: boolean): Promise<string[]> {
+    return new Promise((resolve) => {
+      // 构建 API URL
+      // count=0 表示获取所有结果，reply_json=1 返回 JSON 格式
+      const encodedQuery = encodeURIComponent(searchQuery);
+      const url = `http://127.0.0.1:${port}/?search=${encodedQuery}&count=0&reply_json=1`;
+
+      console.log(`[Main] Everything API URL: ${url}`);
+
+      http.get(url, (res: any) => {
+        let data = '';
+        res.on('data', (chunk: string) => data += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            const results = json.results || [];
+
+            // 提取文件路径
+            const files = results.map((item: any) => {
+              if (fullPath) {
+                return item.fullPath || item.name;
+              }
+              return item.name;
+            }).filter(Boolean);
+
+            resolve(files);
+          } catch (e) {
+            console.error('[Main] 解析 Everything 响应失败:', e, data.substring(0, 200));
+            resolve([]);
+          }
+        });
+      }).on('error', (e: any) => {
+        console.error('[Main] Everything API 请求失败:', e);
+        resolve([]);
+      }).setTimeout(10000, () => {
+        console.error('[Main] Everything API 请求超时');
+        resolve([]);
       });
     });
   }
