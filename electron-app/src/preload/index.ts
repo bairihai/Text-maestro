@@ -59,18 +59,32 @@ const globals = {
   log: log
 };
 
+// 自定义 API：封装 IPC 调用，供渲染层直接使用
+const customAPI = {
+  readFileByPath: (filePath: string) => ipcRenderer.invoke('read-file-by-path', filePath),
+  readMultipleFiles: (filePaths: string[]) => ipcRenderer.invoke('read-multiple-files', filePaths),
+  wordFrequency: (text: string, stopwords: string, customDict: string) => ipcRenderer.invoke('word-frequency', text, stopwords, customDict),
+  generateWordcloud: (freqJson: string, fontPath: string, maxFont: number, minFont: number, margin: number, preferH: number) => ipcRenderer.invoke('generate-wordcloud', freqJson, fontPath, maxFont, minFont, margin, preferH),
+  weeklyFolder: (fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => ipcRenderer.invoke('weekly-folder', fileList, timeFormat, targetFolder, year, autoCreate),
+  discordTimeSlot: (text: string) => ipcRenderer.invoke('discord-time-slot', text),
+  discordPreference: (userText: string, channelText: string) => ipcRenderer.invoke('discord-preference', userText, channelText),
+};
+
+// 合并标准 electronAPI 和自定义 API
+const api = Object.assign({}, electronAPI, customAPI);
+
 // 使用 @electron-toolkit/preload 暴露的 window.electron.ipcRenderer.invoke()
 // 具体 IPC 通道直接在渲染层组件中调用（如 check-server、generate-tree、check-everything-status）
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('electron', api)
     contextBridge.exposeInMainWorld('globals', globals)
   } catch (error) {
     console.error(error)
   }
 } else {
   // @ts-ignore (define in dts)
-  window.electron = electronAPI
+  window.electron = api
   // @ts-ignore (define in dts)
   window.globals = globals
 }

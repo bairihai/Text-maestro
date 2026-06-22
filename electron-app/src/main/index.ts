@@ -383,6 +383,217 @@ app.whenReady().then(() => {
     }
   });
 
+  // 读取指定路径文件（utf-8）
+  ipcMain.handle('read-file-by-path', async (_, filePath: string) => {
+    try {
+      const fullPath = path.resolve(filePath);
+      const data = await fs.readFile(fullPath, 'utf8');
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // 批量读取文件
+  ipcMain.handle('read-multiple-files', async (_, filePaths: string[]) => {
+    const results: Array<{ path: string; success: boolean; data?: string; error?: string }> = [];
+    for (const fp of filePaths) {
+      try {
+        const fullPath = path.resolve(fp);
+        const data = await fs.readFile(fullPath, 'utf8');
+        results.push({ path: fp, success: true, data });
+      } catch (err) {
+        results.push({ path: fp, success: false, error: (err as Error).message });
+      }
+    }
+    return results;
+  });
+
+  // 词频统计（Python jieba 加速）
+  ipcMain.handle('word-frequency', async (_, text: string, stopwords: string, customDict: string) => {
+    try {
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const scriptPath = path.join(__dirname, 'py', 'word_frequency.py');
+      log.info(`[WordFreq] 调用 Python 脚本: ${scriptPath}`);
+
+      // 用 stdin 传递文本参数（避免命令行长度限制）
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = exec(
+          `${pyCmd} "${scriptPath}" "${text.replace(/"/g, '\\"')}" "${stopwords.replace(/"/g, '\\"')}" "${customDict.replace(/"/g, '\\"')}"`,
+          { timeout: 60000, maxBuffer: 20 * 1024 * 1024 },
+          (err: Error | null, stdout: string, stderr: string) => {
+            if (err) {
+              log.error('[WordFreq] Python 执行错误:', err.message, stderr);
+              reject(err);
+            } else {
+              resolve(stdout.trim());
+            }
+          }
+        );
+        setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
+      });
+
+      return JSON.parse(output);
+    } catch (err) {
+      log.error('[WordFreq] 失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // 词云图生成（Python wordcloud 加速）
+  ipcMain.handle('generate-wordcloud', async (_, freqJson: string, fontPath: string, maxFont: number, minFont: number, margin: number, preferH: number) => {
+    try {
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const scriptPath = path.join(__dirname, 'py', 'generate_wordcloud.py');
+      log.info(`[WordCloud] 调用 Python 脚本: ${scriptPath}`);
+
+      // 将频率表写入临时文件，避免命令行长度限制
+      const tempFile = path.join(app.getPath('temp'), `wordcloud_freq_${Date.now()}.json`);
+      await fs.writeFile(tempFile, freqJson, 'utf-8');
+
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = exec(
+          `${pyCmd} "${scriptPath}" "${tempFile}" "${fontPath}" "${maxFont}" "${minFont}" "${margin}" "${preferH}"`,
+          { timeout: 60000, maxBuffer: 20 * 1024 * 1024 },
+          (err: Error | null, stdout: string, stderr: string) => {
+            if (err) {
+              log.error('[WordCloud] Python 执行错误:', err.message, stderr);
+              reject(err);
+            } else {
+              resolve(stdout.trim());
+            }
+          }
+        );
+        setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
+      });
+
+      // 清理临时文件
+      await fs.unlink(tempFile).catch(() => {});
+
+      return JSON.parse(output);
+    } catch (err) {
+      log.error('[WordCloud] 失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // 计算 gradio-app 目录路径（供 Python 脚本通过 sys.path.insert 引入）
+  const gradioAppPath = path.resolve(__dirname, '..', '..', '..', 'gradio-app');
+
+  // 周回文件夹整理 BAT 脚本生成（Python 加速）
+  ipcMain.handle('weekly-folder', async (_, fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => {
+    try {
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const scriptPath = path.join(__dirname, 'py', 'weekly_folder.py');
+      log.info(`[WeeklyFolder] 调用 Python 脚本: ${scriptPath}`);
+
+      // 将文件列表写入临时文件（避免命令行长度限制）
+      const tempFile = path.join(app.getPath('temp'), `weekly_folder_list_${Date.now()}.txt`);
+      await fs.writeFile(tempFile, fileList, 'utf-8');
+
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = exec(
+          `${pyCmd} "${scriptPath}" "${tempFile}" "${timeFormat}" "${targetFolder}" "${year}" "${autoCreate ? 1 : 0}"`,
+          { timeout: 60000, maxBuffer: 20 * 1024 * 1024, env: { ...process.env, GRADIO_APP_PATH: gradioAppPath } },
+          (err: Error | null, stdout: string, stderr: string) => {
+            if (err) {
+              log.error('[WeeklyFolder] Python 执行错误:', err.message, stderr);
+              reject(err);
+            } else {
+              resolve(stdout.trim());
+            }
+          }
+        );
+        setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
+      });
+
+      // 清理临时文件
+      await fs.unlink(tempFile).catch(() => {});
+
+      return JSON.parse(output);
+    } catch (err) {
+      log.error('[WeeklyFolder] 失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Discord 频道时频统计（Python pandas 加速）
+  ipcMain.handle('discord-time-slot', async (_, text: string) => {
+    try {
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const scriptPath = path.join(__dirname, 'py', 'discord_analysis.py');
+      log.info(`[DiscordTimeSlot] 调用 Python 脚本: ${scriptPath}`);
+
+      // 将文本写入临时文件（避免命令行长度限制）
+      const tempFile = path.join(app.getPath('temp'), `discord_timeslot_${Date.now()}.txt`);
+      await fs.writeFile(tempFile, text, 'utf-8');
+
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = exec(
+          `${pyCmd} "${scriptPath}" "time_slot" "${tempFile}"`,
+          { timeout: 60000, maxBuffer: 20 * 1024 * 1024, env: { ...process.env, GRADIO_APP_PATH: gradioAppPath } },
+          (err: Error | null, stdout: string, stderr: string) => {
+            if (err) {
+              log.error('[DiscordTimeSlot] Python 执行错误:', err.message, stderr);
+              reject(err);
+            } else {
+              resolve(stdout.trim());
+            }
+          }
+        );
+        setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
+      });
+
+      // 清理临时文件
+      await fs.unlink(tempFile).catch(() => {});
+
+      return JSON.parse(output);
+    } catch (err) {
+      log.error('[DiscordTimeSlot] 失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Discord 用户偏好度分析（Python pandas 加速）
+  ipcMain.handle('discord-preference', async (_, userText: string, channelText: string) => {
+    try {
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const scriptPath = path.join(__dirname, 'py', 'discord_analysis.py');
+      log.info(`[DiscordPreference] 调用 Python 脚本: ${scriptPath}`);
+
+      // 将两段文本分别写入临时文件（避免命令行长度限制）
+      const tempUserFile = path.join(app.getPath('temp'), `discord_pref_user_${Date.now()}.txt`);
+      const tempChannelFile = path.join(app.getPath('temp'), `discord_pref_channel_${Date.now()}.txt`);
+      await fs.writeFile(tempUserFile, userText, 'utf-8');
+      await fs.writeFile(tempChannelFile, channelText, 'utf-8');
+
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = exec(
+          `${pyCmd} "${scriptPath}" "preference" "${tempUserFile}" "${tempChannelFile}"`,
+          { timeout: 60000, maxBuffer: 20 * 1024 * 1024, env: { ...process.env, GRADIO_APP_PATH: gradioAppPath } },
+          (err: Error | null, stdout: string, stderr: string) => {
+            if (err) {
+              log.error('[DiscordPreference] Python 执行错误:', err.message, stderr);
+              reject(err);
+            } else {
+              resolve(stdout.trim());
+            }
+          }
+        );
+        setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
+      });
+
+      // 清理临时文件
+      await fs.unlink(tempUserFile).catch(() => {});
+      await fs.unlink(tempChannelFile).catch(() => {});
+
+      return JSON.parse(output);
+    } catch (err) {
+      log.error('[DiscordPreference] 失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   createWindow()
 
   app.on('activate', function () {

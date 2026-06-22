@@ -162,6 +162,50 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         rgb_output = gr.Textbox(label="输出 RGB 颜色值")
         gr.Button("转换").click(utils.hex_to_rgb, inputs=hex_input, outputs=rgb_output)
 
+    # Timestamp 时间戳转换工具
+    gr.Markdown("## Timestamp 时间戳转换工具")
+    with gr.Tab("时间戳 → 日期"):
+        ts_input = gr.Textbox(label="输入时间戳", placeholder="例如：1700000000 或 1700000000000", value="1700000000")
+        with gr.Row():
+            ts_unit = gr.Radio(label="单位", choices=["auto（自动判断）", "seconds（秒）", "milliseconds（毫秒）"], value="auto（自动判断）")
+            ts_tz = gr.Radio(label="时区", choices=["local（本地）", "utc（UTC）"], value="local（本地）")
+        ts_fmt = gr.Textbox(label="输出格式", value="%Y-%m-%d %H:%M:%S")
+        ts_output = gr.Textbox(label="转换结果")
+
+        def ts_to_date(ts, unit, tz, fmt):
+            unit_map = {"auto（自动判断）": "auto", "seconds（秒）": "seconds", "milliseconds（毫秒）": "milliseconds"}
+            tz_map = {"local（本地）": "local", "utc（UTC）": "utc"}
+            return utils.timestamp_to_date(ts, unit_map.get(unit, "auto"), tz_map.get(tz, "local"), fmt)
+
+        gr.Button("转换").click(ts_to_date, inputs=[ts_input, ts_unit, ts_tz, ts_fmt], outputs=ts_output)
+
+    with gr.Tab("日期 → 时间戳"):
+        date_input = gr.Textbox(label="输入日期", placeholder="例如：2023-11-15 06:13:20", value="2023-11-15 06:13:20")
+        with gr.Row():
+            date_unit = gr.Radio(label="输出单位", choices=["seconds（秒）", "milliseconds（毫秒）"], value="seconds（秒）")
+            date_tz = gr.Radio(label="时区", choices=["local（本地）", "utc（UTC）"], value="local（本地）")
+        date_fmt = gr.Textbox(label="输入格式", value="%Y-%m-%d %H:%M:%S")
+        date_ts_output = gr.Textbox(label="转换结果")
+
+        def date_to_ts(date_str, unit, tz, fmt):
+            unit_map = {"seconds（秒）": "seconds", "milliseconds（毫秒）": "milliseconds"}
+            tz_map = {"local（本地）": "local", "utc（UTC）": "utc"}
+            return utils.date_to_timestamp(date_str, unit_map.get(unit, "seconds"), tz_map.get(tz, "local"), fmt)
+
+        gr.Button("转换").click(date_to_ts, inputs=[date_input, date_unit, date_tz, date_fmt], outputs=date_ts_output)
+
+    with gr.Tab("当前时间戳"):
+        with gr.Row():
+            cur_unit = gr.Radio(label="单位", choices=["seconds（秒）", "milliseconds（毫秒）"], value="seconds（秒）")
+            cur_btn = gr.Button("获取当前时间戳")
+        cur_output = gr.Textbox(label="当前时间戳")
+
+        def get_cur_ts(unit):
+            unit_map = {"seconds（秒）": "seconds", "milliseconds（毫秒）": "milliseconds"}
+            return utils.get_current_timestamp(unit_map.get(unit, "seconds"))
+
+        cur_btn.click(get_cur_ts, inputs=cur_unit, outputs=cur_output)
+
     # 字数词数统计功能，三引号实现长文本分段
     gr.Markdown("## 字数词数统计功能")
     with gr.Group():

@@ -75,7 +75,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             title: '通用文档',
             icon: <IconDriveFile />,
             items: [
-                { key: '3_0', label: '任一文件夹的结构树', to: '/common/folder-tree', needGradio: true },
+                { key: '3_0', label: '任一文件夹的结构树', to: '/common/folder-tree', needPython: true },
                 { key: '3_1', label: 'obsidian 单篇文档分析' },
                 { key: '3_2', label: 'obsidian 多文档分析' },
                 { key: '3_3', label: '掘金小册 上云action生成' },
@@ -92,6 +92,18 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
                 { key: '3a_1', label: 'RGB / Hex 颜色码转换', to: '/tools/color-converter' },
                 { key: '3a_2', label: '简体 / 繁体 中文转换', to: '/tools/simplified-traditional' },
                 { key: '3a_3', label: '正则筛选 / 文件列表过滤', to: '/tools/regex-filter' },
+                { key: '3a_3a', label: 'Timestamp 时间戳转换', to: '/tools/timestamp' },
+                { key: '3a_4', label: '文本比较', to: '/tools/text-diff' },
+                { key: '3a_5', label: '字数词数统计', to: '/tools/word-count' },
+                { key: '3a_6', label: 'Markdown 大纲工具', to: '/tools/markdown-outline' },
+                { key: '3a_7', label: 'CSV 预览', to: '/tools/csv-preview' },
+                { key: '3a_8', label: '文本读取', to: '/tools/file-reader' },
+                { key: '3a_9', label: '多文档拼接', to: '/tools/doc-merge' },
+                { key: '3a_10', label: 'Discord 聊天记录分析', to: '/tools/discord-analysis' },
+                { key: '3a_11', label: 'Twitch 弹幕分析', to: '/tools/twitch-analysis' },
+                { key: '3a_12', label: '词频统计', to: '/tools/word-frequency', needPython: true },
+                { key: '3a_13', label: '词云图生成', to: '/tools/wordcloud', needPython: true },
+                { key: '3a_14', label: '周回文件夹管理', to: '/tools/weekly-folder', needPython: true },
             ]
         },
         {
@@ -230,7 +242,7 @@ export const NavBar = () => {
                             {link.items.map((item) => (
                                 <MenuItem key={item.key} onClick={() => item.to && handleNavigation(item.to)}>
                                     {item.label}
-                                    {item.needGradio && <PythonBadge />}
+                                    {item.needPython && <PythonBadge />}
                                 </MenuItem>
                             ))}
                         </SubMenu>

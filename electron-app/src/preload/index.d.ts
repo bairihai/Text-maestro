@@ -40,9 +40,60 @@ interface OpenEverythingResult {
   error?: string;
 }
 
+// 自定义 API 的返回类型
+interface ReadFileResult {
+  success: boolean;
+  data?: string;
+  error?: string;
+}
+
+interface ReadMultipleFilesResult {
+  path: string;
+  success: boolean;
+  data?: string;
+  error?: string;
+}
+
+interface WordFrequencyResult {
+  success: boolean;
+  data?: Record<string, number>;
+  error?: string;
+}
+
+interface WordcloudResult {
+  success: boolean;
+  data?: string;
+  error?: string;
+}
+
+// 周回文件夹整理 BAT 脚本生成的返回类型
+interface WeeklyFolderResult {
+  success: boolean;
+  data?: string;
+  error?: string;
+}
+
+// Discord 分析的返回类型（频道时频统计 / 用户偏好度分析）
+interface DiscordAnalysisResult {
+  success: boolean;
+  data?: string;
+  error?: string;
+}
+
+// 扩展 ElectronAPI，添加自定义方法
+interface CustomElectronAPI extends ElectronAPI {
+  readFileByPath: (filePath: string) => Promise<ReadFileResult>;
+  readMultipleFiles: (filePaths: string[]) => Promise<ReadMultipleFilesResult[]>;
+  wordFrequency: (text: string, stopwords: string, customDict: string) => Promise<WordFrequencyResult>;
+  generateWordcloud: (freqJson: string, fontPath: string, maxFont: number, minFont: number, margin: number, preferH: number) => Promise<WordcloudResult>;
+  weeklyFolder: (fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => Promise<WeeklyFolderResult>;
+  discordTimeSlot: (text: string) => Promise<DiscordAnalysisResult>;
+  discordPreference: (userText: string, channelText: string) => Promise<DiscordAnalysisResult>;
+}
+
 declare global {
   interface Window {
-    electron: ElectronAPI
+    electron: CustomElectronAPI
     globals: {
       ipcRenderer: {
         send: (channel: string, ...args: unknown[]) => void;

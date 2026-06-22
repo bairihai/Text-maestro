@@ -4,6 +4,7 @@ import re
 import csv
 import pandas as pd
 from io import StringIO
+from datetime import datetime, timezone
 
 # utils.py 基础功能
 
@@ -279,3 +280,68 @@ def parse_outline(outline):
             title = line.lstrip('#').strip()
             structure.append((level, title))
     return structure
+
+
+# ==================== Timestamp 时间戳转换功能 ====================
+
+def timestamp_to_date(ts_str, unit='auto', timezone_str='local', fmt='%Y-%m-%d %H:%M:%S'):
+    """
+    将时间戳转换为可读日期
+    unit: 'auto'（自动判断秒/毫秒）/'seconds'/'milliseconds'
+    timezone_str: 'local'（本地时区）/'utc'（UTC）
+    fmt: 输出格式字符串
+    """
+    try:
+        ts = float(ts_str)
+        # 自动判断单位：10位以下为秒，13位以下为毫秒
+        if unit == 'auto':
+            if abs(ts) < 1e12:
+                unit = 'seconds'
+            else:
+                unit = 'milliseconds'
+
+        if unit == 'milliseconds':
+            ts = ts / 1000
+
+        if timezone_str == 'utc':
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        else:
+            dt = datetime.fromtimestamp(ts)
+
+        return dt.strftime(fmt)
+    except Exception as e:
+        return f"转换失败: {str(e)}"
+
+
+def date_to_timestamp(date_str, unit='seconds', timezone_str='local', fmt='%Y-%m-%d %H:%M:%S'):
+    """
+    将日期字符串转换为时间戳
+    unit: 'seconds'/'milliseconds'
+    timezone_str: 'local'/'utc'
+    fmt: 输入的日期格式字符串
+    """
+    try:
+        if timezone_str == 'utc':
+            dt = datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc)
+        else:
+            dt = datetime.strptime(date_str, fmt)
+
+        ts = dt.timestamp()
+        if unit == 'milliseconds':
+            ts = ts * 1000
+
+        return str(int(ts))
+    except Exception as e:
+        return f"转换失败: {str(e)}"
+
+
+def get_current_timestamp(unit='seconds'):
+    """
+    获取当前时间戳
+    unit: 'seconds'/'milliseconds'
+    """
+    import time
+    if unit == 'milliseconds':
+        return str(int(time.time() * 1000))
+    else:
+        return str(int(time.time()))
