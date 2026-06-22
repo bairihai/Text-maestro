@@ -1,6 +1,6 @@
 import { Button, Switch, Select, Input, Typography, Card, Checkbox, Divider } from '@arco-design/web-react';
 
-import { StatusCheck, OnlineCheck, EverythingCheck, WordCloudAdvancedCheck } from '@renderer/components/StatusCheck';
+import { StatusCheck, OnlineCheck, GradioCheck, WordCloudAdvancedCheck } from '@renderer/components/StatusCheck';
 import { useTheme } from '@renderer/context/ThemeContext';
 
 import { IconSun, IconMoon, IconDesktop } from '@arco-design/web-react/icon';
@@ -21,7 +21,7 @@ function Setting() {
     <div className="h-screen overflow-y-auto p-4">
       <Divider orientation="left" style={{margin: '10px 0', fontSize: '10px', fontWeight: 'bold'}}>服务状态</Divider>
       <div className="columns-2 sm:columns-2 md:columns-2 gap-2">
-        {[StatusCheck, OnlineCheck, EverythingCheck, WordCloudAdvancedCheck].map((Component, index) => (
+        {[StatusCheck, OnlineCheck, GradioCheck, WordCloudAdvancedCheck].map((Component, index) => (
           <div key={index} className="break-inside-avoid mb-2">
             <Component />
           </div>

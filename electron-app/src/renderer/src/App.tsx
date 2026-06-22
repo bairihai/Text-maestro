@@ -8,7 +8,7 @@ import { NavBar } from './components/Navbar'
 import routes from './router'
 import store from './store';
 import { ThemeProvider } from './context/ThemeContext';
-import { EverythingProvider } from './context/EverythingContext';
+import { GradioProvider } from './context/GradioContext';
 
 // 5. App 组件定义
 function App(): JSX.Element {
@@ -16,7 +16,7 @@ function App(): JSX.Element {
   return (
     <Provider store={store}>
       <ThemeProvider>
-        <EverythingProvider>
+        <GradioProvider>
           <Router>
             <NavBar />
             <div style={{ marginLeft: '48px', minHeight: '100vh' }}>
@@ -27,7 +27,7 @@ function App(): JSX.Element {
               </Routes>
             </div>
           </Router>
-        </EverythingProvider>
+        </GradioProvider>
       </ThemeProvider>
     </Provider>
   )

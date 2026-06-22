@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { IconRefresh } from '@arco-design/web-react/icon';
 import EverythingCheck from './EverythingCheck';
+import GradioCheck from './GradioCheck';
 
 // 每5000毫秒检查一次服务器（7860端口的gradio服务）状态。由于更换使用了main方法避免CSP问题，确保在 preload 脚本中均已经暴露。
 const StatusCheck: React.FC = () => {
@@ -98,4 +99,4 @@ const WordCloudAdvancedCheck = () => {
   );
 };
 
-export {StatusCheck, OnlineCheck, EverythingCheck, EverythingCheckExport, WordCloudAdvancedCheck};
+export {StatusCheck, OnlineCheck, EverythingCheck, EverythingCheckExport, GradioCheck, WordCloudAdvancedCheck};

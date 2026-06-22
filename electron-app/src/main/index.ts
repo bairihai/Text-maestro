@@ -6,7 +6,6 @@ import icon from '../../resources/icon.png?asset'
 const fs = require('fs').promises;
 const path = require('path');
 const { exec } = require('child_process');
-const http = require('http');
 
 import log from 'electron-log';
 import net from 'net';
@@ -55,42 +54,81 @@ function createWindow(): void {
   });
 }
 
-// 目录树生成：用 Node fs 递归读取目录结构
-async function buildTree(dirPath: string, maxDepth: number, currentDepth: number, includeStats: boolean): Promise<TreeNode> {
-  const name = path.basename(dirPath);
-  const stat = await fs.stat(dirPath);
-  const node: TreeNode = {
-    name,
-    type: 'directory',
-  };
-  if (includeStats) {
-    node.size = stat.size;
-  }
-  if (currentDepth >= maxDepth) {
-    return node;
-  }
-  const entries = await fs.readdir(dirPath, { withFileTypes: true });
-  const children: TreeNode[] = [];
-  for (const entry of entries) {
-    const entryPath = path.join(dirPath, entry.name);
+// 目录树生成：用 fs.readdir withFileTypes 单层遍历，零额外 stat 调用
+// 与 Python os.walk 风格一致，但按深度限制，性能与 Gradio 版本持平
+async function buildTree(dirPath: string, maxDepth: number): Promise<TreeNode> {
+  const rootName = path.basename(dirPath) || dirPath;
+  const root: TreeNode = { name: rootName, type: 'directory', children: [] };
+
+  // 栈：[节点, 绝对路径, 当前深度]
+  const stack: Array<{ node: TreeNode; absPath: string; depth: number }> = [
+    { node: root, absPath: dirPath, depth: 0 }
+  ];
+
+  while (stack.length > 0) {
+    const { node, absPath, depth } = stack.pop()!;
+    if (depth >= maxDepth) continue;
+
     try {
-      if (entry.isDirectory()) {
-        children.push(await buildTree(entryPath, maxDepth, currentDepth + 1, includeStats));
-      } else if (entry.isFile()) {
-        const childNode: TreeNode = { name: entry.name, type: 'file' };
-        if (includeStats) {
-          const fileStat = await fs.stat(entryPath);
-          childNode.size = fileStat.size;
+      const entries = await fs.readdir(absPath, { withFileTypes: true });
+      const childNodes: TreeNode[] = [];
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const child: TreeNode = { name: entry.name, type: 'directory', children: [] };
+          childNodes.push(child);
+          // 子目录入栈，继续展开
+          stack.push({
+            node: child,
+            absPath: path.join(absPath, entry.name),
+            depth: depth + 1
+          });
+        } else if (entry.isFile()) {
+          childNodes.push({ name: entry.name, type: 'file' });
         }
-        children.push(childNode);
       }
+
+      // 排序：目录在前，文件在后，按名称字母序
+      childNodes.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      node.children = childNodes;
     } catch (err) {
-      // 跳过无权限访问的条目
-      log.warn(`Main: 跳过无权限条目: ${entryPath}`, err);
+      log.warn(`Main: 跳过无权限目录: ${absPath}`);
     }
   }
-  node.children = children;
-  return node;
+
+  return root;
+}
+
+// 目录大小统计：单层遍历 + 仅文件调用 stat
+async function calcDirectorySize(dirPath: string): Promise<number> {
+  let total = 0;
+  const stack: string[] = [dirPath];
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    try {
+      const entries = await fs.readdir(current, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          stack.push(path.join(current, entry.name));
+        } else if (entry.isFile()) {
+          try {
+            const stat = await fs.stat(path.join(current, entry.name));
+            total += stat.size;
+          } catch {
+            // 单个文件 stat 失败忽略
+          }
+        }
+      }
+    } catch (err) {
+      log.warn(`Main: 跳过无权限目录(统计): ${current}`);
+    }
+  }
+
+  return total;
 }
 
 // This method will be called when Electron has finished
@@ -230,40 +268,85 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('generate-tree', async (_, dirPath: string, maxDepth: number = 3, includeStats: boolean = false) => {
+  ipcMain.handle('generate-tree', async (_, dirPath: string, maxDepth: number = 3, includeStats: boolean = false, useGradio: boolean = false) => {
+    const startTotal = Date.now();
     try {
       const fullPath = path.resolve(dirPath);
       const stat = await fs.stat(fullPath);
       if (!stat.isDirectory()) {
         return { error: '指定路径不是目录' };
       }
-      const tree = await buildTree(fullPath, maxDepth, 0, includeStats);
-      const result: any = { tree };
-      if (includeStats) {
-        // 计算目录总大小（递归）
-        const calcSize = async (node: TreeNode): Promise<number> => {
-          if (node.type === 'file') return node.size || 0;
-          if (!node.children) return 0;
-          let total = 0;
-          for (const child of node.children) {
-            total += await calcSize(child);
+
+      // ============== Gradio/Python 加速模式 ==============
+      if (useGradio) {
+        const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+        const pyResult = await new Promise<string>((resolve) => {
+          exec(`${pyCmd} --version`, (_err: Error | null, stdout: string, stderr: string) => {
+            resolve((stdout || stderr || '').trim());
+          });
+        });
+        const pyAvailable = /^Python\s+\d/i.test(pyResult) || pyResult.includes('Python');
+
+        if (pyAvailable) {
+          // 脚本位置：和 index.js 同目录的 py/generate_tree.py
+          const scriptPath = path.join(__dirname, 'py', 'generate_tree.py');
+          log.info(`[GradioTree] 调用 Python 脚本: ${scriptPath}, 参数=${fullPath} depth=${maxDepth} stats=${includeStats}`);
+
+          try {
+            const output = await new Promise<string>((resolve, reject) => {
+              const childProc = exec(
+                `${pyCmd} "${scriptPath}" "${fullPath}" "${maxDepth}" "${includeStats ? 1 : 0}"`,
+                { timeout: 30000, maxBuffer: 20 * 1024 * 1024 },
+                (_err: Error | null, stdout: string, stderr: string) => {
+                  if (_err) {
+                    log.error('[GradioTree] Python 执行错误:', _err.message, stderr);
+                    reject(_err);
+                  } else {
+                    resolve(stdout.trim());
+                  }
+                }
+              );
+              setTimeout(() => {
+                try { childProc.kill(); } catch { /* ignore */ }
+              }, 30000);
+            });
+
+            const parsed = JSON.parse(output);
+            log.info(`[GradioTree] Python 脚本返回成功 (总耗时 ${Date.now() - startTotal}ms)`);
+            return parsed;
+          } catch (err) {
+            log.warn('[GradioTree] Python 脚本失败，降级到 Node.js fs 方式:', err);
           }
-          return total;
-        };
-        const totalSize = await calcSize(tree);
-        // 硬盘信息：Node 用 fs.statfs（Node 18+，Electron 31 自带 Node 20+）
-        const statfs: any = await fs.statfs(fullPath);
-        const diskTotal = statfs.blocks * statfs.bsize;
-        const diskFree = statfs.bfree * statfs.bsize;
-        const diskUsed = diskTotal - diskFree;
-        result.stats = {
-          totalSize,
-          diskTotal,
-          diskUsed,
-          diskFree,
-          percentUsed: (totalSize / diskTotal) * 100
-        };
+        } else {
+          log.info(`[GradioTree] Python 不可用 (${pyResult})，降级到 Node.js fs 方式`);
+        }
       }
+
+      // ============== 优化后的 fs 模式：tree/stats 并发 ==============
+      const treePromise = buildTree(fullPath, maxDepth);
+      const statsTask = includeStats
+        ? Promise.all([calcDirectorySize(fullPath), fs.statfs(fullPath).catch(() => null)])
+        : null;
+
+      const tree = await treePromise;
+      const result: any = { tree, accelerated: false };
+      if (statsTask) {
+        const [totalSize, statfs] = await statsTask;
+        if (statfs) {
+          const diskTotal = statfs.blocks * statfs.bsize;
+          const diskFree = statfs.bfree * statfs.bsize;
+          const diskUsed = diskTotal - diskFree;
+          result.stats = {
+            totalSize,
+            diskTotal,
+            diskUsed,
+            diskFree,
+            percentUsed: diskTotal > 0 ? (totalSize / diskTotal) * 100 : 0,
+          };
+        }
+      }
+
+      log.info(`[FSTree] 总耗时: ${Date.now() - startTotal}ms`);
       return result;
     } catch (error) {
       const msg = (error as Error).message;
@@ -272,312 +355,33 @@ app.whenReady().then(() => {
     }
   });
 
-  // Everything 状态检测
-  ipcMain.handle('check-everything-status', async () => {
-    console.log('[Main] check-everything-status 被调用');
-    const result: any = {
-      installed: false,
-      running: false,
-      indexed: false,
-      indexCount: 0,
-      indexDate: '',
-      httpApi: false,
-      error: ''
-    };
-
-    // 1. 检测安装状态（多重方式）
+  // 检查 Python 环境（用于 Gradio 加速/脚本调用）
+  ipcMain.handle('check-gradio-status', async () => {
+    log.info('[Main] check-gradio-status 被调用');
+    const cmd = process.platform === 'win32' ? 'python --version' : 'python3 --version';
     try {
-      // 方式 A: 检查默认安装路径
-      const possiblePaths = [
-        'C:\\Program Files\\Everything\\Everything.exe',
-        'C:\\Program Files (x86)\\Everything\\Everything.exe',
-        path.join(process.env.USERPROFILE || '', 'AppData', 'Local', 'Programs', 'Everything', 'Everything.exe'),
-      ];
-      for (const p of possiblePaths) {
-        try {
-          await fs.access(p);
-          result.installed = true;
-          break;
-        } catch (_e) {
-          // continue
-        }
-      }
-
-      // 方式 B: 注册表查询（如果方式 A 没找到）
-      if (!result.installed) {
-        const regResult = await new Promise<string>((resolve) => {
-          exec('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
-            (_err: Error | null, stdout: string) => {
-              if (!stdout) {
-                exec('reg query "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
-                  (_err2: Error | null, stdout2: string) => {
-                    resolve(stdout2 || '');
-                  });
-              } else {
-                resolve(stdout);
-              }
-            });
+      const { stdout, stderr }: any = await new Promise((resolve) => {
+        exec(cmd, (_err: Error | null, stdout: string, stderr: string) => {
+          resolve({ stdout, stderr });
         });
-        result.installed = regResult.includes('InstallLocation');
-      }
-
-      // 方式 C: 注册表卸载项（其他位置）
-      if (!result.installed) {
-        const regSimple = await new Promise<string>((resolve) => {
-          exec('reg query "HKCU\\Software\\Voidtools\\Everything" /v InstallLocation 2>nul',
-            (_err: Error | null, stdout: string) => {
-              resolve(stdout || '');
-            });
-        });
-        result.installed = regSimple.includes('InstallLocation');
-      }
-
-      log.info(`Main: Everything 安装检测 = ${result.installed}`);
-    } catch (e) {
-      log.info('Main: Everything 安装检测失败', e);
-      result.error = String(e);
-    }
-
-    // 2. 检测运行状态（优先用 tasklist 检查进程，再检查 HTTP 端口）
-    try {
-      // 方式 A: 检查进程是否运行
-      const processRunning = await new Promise<boolean>((resolve) => {
-        exec('tasklist /FI "IMAGENAME eq Everything.exe" 2>nul',
-          (_err: Error | null, stdout: string) => {
-            resolve(stdout.includes('Everything.exe'));
-          });
       });
-
-      // 方式 B: 检查 HTTP API 端口（Everything HTTP 服务器常见端口：80, 21, 8080）
-      let httpPort = 0;
-      const commonPorts = [80, 21, 8080, 8081];
-      for (const port of commonPorts) {
-        const isOpen = await checkPort('127.0.0.1', port).catch(() => false);
-        if (isOpen) {
-          httpPort = port;
-          break;
-        }
-      }
-
-      result.running = processRunning || (httpPort > 0);
-      result.httpApi = httpPort > 0;
-      result.httpPort = httpPort;
-
-      log.info(`Main: Everything 进程运行 = ${processRunning}, HTTP API = ${httpPort > 0 ? `端口 ${httpPort}` : '未开启'}, 综合运行 = ${result.running}`);
+      const versionOut = (stdout || stderr || '').trim();
+      const available = versionOut.includes('Python') || /^Python\s+\d/i.test(versionOut);
+      log.info(`[Main] Python 版本 = ${versionOut}, 可用 = ${available}`);
+      return {
+        available,
+        version: versionOut.replace('Python ', '').trim() || '',
+        error: available ? '' : `未检测到 Python: ${versionOut || '无输出'}`,
+      };
     } catch (e) {
-      log.info('Main: Everything 运行检测失败', e);
-      // fallback: 只靠端口检测
-      try {
-        let httpPort = 0;
-        const commonPorts = [80, 21, 8080, 8081];
-        for (const port of commonPorts) {
-          const isOpen = await checkPort('127.0.0.1', port).catch(() => false);
-          if (isOpen) {
-            httpPort = port;
-            break;
-          }
-        }
-        result.running = httpPort > 0;
-        result.httpApi = httpPort > 0;
-        result.httpPort = httpPort;
-      } catch (_e2) {
-        result.running = false;
-        result.httpApi = false;
-        result.httpPort = 0;
-      }
-    }
-
-    // 3. 获取索引状态（只有 HTTP API 可用时才能查）
-    if (result.running && result.httpApi && result.httpPort) {
-      try {
-        const apiResult = await fetchEverythingAPI(result.httpPort);
-        if (apiResult && apiResult.totalResults > 0) {
-          result.indexed = true;
-          result.indexCount = apiResult.totalResults || 0;
-          result.indexDate = apiResult.date || '';
-          log.info(`Main: Everything 索引 = ${result.indexCount} 条`);
-        } else if (apiResult) {
-          result.indexed = true;
-          log.info('Main: Everything HTTP API 可用');
-        }
-      } catch (e) {
-        log.info('Main: Everything API 获取失败', e);
-      }
-    }
-
-    return result;
-  });
-
-  // Everything 文件搜索
-  ipcMain.handle('everything-search', async (_, directory: string, searchSubdirs: boolean, onlyFiles: boolean, fullPath: boolean) => {
-    console.log(`[Main] everything-search: ${directory}, subdirs=${searchSubdirs}, onlyFiles=${onlyFiles}, fullPath=${fullPath}`);
-
-    // 1. 先检测 Everything HTTP API 是否可用
-    let httpPort = 0;
-    const commonPorts = [80, 21, 8080, 8081];
-    for (const port of commonPorts) {
-      const isOpen = await checkPort('127.0.0.1', port).catch(() => false);
-      if (isOpen) {
-        httpPort = port;
-        break;
-      }
-    }
-
-    if (!httpPort) {
-      return { error: 'Everything HTTP API 未启用' };
-    }
-
-    // 2. 构建搜索查询
-    // 使用 Everything HTTP API 的查询语法
-    let searchQuery = '';
-    if (searchSubdirs) {
-      searchQuery = `"${directory}\\*"`;
-    } else {
-      searchQuery = `parent:"${directory}"`;
-    }
-
-    if (onlyFiles) {
-      searchQuery = `file:${searchQuery}`;
-    }
-
-    // 3. 调用 Everything HTTP API
-    try {
-      const results = await searchEverythingFiles(httpPort, searchQuery, fullPath);
-      console.log(`[Main] everything-search 结果: ${results.length} 个文件`);
-      return results;
-    } catch (e) {
-      console.error('[Main] everything-search 失败:', e);
-      return { error: String(e) };
+      log.info('[Main] Python 环境检测失败', e);
+      return {
+        available: false,
+        version: '',
+        error: String(e),
+      };
     }
   });
-
-  // 打开 Everything
-  ipcMain.handle('open-everything', async () => {
-    try {
-      // 尝试多个默认路径
-      const possiblePaths = [
-        'C:\\Program Files\\Everything\\Everything.exe',
-        'C:\\Program Files (x86)\\Everything\\Everything.exe',
-        path.join(process.env.USERPROFILE || '', 'AppData', 'Local', 'Programs', 'Everything', 'Everything.exe'),
-      ];
-
-      for (const p of possiblePaths) {
-        const exists = await fs.access(p).then(() => true).catch(() => false);
-        if (exists) {
-          shell.openPath(p);
-          return { success: true };
-        }
-      }
-
-      // 尝试注册表查找
-      const regPaths = [
-        'reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
-        'reg query "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Everything" /v InstallLocation 2>nul',
-        'reg query "HKCU\\Software\\Voidtools\\Everything" /v InstallLocation 2>nul',
-      ];
-
-      for (const regCmd of regPaths) {
-        const regResult = await new Promise<string>((resolve) => {
-          exec(regCmd, (_err: Error | null, stdout: string) => {
-            resolve(stdout || '');
-          });
-        });
-        const match = regResult.match(/InstallLocation\s+REG_SZ\s+(.+)/i);
-        if (match) {
-          const installPath = match[1].trim();
-          const exePath = installPath.endsWith('.exe') ? installPath : `${installPath}Everything.exe`;
-          shell.openPath(exePath);
-          return { success: true };
-        }
-      }
-
-      // 最后尝试用 shell 打开（Windows 会用默认关联）
-      shell.openPath('Everything.exe');
-      return { success: false, error: '未找到 Everything 安装路径，已尝试系统默认' };
-    } catch (e) {
-      return { success: false, error: String(e) };
-    }
-  });
-
-  // 打开 Everything 安装页面
-  ipcMain.handle('open-everything-download', async () => {
-    shell.openExternal('https://www.voidtools.com/downloads/');
-  });
-
-  // 辅助函数：获取 Everything HTTP API 信息
-  function fetchEverythingAPI(port: number): Promise<{ totalResults: number; date: string } | null> {
-    return new Promise((resolve) => {
-      const req = http.get(`http://127.0.0.1:${port}/?search=%22%22&offset=0&count=0&reply_json=1`, (res: any) => {
-        let data = '';
-        res.on('data', (chunk: string) => data += chunk);
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            // Everything API 返回格式: { totalResults: N, results: [...] }
-            resolve({ totalResults: json.totalResults || 0, date: new Date().toLocaleString() });
-          } catch {
-            // 尝试其他解析方式
-            const match = data.match(/totalResults["\s:]+(\d+)/);
-            if (match) {
-              resolve({ totalResults: parseInt(match[1]), date: new Date().toLocaleString() });
-            } else {
-              // 如果无法解析 JSON 但有响应，说明服务在运行
-              resolve({ totalResults: 0, date: new Date().toLocaleString() });
-            }
-          }
-        });
-      });
-      req.on('error', () => {
-        resolve(null);
-      });
-      req.setTimeout(3000, () => {
-        req.destroy();
-        resolve(null);
-      });
-    });
-  }
-
-  // 辅助函数：搜索 Everything 文件
-  function searchEverythingFiles(port: number, searchQuery: string, fullPath: boolean): Promise<string[]> {
-    return new Promise((resolve) => {
-      // 构建 API URL
-      // count=0 表示获取所有结果，reply_json=1 返回 JSON 格式
-      const encodedQuery = encodeURIComponent(searchQuery);
-      const url = `http://127.0.0.1:${port}/?search=${encodedQuery}&count=0&reply_json=1`;
-
-      console.log(`[Main] Everything API URL: ${url}`);
-
-      http.get(url, (res: any) => {
-        let data = '';
-        res.on('data', (chunk: string) => data += chunk);
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            const results = json.results || [];
-
-            // 提取文件路径
-            const files = results.map((item: any) => {
-              if (fullPath) {
-                return item.fullPath || item.name;
-              }
-              return item.name;
-            }).filter(Boolean);
-
-            resolve(files);
-          } catch (e) {
-            console.error('[Main] 解析 Everything 响应失败:', e, data.substring(0, 200));
-            resolve([]);
-          }
-        });
-      }).on('error', (e: any) => {
-        console.error('[Main] Everything API 请求失败:', e);
-        resolve([]);
-      }).setTimeout(10000, () => {
-        console.error('[Main] Everything API 请求超时');
-        resolve([]);
-      });
-    });
-  }
 
   createWindow()
 

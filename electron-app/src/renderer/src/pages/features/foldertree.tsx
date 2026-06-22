@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '@renderer/context/ThemeContext';
-import { useEverything } from '@renderer/context/EverythingContext';
-import { EverythingBadge } from '@renderer/components/EverythingRequiredWrapper';
+import { useGradio } from '@renderer/context/GradioContext';
+import { GradioBadge } from '@renderer/components/GradioRequiredWrapper';
 
 // ------------- types -------------
 interface TreeNode {
@@ -20,14 +20,29 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function treeToText(node: TreeNode, depth: number = 0): string {
+function treeToText(node: TreeNode, style: 'tree' | 'ls' = 'tree', depth: number = 0): string {
+  if (style === 'ls') {
+    let text = '';
+    // ls 风格：每个条目一行，目录名带 / 后缀
+    const prefix = '    '.repeat(depth);
+    const suffix = node.type === 'directory' ? '/' : '';
+    const sizeText = node.size !== undefined ? `  (${formatSize(node.size)})` : '';
+    text += `${prefix}${node.name}${suffix}${sizeText}\n`;
+    if (node.children) {
+      for (const child of node.children) {
+        text += treeToText(child, 'ls', depth + 1);
+      }
+    }
+    return text;
+  }
+  // tree 风格（默认）
   const indent = '    '.repeat(depth);
   const suffix = node.type === 'directory' ? '/' : '';
   const sizeText = node.size !== undefined ? `  (${formatSize(node.size)})` : '';
   let text = `${indent}${node.name}${suffix}${sizeText}\n`;
   if (node.children) {
     for (const child of node.children) {
-      text += treeToText(child, depth + 1);
+      text += treeToText(child, 'tree', depth + 1);
     }
   }
   return text;
@@ -133,12 +148,14 @@ const checkboxStyle: React.CSSProperties = { width: 16, height: 16, cursor: 'poi
 // ---------------- component ----------------
 const FolderTree: React.FC = () => {
   const { colors } = useTheme();
-  const { isConnected, status } = useEverything();
+  const { isConnected, status } = useGradio();
   const [path, setPath] = useState('');
   const [maxDepth, setMaxDepth] = useState(3);
   const [options, setOptions] = useState<string[]>(['生成目录树', '统计目录信息']);
-  const [useEverythingAccel, setUseEverythingAccel] = useState(false);
+  const [treeStyle, setTreeStyle] = useState<'tree' | 'ls'>('tree');
+  const [useGradioAccel, setUseGradioAccel] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [stats, setStats] = useState<any>(null);
@@ -146,8 +163,6 @@ const FolderTree: React.FC = () => {
   const [btnHover, setBtnHover] = useState(false);
   const [pathFocused, setPathFocused] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  // Everything 快速搜索
   const [quickSearchResults, setQuickSearchResults] = useState<string[]>([]);
   const [quickSearchLoading, setQuickSearchLoading] = useState(false);
 
@@ -157,41 +172,48 @@ const FolderTree: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!path.trim()) { setError('请输入文件夹路径'); return; }
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setElapsedMs(0);
     setTree(null);
     setStats(null);
+
+    // 开始计时动画
+    const startTime = Date.now();
+    const timer = setInterval(() => setElapsedMs(Date.now() - startTime), 50);
+
     try {
       const includeStats = options.includes('统计目录信息');
-      const result = await (window as any).electron.ipcRenderer.invoke('generate-tree', path, maxDepth, includeStats);
+      const shouldAccel = useGradioAccel && isConnected;
+      const result = await (window as any).electron.ipcRenderer.invoke('generate-tree', path, maxDepth, includeStats, shouldAccel);
       if (result.error) { setError(result.error); }
-      else { setTree(result.tree); setStats(result.stats || null); }
+      else {
+        setTree(result.tree);
+        setStats(result.stats || null);
+        if (shouldAccel) {
+          handleQuickSearch();
+        }
+      }
     } catch (err) { setError((err as Error).message); }
-    finally { setLoading(false); }
-
-    // 如果启用了 Everything 加速，并行触发搜索
-    if (useEverythingAccel && isConnected) {
-      handleQuickSearch();
+    finally {
+      clearInterval(timer);
+      setLoading(false);
     }
   };
 
-  // Everything 快速搜索
+  // Gradio 加速的目录快速列表
   const handleQuickSearch = async () => {
-    if (!useEverythingAccel || !isConnected || !path.trim()) { return; }
+    if (!useGradioAccel || !isConnected || !path.trim()) { return; }
     setQuickSearchLoading(true);
     setQuickSearchResults([]);
     try {
       const results = await (window as any).electron.ipcRenderer.invoke(
-        'everything-search',
-        path.trim(),
-        true,  // searchSubdirs
-        false, // onlyFiles
-        true   // fullPath
+        'list-folder-files',
+        path.trim()
       );
       if (Array.isArray(results)) {
         setQuickSearchResults(results);
       }
     } catch (err) {
-      console.error('[FolderTree] Everything 搜索失败:', err);
+      console.error('[FolderTree] 目录列表搜索失败:', err);
     } finally {
       setQuickSearchLoading(false);
     }
@@ -222,7 +244,7 @@ const FolderTree: React.FC = () => {
 目录占用百分比:  ${stats.percentUsed !== undefined ? stats.percentUsed.toFixed(2) + '%' : '—'}
 ` : '';
 
-  const treeText = tree ? treeToText(tree) : '';
+  const treeText = tree ? treeToText(tree, treeStyle) : '';
 
   return (
     <div style={getPageStyle(colors)}>
@@ -232,9 +254,9 @@ const FolderTree: React.FC = () => {
         </svg>
         <h1 style={titleStyle}>文件夹目录树生成</h1>
         <span style={{ color: colors.textSecondary, fontSize: 12 }}>· Directory tree generator</span>
-        {isConnected && status.indexCount > 0 && (
+        {isConnected && (
           <span style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 'auto' }}>
-            Everything 已索引 {status.indexCount.toLocaleString()} 个文件
+            Python {status.version ? status.version + ' ' : ''}可用
           </span>
         )}
       </div>
@@ -250,13 +272,37 @@ const FolderTree: React.FC = () => {
               style={{ ...getInputStyle(colors), ...(pathFocused ? inputFocusStyle : null) }} />
           </div>
 
-          <div>
-            <div style={{ ...labelStyle, color: colors.textSecondary }}>MAX DEPTH</div>
-            <div style={{ ...sliderContainerStyle, color: colors.textSecondary }}>
-              <input type="range" min={1} max={10} step={1} value={maxDepth}
-                onChange={(e) => setMaxDepth(Number(e.target.value))}
-                style={{ flex: 1, accentColor: '#2f81f7', cursor: 'pointer' }} />
-              <span style={{ ...sliderValueStyle, color: colors.textPrimary }}>{maxDepth}</span>
+          <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ ...labelStyle, color: colors.textSecondary }}>【输出目录树时】输出样式</div>
+              <select
+                value={treeStyle}
+                onChange={(e) => setTreeStyle(e.target.value as 'tree' | 'ls')}
+                style={{
+                  ...getInputStyle(colors),
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  paddingRight: 32,
+                  backgroundImage: 'linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, transparent 50%, currentColor 50%)',
+                  backgroundPosition: 'calc(100% - 18px) 55%, calc(100% - 12px) 55%',
+                  backgroundSize: '6px 6px',
+                  backgroundRepeat: 'no-repeat',
+                  color: colors.textPrimary,
+                }}
+              >
+                <option value="tree">tree</option>
+                <option value="ls">ls</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ ...labelStyle, color: colors.textSecondary }}>【输出目录树时】最大深度</div>
+              <div style={{ ...sliderContainerStyle, color: colors.textSecondary }}>
+                <input type="range" min={1} max={10} step={1} value={maxDepth}
+                  onChange={(e) => setMaxDepth(Number(e.target.value))}
+                  style={{ flex: 1, accentColor: '#2f81f7', cursor: 'pointer' }} />
+                <span style={{ ...sliderValueStyle, color: colors.textPrimary }}>{maxDepth}</span>
+              </div>
             </div>
           </div>
 
@@ -274,12 +320,12 @@ const FolderTree: React.FC = () => {
                 统计目录信息
               </label>
               <label style={{ ...checkboxLabelStyle, color: isConnected ? colors.textPrimary : colors.textSecondary, opacity: isConnected ? 1 : 0.6 }}>
-                <input type="checkbox" checked={useEverythingAccel && isConnected}
-                  onChange={() => setUseEverythingAccel((v) => !v)} style={checkboxStyle} disabled={!isConnected} />
-                使用 Everything 加速
-                <EverythingBadge />
+                <input type="checkbox" checked={useGradioAccel && isConnected}
+                  onChange={() => setUseGradioAccel((v) => !v)} style={checkboxStyle} disabled={!isConnected} />
+                使用 Python (Gradio) 加速
+                <GradioBadge />
                 {!isConnected && (
-                  <span style={{ fontSize: 11, color: '#FF8000', marginLeft: 8 }}>（未连接）</span>
+                  <span style={{ fontSize: 11, color: '#FF8000', marginLeft: 8 }}>（未检测到 Python）</span>
                 )}
               </label>
             </div>
@@ -292,6 +338,69 @@ const FolderTree: React.FC = () => {
           </button>
         </div>
 
+        {loading && (
+          <div style={getCodeBlockStyle(colors)}>
+            <div style={{ ...codeHeaderStyle, color: colors.textSecondary }}>
+              <span>正在扫描目录...</span>
+              <span style={{ fontSize: 12, color: colors.textSecondary }}>
+                已用时 {(elapsedMs / 1000).toFixed(1)}s
+              </span>
+            </div>
+            <div style={{
+              padding: '24px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 16,
+              flexDirection: 'column',
+              minHeight: 100,
+            }}>
+              {/* 脉冲点动画 */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: '#2f81f7',
+                      opacity: 0.3 + (0.7 * Math.abs(Math.sin((elapsedMs / 500) + (i * Math.PI / 4)))),
+                      transform: `scale(${0.7 + 0.5 * Math.abs(Math.sin((elapsedMs / 500) + (i * Math.PI / 4)))})`,
+                      transition: 'opacity 50ms, transform 50ms',
+                    }}
+                  />
+                ))}
+              </div>
+              {/* 进度条 */}
+              <div style={{
+                width: '80%',
+                height: 4,
+                background: colors.border,
+                borderRadius: 2,
+                overflow: 'hidden',
+                position: 'relative',
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: 0, left: 0,
+                  height: '100%',
+                  width: `${Math.min(100, elapsedMs / 20)}%`,
+                  background: `linear-gradient(90deg, #2f81f7, #539bf5)`,
+                  transition: 'width 100ms linear',
+                }} />
+              </div>
+              <div style={{
+                fontSize: 12,
+                color: colors.textSecondary,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              }}>
+                {useGradioAccel && isConnected ? '使用 Python os.walk 加速扫描' : '使用 Node.js fs 递归扫描目录'}
+              </div>
+            </div>
+          </div>
+        )}
+
         {!loading && error && (
           <div style={{
             background: 'rgba(248,81,73,0.1)', border: `1px solid ${colors.error}`,
@@ -303,7 +412,7 @@ const FolderTree: React.FC = () => {
         {!loading && !error && tree && options.includes('生成目录树') && (
           <div style={getCodeBlockStyle(colors)}>
             <div style={{ ...codeHeaderStyle, color: colors.textSecondary }}>
-              <span>tree</span>
+              <span>{treeStyle}</span>
               <button onClick={() => handleCopy(treeText)}
                 onMouseEnter={() => setCopyHover(true)} onMouseLeave={() => setCopyHover(false)}
                 style={{ ...copyBtnStyle, color: copyHover ? colors.textPrimary : colors.textSecondary }}>Copy</button>
@@ -323,13 +432,13 @@ const FolderTree: React.FC = () => {
           </div>
         )}
 
-        {/* Everything 搜索结果 */}
-        {useEverythingAccel && isConnected && (quickSearchResults.length > 0 || quickSearchLoading) && (
+        {/* Python 加速的目录文件列表 */}
+        {useGradioAccel && isConnected && (quickSearchResults.length > 0 || quickSearchLoading) && (
           <div style={getCodeBlockStyle(colors)}>
             <div style={{ ...codeHeaderStyle, color: colors.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>everything search</span>
-                <EverythingBadge />
+                <span>目录文件列表</span>
+                <GradioBadge />
               </div>
               {quickSearchResults.length > 0 && (
                 <button onClick={handleCopyQuickResults}
