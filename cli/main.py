@@ -12,6 +12,7 @@ import json
 import platform
 import threading
 import time
+import shlex
 
 # 将 gradio-app 加入 sys.path，以便 import 已有模块
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'gradio-app'))
@@ -738,6 +739,566 @@ def cmd_social_discord_preference(args):
     print(result)
 
 
+# ==================== 交互式 REPL 模式 ====================
+
+# 所有命令树（用于 Tab 补全）
+_COMMAND_TREE = {
+    'text': {
+        'subcommands': {
+            'unicode': {'options': ['--to']},
+            'diff': {'options': ['--file1', '--file2']},
+            'count': {'options': ['--file']},
+            's2t': {'options': ['--file']},
+            't2s': {'options': ['--file']},
+            'filter': {'options': ['--pattern', '--file-list', '--input']},
+        },
+        'options': [],
+    },
+    'color': {
+        'subcommands': {
+            'rgb2hex': {'options': []},
+            'hex2rgb': {'options': []},
+        },
+        'options': [],
+    },
+    'timestamp': {
+        'subcommands': {
+            'now': {'options': ['--ms']},
+            'to-date': {'options': ['--unit', '--tz', '--fmt']},
+            'to-ts': {'options': ['--unit', '--tz', '--fmt']},
+        },
+        'options': [],
+    },
+    'markdown': {
+        'subcommands': {
+            'outline': {'options': ['--file', '--input']},
+            'merge': {'options': []},
+            'reorganize': {'options': ['--file', '--outline']},
+        },
+        'options': [],
+    },
+    'file': {
+        'subcommands': {
+            'read': {'options': []},
+            'tree': {'options': ['--depth', '--style', '--stats']},
+            'merge-txt': {'options': ['-o', '--output']},
+            'merge-csv': {'options': ['-o', '--output']},
+            'csv-preview': {'options': []},
+            'weekly': {'options': ['--file-list', '--input', '--target', '--year', '--time-format', '--auto-create', '-o', '--output']},
+        },
+        'options': [],
+    },
+    'words': {
+        'subcommands': {
+            'freq': {'options': ['--file', '--input', '--stopwords', '--dict', '-o', '--output']},
+            'cloud': {'options': ['--freq', '--font', '--max-font', '--min-font', '--margin', '--prefer-horizontal', '-o', '--output']},
+        },
+        'options': [],
+    },
+    'social': {
+        'subcommands': {
+            'twitch': {'options': ['--file', '--text']},
+            'discord': {
+                'subcommands': {
+                    'extract': {'options': ['--file', '--user', '-o', '--output']},
+                    'frequency': {'options': ['--file', '--granularity']},
+                    'time-slot': {'options': ['--file', '--input']},
+                    'preference': {'options': ['--user-file', '--channel-file']},
+                },
+                'options': [],
+            },
+        },
+        'options': [],
+    },
+}
+
+# REPL 内置命令
+_BUILTIN_COMMANDS = ['help', 'exit', 'quit', 'clear']
+
+# 历史文件路径
+_HISTFILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.repl_history')
+
+# 共享历史列表（供 msvcrt 模式使用）
+_REPL_HISTORY = []
+
+
+def _load_history():
+    """从历史文件加载历史记录到共享列表"""
+    _REPL_HISTORY.clear()
+    try:
+        with open(_HISTFILE, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.rstrip('\n')
+                if line:
+                    _REPL_HISTORY.append(line)
+    except (OSError, IOError):
+        pass
+
+
+def _save_history():
+    """保存历史记录到文件"""
+    try:
+        with open(_HISTFILE, 'w', encoding='utf-8') as f:
+            for line in _REPL_HISTORY[-100:]:
+                f.write(line + '\n')
+    except (OSError, IOError):
+        pass
+
+
+def _add_history(line):
+    """添加一条历史记录（去重）"""
+    if line and (not _REPL_HISTORY or _REPL_HISTORY[-1] != line):
+        _REPL_HISTORY.append(line)
+        # 同步到 readline 历史（如果可用）
+        try:
+            import readline
+            readline.add_history(line)
+        except (ImportError, RuntimeError):
+            pass
+
+
+def get_completions(line):
+    """
+    根据当前输入行返回补全列表
+    line: 用户已输入的完整文本（不含光标后的内容）
+    返回: (补全列表, 是否需要追加空格)
+    """
+    # 解析已输入的 token
+    try:
+        tokens = shlex.split(line, posix=False)
+    except ValueError:
+        # 引号未闭合等情况
+        tokens = line.split()
+
+    # 判断最后一个 token 是否完整（行末有空格表示上一个 token 已完成）
+    last_incomplete = not line.endswith(' ') and len(line.strip()) > 0
+
+    if last_incomplete:
+        current_word = tokens[-1] if tokens else ''
+        preceding = tokens[:-1]
+    else:
+        current_word = ''
+        preceding = tokens
+
+    # 顶层命令补全
+    if len(preceding) == 0:
+        all_top = list(_COMMAND_TREE.keys()) + _BUILTIN_COMMANDS
+        if not current_word:
+            return sorted(all_top), False
+        return sorted([c for c in all_top if c.startswith(current_word)]), False
+
+    cmd = preceding[0]
+
+    # 内置命令
+    if cmd in ('help', 'exit', 'quit', 'clear'):
+        return [], False
+
+    if cmd not in _COMMAND_TREE:
+        return [], False
+
+    cmd_node = _COMMAND_TREE[cmd]
+
+    # 二级子命令补全
+    if len(preceding) == 1:
+        subcmds = list(cmd_node.get('subcommands', {}).keys())
+        if not current_word:
+            return sorted(subcmds), False
+        return sorted([s for s in subcmds if s.startswith(current_word)]), False
+
+    subcmd = preceding[1]
+    subcmds = cmd_node.get('subcommands', {})
+
+    if subcmd not in subcmds:
+        # 可能是三级子命令（social discord ...）
+        if 'subcommands' in subcmds.get(subcmd, {}):
+            pass  # 下面处理
+        else:
+            # 补全选项
+            opts = cmd_node.get('options', [])
+            if not current_word:
+                return sorted(opts), False
+            return sorted([o for o in opts if o.startswith(current_word)]), False
+
+    subcmd_node = subcmds[subcmd]
+
+    # 三级子命令补全（social discord extract/frequency/...）
+    if 'subcommands' in subcmd_node and len(preceding) == 2:
+        sub_subcmds = list(subcmd_node['subcommands'].keys())
+        if not current_word:
+            return sorted(sub_subcmds), False
+        return sorted([s for s in sub_subcmds if s.startswith(current_word)]), False
+
+    # 选项补全
+    if current_word.startswith('-'):
+        opts = subcmd_node.get('options', [])
+        if not current_word:
+            return sorted(opts), False
+        return sorted([o for o in opts if o.startswith(current_word)]), False
+
+    return [], False
+
+
+def _suggest_command(cmd):
+    """对拼写错误的命令给出建议"""
+    import difflib
+    all_commands = list(_COMMAND_TREE.keys()) + _BUILTIN_COMMANDS
+    suggestions = difflib.get_close_matches(cmd, all_commands, n=3, cutoff=0.5)
+    return suggestions
+
+
+def _redraw_line(prompt, line, cursor_pos):
+    """重绘当前输入行"""
+    # 移到行首，清除整行，重绘
+    sys.stdout.write('\r' + ' ' * (len(prompt) + len(line) + 20) + '\r')
+    sys.stdout.write(prompt + line)
+    # 将光标移到正确位置
+    if cursor_pos < len(line):
+        sys.stdout.write('\b' * (len(line) - cursor_pos))
+    sys.stdout.flush()
+
+
+def _msvcrt_input(prompt):
+    """
+    使用 msvcrt 实现带 Tab 补全的输入（Windows 原生）
+    支持：
+      - 字符输入、退格、Delete
+      - Tab 补全（单匹配自动补全，多匹配补全公共前缀并显示选项）
+      - Enter 提交、Ctrl+C 退出
+      - 上/下方向键浏览历史
+      - 左/右方向键移动光标
+      - Home/End 跳到行首/行尾
+      - Ctrl+L 清屏
+    """
+    import msvcrt
+
+    line = ''
+    cursor_pos = 0
+    hist_index = len(_REPL_HISTORY)
+    saved_input = ''
+
+    print(prompt, end='', flush=True)
+
+    while True:
+        ch = msvcrt.getwch()
+
+        # 特殊键（方向键等）— 前缀为 \x00 或 \xe0
+        if ch in ('\x00', '\xe0'):
+            ch2 = msvcrt.getwch()
+
+            # 上方向键 — 历史上一条
+            if ch2 == 'H':
+                if _REPL_HISTORY and hist_index > 0:
+                    if hist_index == len(_REPL_HISTORY):
+                        saved_input = line
+                    hist_index -= 1
+                    line = _REPL_HISTORY[hist_index]
+                    cursor_pos = len(line)
+                    _redraw_line(prompt, line, cursor_pos)
+                continue
+
+            # 下方向键 — 历史下一条
+            if ch2 == 'P':
+                if hist_index < len(_REPL_HISTORY):
+                    hist_index += 1
+                    if hist_index == len(_REPL_HISTORY):
+                        line = saved_input
+                    else:
+                        line = _REPL_HISTORY[hist_index]
+                    cursor_pos = len(line)
+                    _redraw_line(prompt, line, cursor_pos)
+                continue
+
+            # 左方向键 — 光标左移
+            if ch2 == 'K':
+                if cursor_pos > 0:
+                    cursor_pos -= 1
+                    sys.stdout.write('\b')
+                    sys.stdout.flush()
+                continue
+
+            # 右方向键 — 光标右移
+            if ch2 == 'M':
+                if cursor_pos < len(line):
+                    sys.stdout.write(line[cursor_pos])
+                    cursor_pos += 1
+                    sys.stdout.flush()
+                continue
+
+            # Home — 跳到行首
+            if ch2 == 'G':
+                while cursor_pos > 0:
+                    sys.stdout.write('\b')
+                    cursor_pos -= 1
+                sys.stdout.flush()
+                continue
+
+            # End — 跳到行尾
+            if ch2 == 'O':
+                while cursor_pos < len(line):
+                    sys.stdout.write(line[cursor_pos])
+                    cursor_pos += 1
+                sys.stdout.flush()
+                continue
+
+            # Delete — 删除光标后的字符
+            if ch2 == 'S':
+                if cursor_pos < len(line):
+                    line = line[:cursor_pos] + line[cursor_pos + 1:]
+                    _redraw_line(prompt, line, cursor_pos)
+                continue
+
+            continue
+
+        # Enter — 提交
+        if ch == '\r':
+            print()
+            return line
+
+        # Ctrl+C — 中断
+        if ch == '\x03':
+            print('^C')
+            raise KeyboardInterrupt
+
+        # Ctrl+L — 清屏
+        if ch == '\x0c':
+            os.system('cls' if platform.system() == 'Windows' else 'clear')
+            sys.stdout.write(prompt + line)
+            sys.stdout.flush()
+            continue
+
+        # Backspace — 删除光标前的字符
+        if ch == '\x08':
+            if cursor_pos > 0:
+                line = line[:cursor_pos - 1] + line[cursor_pos:]
+                cursor_pos -= 1
+                _redraw_line(prompt, line, cursor_pos)
+            continue
+
+        # Tab — 补全
+        if ch == '\t':
+            completions, _ = get_completions(line)
+            if len(completions) == 1:
+                # 单个匹配：自动补全并追加空格
+                parts = line.rsplit(' ', 1)
+                if len(parts) == 2:
+                    new_line = parts[0] + ' ' + completions[0] + ' '
+                else:
+                    new_line = completions[0] + ' '
+                line = new_line
+                cursor_pos = len(line)
+                _redraw_line(prompt, line, cursor_pos)
+            elif len(completions) > 1:
+                # 多个匹配：先补全到公共前缀
+                common = os.path.commonprefix(completions)
+                parts = line.rsplit(' ', 1)
+                current_word = parts[1] if len(parts) == 2 else parts[0]
+
+                if len(common) > len(current_word):
+                    if len(parts) == 2:
+                        line = parts[0] + ' ' + common
+                    else:
+                        line = common
+                    cursor_pos = len(line)
+
+                # 显示所有匹配项
+                print()
+                col_width = max(len(c) for c in completions) + 2
+                cols = max(1, 80 // col_width)
+                for i, c in enumerate(completions):
+                    sys.stdout.write(c.ljust(col_width))
+                    if (i + 1) % cols == 0:
+                        print()
+                if len(completions) % cols != 0:
+                    print()
+                sys.stdout.write(prompt + line)
+                sys.stdout.flush()
+            continue
+
+        # 普通可打印字符
+        if ch.isprintable():
+            line = line[:cursor_pos] + ch + line[cursor_pos:]
+            cursor_pos += 1
+            # 从光标位置开始重绘剩余字符
+            sys.stdout.write(ch + line[cursor_pos:])
+            # 如果光标不在行尾，将光标移回正确位置
+            if cursor_pos < len(line):
+                sys.stdout.write('\b' * (len(line) - cursor_pos))
+            sys.stdout.flush()
+
+
+def read_line_with_completion(prompt):
+    """读取一行输入，支持 Tab 补全"""
+    # 优先尝试 readline（Unix 或 pyreadline3）
+    try:
+        import readline
+        readline.set_completer(_readline_completer)
+        readline.parse_and_bind('tab: complete')
+        readline.set_completer_delims(' \t\n')
+        return input(prompt)
+    except ImportError:
+        pass
+
+    # Windows 且为 TTY 时使用 msvcrt 补全
+    if platform.system() == 'Windows' and sys.stdin.isatty():
+        return _msvcrt_input(prompt)
+
+    # 非交互环境（管道/重定向）回退到普通 input
+    return input(prompt)
+
+
+def _readline_completer(text, state):
+    """readline 补全回调函数"""
+    try:
+        import readline
+        line = readline.get_line_buffer()
+    except Exception:
+        line = text
+
+    completions, _ = get_completions(line)
+    matches = [c for c in completions if c.startswith(text)] if text else completions
+    if state < len(matches):
+        return matches[state]
+    return None
+
+
+def print_repl_help():
+    """打印 REPL 帮助"""
+    print_title('Text-maestro CLI — 交互模式')
+    print()
+    print_info('可用命令:')
+    for cmd, node in _COMMAND_TREE.items():
+        subs = list(node.get('subcommands', {}).keys())
+        if subs:
+            print(f'  {BOLD}{cmd}{RESET} — {", ".join(subs)}')
+        else:
+            print(f'  {BOLD}{cmd}{RESET}')
+    print()
+    print_info('内置命令:')
+    print(f'  {BOLD}help{RESET}     — 显示此帮助')
+    print(f'  {BOLD}exit{RESET}     — 退出交互模式')
+    print(f'  {BOLD}quit{RESET}     — 退出交互模式')
+    print(f'  {BOLD}clear{RESET}    — 清屏')
+    print()
+    print_info('快捷键:')
+    print(f'  {BOLD}Tab{RESET}         — 自动补全命令和选项')
+    print(f'  {BOLD}↑ / ↓{RESET}       — 浏览历史命令')
+    print(f'  {BOLD}← / →{RESET}       — 移动光标')
+    print(f'  {BOLD}Home / End{RESET}  — 跳到行首 / 行尾')
+    print(f'  {BOLD}Ctrl+L{RESET}      — 清屏')
+    print(f'  {BOLD}Ctrl+C{RESET}      — 退出交互模式')
+    print()
+    print_info('提示:')
+    print('  · 输入命令后不带参数可查看该命令的帮助')
+    print('  · 例如: text count "你好世界"')
+    print()
+
+
+def run_repl(parser):
+    """运行交互式 REPL 循环"""
+    # 加载历史记录
+    _load_history()
+    # 同步到 readline 历史（如果可用）
+    try:
+        import readline
+        for line in _REPL_HISTORY:
+            readline.add_history(line)
+        readline.set_history_length(100)
+    except (ImportError, RuntimeError):
+        pass
+
+    # 打印欢迎信息
+    print(f'{BOLD}╔══════════════════════════════════════╗')
+    print(f'║   Text-maestro 文本分析工具箱 CLI     ║')
+    print(f'║   v1.1.0  交互模式  by 白日海         ║')
+    print(f'╚══════════════════════════════════════╝{RESET}')
+    print()
+    print_info('输入 help 查看可用命令，输入 exit 退出')
+    print_info('按 Tab 自动补全，↑↓ 浏览历史，Ctrl+L 清屏')
+    print()
+
+    prompt = f'{BLUE}text-maestro{RESET}> '
+
+    while True:
+        try:
+            line = read_line_with_completion(prompt)
+        except (EOFError, KeyboardInterrupt):
+            print()
+            print_info('再见！')
+            break
+
+        line = line.strip()
+        if not line:
+            continue
+
+        # 内置命令
+        if line in ('exit', 'quit'):
+            print_info('再见！')
+            break
+        elif line == 'help':
+            print_repl_help()
+            continue
+        elif line == 'clear':
+            os.system('cls' if platform.system() == 'Windows' else 'clear')
+            continue
+
+        # 解析并执行命令
+        try:
+            args = shlex.split(line, posix=True)
+        except ValueError as e:
+            print_error(f'参数解析失败: {e}')
+            continue
+
+        # 命令拼写建议
+        first_cmd = args[0]
+        if first_cmd not in _COMMAND_TREE and first_cmd not in _BUILTIN_COMMANDS:
+            suggestions = _suggest_command(first_cmd)
+            if suggestions:
+                print_error(f'未知命令: {first_cmd}')
+                print_info(f'你是否想输入: {", ".join(suggestions)}')
+            else:
+                print_error(f'未知命令: {first_cmd}，输入 help 查看可用命令')
+            continue
+
+        # 添加到历史
+        _add_history(line)
+
+        # 用 argparse 解析（捕获 SystemExit 防止退出 REPL）
+        try:
+            # 临时重定向 stderr 以抑制 argparse 的错误输出
+            old_stderr = sys.stderr
+            import io
+            sys.stderr = io.StringIO()
+            parsed = parser.parse_args(args)
+            sys.stderr = old_stderr
+        except SystemExit:
+            sys.stderr = old_stderr
+            # argparse 已经打印了错误信息到 stderr（被我们捕获了）
+            err_msg = sys.stderr.getvalue() if hasattr(sys.stderr, 'getvalue') else ''
+            if err_msg:
+                print_error(err_msg.strip())
+            else:
+                print_error('参数错误，输入 help 查看用法')
+            continue
+
+        # 执行命令
+        if hasattr(parsed, 'func'):
+            try:
+                parsed.func(parsed)
+            except FileNotFoundError as e:
+                print_error(f'文件不存在: {e.filename}')
+            except SystemExit:
+                # 子命令内部调用 sys.exit() 时不应该退出 REPL
+                pass
+            except Exception as e:
+                print_error(str(e))
+        else:
+            # 只输入了主命令但没子命令
+            print_info(f'请指定子命令，输入 {parsed.command} --help 查看用法')
+
+    # 保存历史
+    _save_history()
+
+
 # ==================== 主入口 ====================
 
 def main():
@@ -762,6 +1323,7 @@ def main():
 """
     )
     parser.add_argument('-v', '--version', action='version', version=f'{BOLD}Text-maestro CLI{RESET} v1.0.0')
+    parser.add_argument('-i', '--interactive', action='store_true', help='进入交互式 REPL 模式')
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 
     setup_text_parser(subparsers)
@@ -773,6 +1335,11 @@ def main():
     setup_social_parser(subparsers)
 
     args = parser.parse_args()
+
+    # 交互式 REPL 模式
+    if args.interactive:
+        run_repl(parser)
+        return
 
     if not args.command:
         parser.print_help()
