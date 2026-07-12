@@ -29,7 +29,7 @@ function createWindow(): void {
     height: 670,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -136,7 +136,8 @@ async function calcDirectorySize(dirPath: string): Promise<number> {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  // 使用应用专属 ID，避免 Windows 任务栏回退到 electron.exe 默认图标
+  electronApp.setAppUserModelId('com.textmaestro.app')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

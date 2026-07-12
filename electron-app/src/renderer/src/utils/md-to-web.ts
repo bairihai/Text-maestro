@@ -473,7 +473,11 @@ export function applyFilter(
 // ============================================================
 
 /** 处理 [[wikilink]]、![[embed]]、#tag、%%comment%%、> [!note] callout */
-export function preprocessObsidian(body: string, transform: MdToWebRule['transform']): string {
+export function preprocessObsidian(
+  body: string,
+  transform: MdToWebRule['transform'],
+  wikiLinkMap?: Map<string, string>,
+): string {
   let out = body;
 
   // %%comment%%
@@ -500,6 +504,15 @@ export function preprocessObsidian(body: string, transform: MdToWebRule['transfo
   // [[wikilink]] 或 [[wikilink|display]]
   const wikiFn = (target: string, display?: string): string => {
     const showText = display || target;
+    // 优先查跨文件映射表
+    if (wikiLinkMap && wikiLinkMap.has(target)) {
+      return `<a class="wikilink" href="${wikiLinkMap.get(target)}">${escapeHtml(showText)}</a>`;
+    }
+    // map 存在但未命中，且模式为 link → 标记 broken（不静默丢失）
+    if (wikiLinkMap && transform.wikilinkMode === 'link') {
+      return `<a class="wikilink broken" title="未找到目标文件">${escapeHtml(showText)}</a>`;
+    }
+    // 无 map 时回退到原逻辑（单文档行为保持不变）
     switch (transform.wikilinkMode) {
       case 'strip':
         return escapeHtml(showText);
