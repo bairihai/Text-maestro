@@ -1,0 +1,21 @@
+# 第三方资源出处声明 (Third-party Attribution Notice)
+
+## stopwords_cn_en.txt
+
+- **来源**: https://github.com/AlionSSS/wordcloud-webui (Apache-2.0)
+- **原作者**: Lion A (alionsss@foxmail.com)
+- **原路径**: src/wordcloud_webui/resources/stopwords_cn_en.txt
+- **用途**: 词云文本直输模式的中英文停用词库
+- **许可证**: Apache-2.0
+
+## utils_wordcloud.py 中的 Mask 模式与普通模式增强逻辑
+
+- **来源**: https://github.com/AlionSSS/wordcloud-webui (Apache-2.0)
+- **原作者**: Lion A
+- **原文件**: src/wordcloud_webui/util/lib_wordcloud.py
+- **集成函数**: generate_wordcloud_normal(), generate_wordcloud_mask(), text_to_wordcloud()
+- **许可证**: Apache-2.0
+
+---
+
+Apache-2.0 许可证全文: http://www.apache.org/licenses/LICENSE-2.0

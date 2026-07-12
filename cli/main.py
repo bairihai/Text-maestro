@@ -584,15 +584,46 @@ def setup_words_parser(subparsers):
     p_freq.add_argument('-o', '--output', help='输出到 JSON 文件')
     p_freq.set_defaults(func=cmd_words_freq)
 
+    # 词云增强功能集成自 https://github.com/AlionSSS/wordcloud-webui (Apache-2.0)
+    # 原作者: Lion A
+    # 集成内容: 文本直输模式、Mask 模式、普通模式增强（宽高/背景色）
+    # 实际生成逻辑见 gradio-app/utils_wordcloud.py
     p_cloud = words_sub.add_parser('cloud', help='词云图生成（需要 wordcloud）',
-        epilog='示例: python cli/main.py words cloud --freq freq.json --font simhei.ttf -o cloud.png',
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    p_cloud.add_argument('--freq', required=True, help='频率表 JSON 文件路径')
+        epilog='''
+示例:
+  # 频率表模式
+  python cli/main.py words cloud --freq freq.json --font simhei.ttf -o cloud.png
+  python cli/main.py words cloud --freq freq.json --font simhei.ttf --bg-color black -o cloud.png
+  # 文本直输模式（自动 jieba 分词）
+  python cli/main.py words cloud --text input.txt --font simhei.ttf -o cloud.png
+  python cli/main.py words cloud --text input.txt --font simhei.ttf --userdict "峻影,柔道" -o cloud.png
+  # Mask 模式（蒙版图像决定形状）
+  python cli/main.py words cloud --freq freq.json --font simhei.ttf --mask mask.png -o cloud.png
+  python cli/main.py words cloud --text input.txt --font simhei.ttf --mask mask.png --contour-color red -o cloud.png
+''', formatter_class=argparse.RawDescriptionHelpFormatter)
+    # 输入源（--freq 与 --text 二选一）
+    p_cloud.add_argument('--freq', help='频率表 JSON 文件路径（与 --text 二选一）')
+    p_cloud.add_argument('--text', help='原始文本文件路径（自动 jieba 分词，与 --freq 二选一）')
     p_cloud.add_argument('--font', required=True, help='字体文件路径')
+    # 字号与排版
     p_cloud.add_argument('--max-font', type=int, default=100, help='最大字号（默认 100）')
     p_cloud.add_argument('--min-font', type=int, default=20, help='最小字号（默认 20）')
     p_cloud.add_argument('--margin', type=int, default=2, help='词间距（默认 2）')
     p_cloud.add_argument('--prefer-horizontal', type=float, default=0.9, help='横向排列概率（默认 0.9）')
+    # 普通模式参数
+    p_cloud.add_argument('--width', type=int, default=400, help='图像宽度（默认 400，仅普通模式）')
+    p_cloud.add_argument('--height', type=int, default=200, help='图像高度（默认 200，仅普通模式）')
+    p_cloud.add_argument('--bg-color', default='white', help='背景色（颜色名或 hex，默认 white）')
+    # Mask 模式参数
+    p_cloud.add_argument('--mask', help='Mask 图像路径（传入则启用 Mask 模式）')
+    p_cloud.add_argument('--mask-color', help='颜色蒙版图像路径（不传则用 --mask 的颜色）')
+    p_cloud.add_argument('--contour-width', type=int, default=3, help='轮廓线粗细（默认 3，仅 Mask 模式）')
+    p_cloud.add_argument('--contour-color', default='steelblue', help='轮廓线颜色（默认 steelblue，仅 Mask 模式）')
+    # 文本模式参数
+    p_cloud.add_argument('--stopwords', help='停用词（逗号分隔，文本模式用；不传则用内置停用词库）')
+    p_cloud.add_argument('--userdict', help='自定义分词词典（逗号分隔，文本模式用）')
+    # 输出
+    p_cloud.add_argument('--format', choices=['png', 'jpeg', 'webp'], default='png', help='输出图片格式（默认 png）')
     p_cloud.add_argument('-o', '--output', default='wordcloud.png', help='输出图片路径（默认 wordcloud.png）')
     p_cloud.set_defaults(func=cmd_words_cloud)
 
@@ -615,18 +646,87 @@ def cmd_words_freq(args):
 
 
 def cmd_words_cloud(args):
+    """
+    词云图生成命令（增强版）
+    集成自 https://github.com/AlionSSS/wordcloud-webui (Apache-2.0)，原作者 Lion A
+    支持三种模式: freq（频率表）/ text（文本直输+jieba）/ mask（Mask 蒙版）
+    """
+    # 校验输入源
+    if not args.freq and not args.text:
+        print_error('请提供 --freq（频率表）或 --text（原始文本）')
+        sys.exit(1)
+    if args.freq and args.text:
+        print_error('--freq 与 --text 不可同时使用')
+        sys.exit(1)
+
     spinner = Spinner('生成词云图中...')
     spinner.start()
     try:
-        # 读取频率表 JSON
-        with open(args.freq, 'r', encoding='utf-8') as f:
-            word_freq = json.load(f)
-        # 生成词云
-        img = utils_wordcloud.generate_wordcloud(
-            word_freq, args.font,
-            args.max_font, args.min_font, args.margin, args.prefer_horizontal
-        )
-        img.save(args.output)
+        mask_img = None
+        mask_color_img = None
+
+        # 加载 mask 图像（如果提供）
+        if args.mask:
+            from PIL import Image as PILImage
+            mask_img = PILImage.open(args.mask)
+            if args.mask_color:
+                mask_color_img = PILImage.open(args.mask_color)
+
+        if args.text:
+            # 文本直输模式：原始文本 → jieba 分词 → 词云
+            text = read_text_file(args.text)
+            img = utils_wordcloud.text_to_wordcloud(
+                text,
+                font_path=args.font,
+                background_color=args.bg_color,
+                margin=args.margin,
+                min_font_size=args.min_font,
+                max_font_size=args.max_font,
+                width=args.width,
+                height=args.height,
+                mask_image=mask_img,
+                mask_color=mask_color_img,
+                contour_width=args.contour_width,
+                contour_color=args.contour_color,
+                stopwords=args.stopwords,
+                userdict=args.userdict,
+                prefer_horizontal=args.prefer_horizontal,
+            )
+        else:
+            # 频率表模式
+            with open(args.freq, 'r', encoding='utf-8') as f:
+                word_freq = json.load(f)
+
+            if mask_img is not None:
+                # Mask 模式
+                img = utils_wordcloud.generate_wordcloud_mask(
+                    word_freq,
+                    font_path=args.font,
+                    background_color=args.bg_color,
+                    margin=args.margin,
+                    min_font_size=args.min_font,
+                    max_font_size=args.max_font,
+                    mask_image=mask_img,
+                    mask_color=mask_color_img,
+                    contour_width=args.contour_width,
+                    contour_color=args.contour_color,
+                    prefer_horizontal=args.prefer_horizontal,
+                )
+            else:
+                # 普通模式（增强版）
+                img = utils_wordcloud.generate_wordcloud_normal(
+                    word_freq,
+                    font_path=args.font,
+                    background_color=args.bg_color,
+                    margin=args.margin,
+                    min_font_size=args.min_font,
+                    max_font_size=args.max_font,
+                    width=args.width,
+                    height=args.height,
+                    prefer_horizontal=args.prefer_horizontal,
+                )
+
+        img.save(args.output, format=args.format.upper())
     finally:
         spinner.stop()
     print_success(f'词云图已保存到 {args.output}')
@@ -791,7 +891,7 @@ _COMMAND_TREE = {
     'words': {
         'subcommands': {
             'freq': {'options': ['--file', '--input', '--stopwords', '--dict', '-o', '--output']},
-            'cloud': {'options': ['--freq', '--font', '--max-font', '--min-font', '--margin', '--prefer-horizontal', '-o', '--output']},
+            'cloud': {'options': ['--freq', '--text', '--font', '--max-font', '--min-font', '--margin', '--prefer-horizontal', '--width', '--height', '--bg-color', '--mask', '--mask-color', '--contour-width', '--contour-color', '--stopwords', '--userdict', '--format', '-o', '--output']},
         },
         'options': [],
     },

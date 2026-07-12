@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useTheme } from '@renderer/context/ThemeContext';
 
+// 增强版词云生成，集成自 https://github.com/AlionSSS/wordcloud-webui (Apache-2.0)
+// 支持三种模式: 频率表 / 文本直输 / Mask 蒙版
+
 // ---------------- styles ----------------
 const getPageStyle = (colors: ReturnType<typeof useTheme>['colors']): React.CSSProperties => ({
   minHeight: '100vh',
@@ -100,18 +103,60 @@ const pythonBadgeStyle: React.CSSProperties = {
   display: 'inline-block',
 };
 
+// 模式切换 Tab 样式
+const modeTabContainerStyle: React.CSSProperties = {
+  display: 'flex', gap: 4, marginBottom: 8,
+};
+
+const getModeTabStyle = (active: boolean, colors: ReturnType<typeof useTheme>['colors']): React.CSSProperties => ({
+  padding: '6px 14px', fontSize: 13, cursor: 'pointer', borderRadius: 6,
+  border: `1px solid ${active ? '#2f81f7' : colors.border}`,
+  background: active ? 'rgba(47, 129, 247, 0.15)' : 'transparent',
+  color: active ? '#2f81f7' : colors.textSecondary,
+  fontWeight: active ? 600 : 400, transition: 'all 0.15s',
+});
+
 // ------------- component -------------
+type WcMode = 'freq' | 'text' | 'mask';
+
 const Wordcloud: React.FC = () => {
   const { colors } = useTheme();
-  // 默认频率表示例
+
+  // 模式
+  const [mode, setMode] = useState<WcMode>('freq');
+
+  // 频率表模式
   const [freqText, setFreqText] = useState(
     `峻影: 15\n柔道: 12\n云都: 10\n快乐: 8\n天气: 6\n练习: 5\n喜欢: 4\n感到: 3`
   );
+
+  // 文本直输模式
+  const [rawText, setRawText] = useState('');
+  const [stopwords, setStopwords] = useState('');
+  const [userdict, setUserdict] = useState('');
+
+  // 通用参数
   const [fontPath, setFontPath] = useState('C:\\Windows\\Fonts\\simhei.ttf');
   const [maxFont, setMaxFont] = useState(100);
   const [minFont, setMinFont] = useState(20);
   const [margin, setMargin] = useState(2);
   const [preferH, setPreferH] = useState(0.9);
+  const [bgColor, setBgColor] = useState('white');
+
+  // 普通模式参数
+  const [width, setWidth] = useState(400);
+  const [height, setHeight] = useState(200);
+
+  // Mask 模式参数
+  const [maskPath, setMaskPath] = useState('');
+  const [maskColorPath, setMaskColorPath] = useState('');
+  const [contourWidth, setContourWidth] = useState(3);
+  const [contourColor, setContourColor] = useState('steelblue');
+
+  // 输出格式
+  const [outputFormat, setOutputFormat] = useState('png');
+
+  // 状态
   const [imageData, setImageData] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +164,7 @@ const Wordcloud: React.FC = () => {
   const [btnHover, setBtnHover] = useState(false);
   const [freqFocused, setFreqFocused] = useState(false);
   const [fontFocused, setFontFocused] = useState(false);
+  const [textFocused, setTextFocused] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -130,7 +176,6 @@ const Wordcloud: React.FC = () => {
   const parseFreqText = (text: string): string | null => {
     const trimmed = text.trim();
     if (!trimmed) return null;
-    // 尝试直接解析 JSON
     try {
       const obj = JSON.parse(trimmed);
       if (obj && typeof obj === 'object') {
@@ -139,7 +184,6 @@ const Wordcloud: React.FC = () => {
     } catch {
       // 不是 JSON，继续按行解析
     }
-    // 按「词语:次数」每行一条解析
     const result: Record<string, number> = {};
     const lines = trimmed.split(/\r?\n/);
     for (const line of lines) {
@@ -153,21 +197,40 @@ const Wordcloud: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    const freqJson = parseFreqText(freqText);
-    if (!freqJson) {
-      setError('频率表格式无效，请使用 JSON 或「词语:次数」每行一条');
-      return;
+    let inputContent = '';
+    let pyMode = mode;
+
+    // 根据模式准备输入内容
+    if (mode === 'freq' || mode === 'mask') {
+      const freqJson = parseFreqText(freqText);
+      if (!freqJson) {
+        setError('频率表格式无效，请使用 JSON 或「词语:次数」每行一条');
+        return;
+      }
+      inputContent = freqJson;
+    } else if (mode === 'text') {
+      if (!rawText.trim()) {
+        setError('请输入原始文本');
+        return;
+      }
+      inputContent = rawText;
     }
+
     if (!fontPath.trim()) {
       setError('请输入字体文件路径');
       return;
     }
+
+    if (mode === 'mask' && !maskPath.trim()) {
+      setError('Mask 模式需要提供 Mask 图像路径');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setImageData(null);
     setElapsedMs(0);
 
-    // 开始计时动画
     const startTime = Date.now();
     const timer = setInterval(() => setElapsedMs(Date.now() - startTime), 50);
 
@@ -177,7 +240,25 @@ const Wordcloud: React.FC = () => {
         setError('当前环境不支持词云生成（缺少 generateWordcloud IPC 方法）');
         return;
       }
-      const res = await fn(freqJson, fontPath.trim(), maxFont, minFont, margin, preferH);
+      const res = await fn(
+        inputContent,
+        fontPath.trim(),
+        maxFont,
+        minFont,
+        margin,
+        preferH,
+        pyMode,
+        width,
+        height,
+        bgColor,
+        maskPath.trim(),
+        maskColorPath.trim(),
+        contourWidth,
+        contourColor,
+        stopwords,
+        userdict,
+        outputFormat,
+      );
       if (!res || res.success === false) {
         setError(res?.error || '词云生成失败');
         return;
@@ -198,7 +279,6 @@ const Wordcloud: React.FC = () => {
   const handleCopyImage = async () => {
     if (!imageData) return;
     try {
-      // 将 base64 转为 Blob 复制到剪贴板
       const base64 = imageData.replace(/^data:image\/\w+;base64,/, '');
       const byteChars = atob(base64);
       const byteNumbers = new Array(byteChars.length);
@@ -206,9 +286,9 @@ const Wordcloud: React.FC = () => {
         byteNumbers[i] = byteChars.charCodeAt(i);
       }
       const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'image/png' });
+      const blob = new Blob([byteArray], { type: `image/${outputFormat}` });
       await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob }),
+        new ClipboardItem({ [`${outputFormat === 'jpeg' ? 'jpeg' : 'png'}`]: blob }),
       ]);
       showToast('图片已复制');
     } catch {
@@ -228,20 +308,78 @@ const Wordcloud: React.FC = () => {
       </div>
 
       <div style={contentStyle}>
+        {/* 模式切换 Tab */}
+        <div style={modeTabContainerStyle}>
+          <div style={getModeTabStyle(mode === 'freq', colors)} onClick={() => setMode('freq')}>
+            频率表模式
+          </div>
+          <div style={getModeTabStyle(mode === 'text', colors)} onClick={() => setMode('text')}>
+            文本直输模式
+          </div>
+          <div style={getModeTabStyle(mode === 'mask', colors)} onClick={() => setMode('mask')}>
+            Mask 模式
+          </div>
+        </div>
+
         {/* 输入区 */}
         <div style={getConfigBlockStyle(colors)}>
-          <div>
-            <div style={{ ...labelStyle, color: colors.textSecondary }}>FREQUENCY（JSON 或「词语:次数」每行一条）</div>
-            <textarea
-              placeholder={'例如:\n{"峻影": 15, "柔道": 12}\n或:\n峻影: 15\n柔道: 12'}
-              value={freqText}
-              onChange={(e) => setFreqText(e.target.value)}
-              onFocus={() => setFreqFocused(true)}
-              onBlur={() => setFreqFocused(false)}
-              style={{ ...getInputStyle(colors), ...textareaStyle, ...(freqFocused ? inputFocusStyle : null) }}
-            />
-          </div>
+          {/* 频率表输入（freq + mask 模式） */}
+          {(mode === 'freq' || mode === 'mask') && (
+            <div>
+              <div style={{ ...labelStyle, color: colors.textSecondary }}>
+                FREQUENCY（JSON 或「词语:次数」每行一条）
+              </div>
+              <textarea
+                placeholder={'例如:\n{"峻影": 15, "柔道": 12}\n或:\n峻影: 15\n柔道: 12'}
+                value={freqText}
+                onChange={(e) => setFreqText(e.target.value)}
+                onFocus={() => setFreqFocused(true)}
+                onBlur={() => setFreqFocused(false)}
+                style={{ ...getInputStyle(colors), ...textareaStyle, ...(freqFocused ? inputFocusStyle : null) }}
+              />
+            </div>
+          )}
 
+          {/* 文本直输（text 模式） */}
+          {mode === 'text' && (
+            <>
+              <div>
+                <div style={{ ...labelStyle, color: colors.textSecondary }}>原始文本（自动 jieba 分词）</div>
+                <textarea
+                  placeholder="输入原始文本，将自动使用 jieba 分词并生成词云"
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  onFocus={() => setTextFocused(true)}
+                  onBlur={() => setTextFocused(false)}
+                  style={{ ...getInputStyle(colors), ...textareaStyle, minHeight: 160, ...(textFocused ? inputFocusStyle : null) }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 200px', minWidth: 200 }}>
+                  <div style={{ ...labelStyle, color: colors.textSecondary }}>停用词（可选，逗号分隔）</div>
+                  <input
+                    type="text"
+                    placeholder="不填则用内置停用词库"
+                    value={stopwords}
+                    onChange={(e) => setStopwords(e.target.value)}
+                    style={getInputStyle(colors)}
+                  />
+                </div>
+                <div style={{ flex: '1 1 200px', minWidth: 200 }}>
+                  <div style={{ ...labelStyle, color: colors.textSecondary }}>自定义分词词典（逗号分隔）</div>
+                  <input
+                    type="text"
+                    placeholder="如: 峻影,柔道,云都"
+                    value={userdict}
+                    onChange={(e) => setUserdict(e.target.value)}
+                    style={getInputStyle(colors)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 字体路径 */}
           <div>
             <div style={{ ...labelStyle, color: colors.textSecondary }}>FONT PATH（字体文件路径，必填）</div>
             <input
@@ -272,7 +410,7 @@ const Wordcloud: React.FC = () => {
               <div style={{ ...labelStyle, color: colors.textSecondary }}>最小字号</div>
               <div style={{ ...sliderContainerStyle, color: colors.textSecondary }}>
                 <input
-                  type="range" min={10} max={200} step={1} value={minFont}
+                  type="range" min={4} max={200} step={1} value={minFont}
                   onChange={(e) => setMinFont(Number(e.target.value))}
                   style={{ flex: 1, accentColor: '#2f81f7', cursor: 'pointer' }}
                 />
@@ -303,6 +441,106 @@ const Wordcloud: React.FC = () => {
             </div>
           </div>
 
+          {/* 普通模式/文本模式：宽高 + 背景色 */}
+          {mode !== 'mask' && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 120px', minWidth: 120 }}>
+                <div style={{ ...labelStyle, color: colors.textSecondary }}>宽度</div>
+                <input
+                  type="number" min={1} value={width}
+                  onChange={(e) => setWidth(Number(e.target.value))}
+                  style={getInputStyle(colors)}
+                />
+              </div>
+              <div style={{ flex: '1 1 120px', minWidth: 120 }}>
+                <div style={{ ...labelStyle, color: colors.textSecondary }}>高度</div>
+                <input
+                  type="number" min={1} value={height}
+                  onChange={(e) => setHeight(Number(e.target.value))}
+                  style={getInputStyle(colors)}
+                />
+              </div>
+              <div style={{ flex: '2 1 200px', minWidth: 200 }}>
+                <div style={{ ...labelStyle, color: colors.textSecondary }}>背景色</div>
+                <input
+                  type="text" value={bgColor}
+                  onChange={(e) => setBgColor(e.target.value)}
+                  placeholder="颜色名或 hex，如 white 或 #fee2e2"
+                  style={getInputStyle(colors)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Mask 模式：mask 路径 + 颜色蒙版 + 轮廓线 + 背景色 */}
+          {mode === 'mask' && (
+            <>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: '2 1 250px', minWidth: 250 }}>
+                  <div style={{ ...labelStyle, color: colors.textSecondary }}>MASK 图像路径（决定形状）</div>
+                  <input
+                    type="text" value={maskPath}
+                    onChange={(e) => setMaskPath(e.target.value)}
+                    placeholder="例如: D:\\images\\mask.png"
+                    style={getInputStyle(colors)}
+                  />
+                </div>
+                <div style={{ flex: '2 1 250px', minWidth: 250 }}>
+                  <div style={{ ...labelStyle, color: colors.textSecondary }}>颜色蒙版路径（可选，决定颜色）</div>
+                  <input
+                    type="text" value={maskColorPath}
+                    onChange={(e) => setMaskColorPath(e.target.value)}
+                    placeholder="不填则用 MASK 图像的颜色"
+                    style={getInputStyle(colors)}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 150px', minWidth: 150 }}>
+                  <div style={{ ...labelStyle, color: colors.textSecondary }}>轮廓线粗细</div>
+                  <input
+                    type="number" min={0} value={contourWidth}
+                    onChange={(e) => setContourWidth(Number(e.target.value))}
+                    style={getInputStyle(colors)}
+                  />
+                </div>
+                <div style={{ flex: '2 1 200px', minWidth: 200 }}>
+                  <div style={{ ...labelStyle, color: colors.textSecondary }}>轮廓线颜色</div>
+                  <input
+                    type="text" value={contourColor}
+                    onChange={(e) => setContourColor(e.target.value)}
+                    placeholder="如 steelblue 或 #4682b4"
+                    style={getInputStyle(colors)}
+                  />
+                </div>
+                <div style={{ flex: '2 1 200px', minWidth: 200 }}>
+                  <div style={{ ...labelStyle, color: colors.textSecondary }}>背景色</div>
+                  <input
+                    type="text" value={bgColor}
+                    onChange={(e) => setBgColor(e.target.value)}
+                    placeholder="如 white 或 #fee2e2"
+                    style={getInputStyle(colors)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 输出格式 */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ ...labelStyle, color: colors.textSecondary, marginBottom: 0 }}>输出格式</div>
+            {['png', 'jpeg', 'webp'].map((fmt) => (
+              <label key={fmt} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                <input
+                  type="radio" name="format" value={fmt} checked={outputFormat === fmt}
+                  onChange={(e) => setOutputFormat(e.target.value)}
+                  style={{ accentColor: '#2f81f7' }}
+                />
+                {fmt}
+              </label>
+            ))}
+          </div>
+
           <button
             onClick={handleGenerate}
             disabled={loading}
@@ -322,7 +560,7 @@ const Wordcloud: React.FC = () => {
         {loading && (
           <div style={getCodeBlockStyle(colors)}>
             <div style={{ ...codeHeaderStyle, color: colors.textSecondary }}>
-              <span>正在使用 wordcloud 生成词云图...</span>
+              <span>正在使用 wordcloud 生成词云图... (模式: {mode})</span>
               <span style={{ fontSize: 12, color: colors.textSecondary }}>
                 已用时 {(elapsedMs / 1000).toFixed(1)}s
               </span>
@@ -336,7 +574,6 @@ const Wordcloud: React.FC = () => {
               flexDirection: 'column',
               minHeight: 100,
             }}>
-              {/* 脉冲点动画 */}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {[0, 1, 2, 3].map((i) => (
                   <div
@@ -358,7 +595,7 @@ const Wordcloud: React.FC = () => {
                 color: colors.textSecondary,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
               }}>
-                使用 Python wordcloud 库渲染图片
+                使用 Python wordcloud 库渲染图片（增强版集成自 AlionSSS/wordcloud-webui）
               </div>
             </div>
           </div>
@@ -377,7 +614,7 @@ const Wordcloud: React.FC = () => {
         {!loading && !error && imageData && (
           <div style={getCodeBlockStyle(colors)}>
             <div style={{ ...codeHeaderStyle, color: colors.textSecondary }}>
-              <span>preview</span>
+              <span>preview ({outputFormat})</span>
               <button
                 onClick={handleCopyImage}
                 style={{ ...copyBtnStyle, color: colors.textSecondary }}
@@ -394,7 +631,7 @@ const Wordcloud: React.FC = () => {
               minHeight: 200,
             }}>
               <img
-                src={imageData.startsWith('data:image') ? imageData : `data:image/png;base64,${imageData}`}
+                src={imageData.startsWith('data:image') ? imageData : `data:image/${outputFormat};base64,${imageData}`}
                 alt="wordcloud"
                 style={{ maxWidth: '100%', maxHeight: 600, objectFit: 'contain' }}
               />
@@ -409,7 +646,9 @@ const Wordcloud: React.FC = () => {
             fontSize: 13, border: `1px dashed ${colors.border}`, borderRadius: 6,
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
           }}>
-            # 输入频率表并点击「生成词云」，将在下方预览图片
+            # 选择模式并输入数据，点击「生成词云」将在下方预览图片
+            <br />
+            # 增强版集成自 AlionSSS/wordcloud-webui (Apache-2.0)
           </div>
         )}
       </div>

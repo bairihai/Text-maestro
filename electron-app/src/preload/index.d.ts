@@ -85,7 +85,25 @@ interface CustomElectronAPI extends ElectronAPI {
   readFileByPath: (filePath: string) => Promise<ReadFileResult>;
   readMultipleFiles: (filePaths: string[]) => Promise<ReadMultipleFilesResult[]>;
   wordFrequency: (text: string, stopwords: string, customDict: string) => Promise<WordFrequencyResult>;
-  generateWordcloud: (freqJson: string, fontPath: string, maxFont: number, minFont: number, margin: number, preferH: number) => Promise<WordcloudResult>;
+  generateWordcloud: (
+    inputContent: string,
+    fontPath: string,
+    maxFont: number,
+    minFont: number,
+    margin: number,
+    preferH: number,
+    mode?: string,
+    width?: number,
+    height?: number,
+    bgColor?: string,
+    maskPath?: string,
+    maskColorPath?: string,
+    contourWidth?: number,
+    contourColor?: string,
+    stopwords?: string,
+    userdict?: string,
+    outputFormat?: string,
+  ) => Promise<WordcloudResult>;
   weeklyFolder: (fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => Promise<WeeklyFolderResult>;
   discordTimeSlot: (text: string) => Promise<DiscordAnalysisResult>;
   discordPreference: (userText: string, channelText: string) => Promise<DiscordAnalysisResult>;

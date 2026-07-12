@@ -250,26 +250,142 @@ with gr.Blocks(title="Text-maestro api大全") as demo:
         gr.Button("生成").click(utils_jieba.word_frequency, inputs=[text_input, input_ban_word, input_text_dict], outputs=output_text)
     
     with gr.Tab("生成词云图"):
-        input_word_frequency = gr.Textbox(label="频率表", lines=3 , placeholder="生成的txt格式频率表", value="{'盛夏': 1, '头发': 1, '军队': 1, '标准': 1, '瑕疵': 1, '赘肉': 1, '矫健': 1, '把位': 1, '过肩': 1, '小臂': 1, '男孩子': 1, '男孩': 1, '骂人': 1, '姑娘': 1, '回事儿': 1, '师父': 1, '国家队': 1, '女将': 1, '胳膊': 2, '柔道队': 1, '时候': 2, '柔道': 1, '技术': 1, '月薪': 1, '学员': 1, '小男孩': 1, '动作': 1, '肩膀': 1}")
+        gr.Markdown("增强版词云生成，集成自 [AlionSSS/wordcloud-webui](https://github.com/AlionSSS/wordcloud-webui) (Apache-2.0)。支持频率表、文本直输、Mask 蒙版三种模式。")
+        # 模式切换
+        wc_mode = gr.Radio(label="模式选择", choices=["频率表模式", "文本直输模式", "Mask 模式"], value="频率表模式")
+
+        # 频率表输入（频率表模式 + Mask 模式用）
+        input_word_frequency = gr.Textbox(label="频率表", lines=3, placeholder="生成的txt格式频率表（频率表模式/Mask模式用）", value="{'盛夏': 1, '头发': 1, '军队': 1, '标准': 1, '瑕疵': 1, '赘肉': 1, '矫健': 1, '把位': 1, '过肩': 1, '小臂': 1, '男孩子': 1, '男孩': 1, '骂人': 1, '姑娘': 1, '回事儿': 1, '师父': 1, '国家队': 1, '女将': 1, '胳膊': 2, '柔道队': 1, '时候': 2, '柔道': 1, '技术': 1, '月薪': 1, '学员': 1, '小男孩': 1, '动作': 1, '肩膀': 1}", visible=True)
+
+        # 文本直输入（文本直输模式用）
+        input_wc_text = gr.Textbox(label="原始文本", lines=5, placeholder="输入原始文本，自动 jieba 分词（文本直输模式用）", visible=False)
+        input_wc_stopwords = gr.Textbox(label="停用词（可选）", placeholder="逗号分隔，不填则用内置停用词库", visible=False)
+        input_wc_userdict = gr.Textbox(label="自定义分词词典（可选）", placeholder="逗号分隔，如: 峻影,柔道,云都", visible=False)
+
+        # 字体路径
         input_font_path = gr.Textbox(label="字体文件路径", placeholder="输入字体文件的完整路径 必填！！！")
+
+        # 通用参数
         with gr.Row():
             input_max_font_size = gr.Slider(label="最大字号", minimum=10, maximum=200, value=100)
-            input_min_font_size = gr.Slider(label="最小字号", minimum=10, maximum=200, value=20)
+            input_min_font_size = gr.Slider(label="最小字号", minimum=4, maximum=200, value=20)
         with gr.Row():
             input_margin = gr.Slider(label="词间距", minimum=0, maximum=10, value=2)
             input_prefer_horizontal = gr.Slider(label="横向排列概率", minimum=0, maximum=1, value=0.9)
+
+        # 普通模式参数
+        with gr.Row():
+            input_wc_width = gr.Number(label="图像宽度", value=400, minimum=1)
+            input_wc_height = gr.Number(label="图像高度", value=200, minimum=1)
+        input_wc_bg_color = gr.Textbox(label="背景色", value="white", placeholder="颜色名或 hex，如 white 或 #fee2e2")
+
+        # Mask 模式参数
+        input_wc_mask = gr.Image(label="Mask 图像（决定词云形状）", visible=False)
+        input_wc_mask_color = gr.Image(label="颜色蒙版图像（可选，决定词云颜色）", visible=False)
+        with gr.Row():
+            input_wc_contour_width = gr.Number(label="轮廓线粗细", value=3, minimum=0, visible=False)
+            input_wc_contour_color = gr.Textbox(label="轮廓线颜色", value="steelblue", visible=False)
+
+        # 输出格式
+        input_wc_format = gr.Radio(label="输出格式", choices=["png", "jpeg", "webp"], value="png")
+
         output_image = gr.Image(label="词云图", format="png")
-        
+
+        # 模式切换时显示/隐藏控件
+        def toggle_wc_mode(mode):
+            is_freq = mode == "频率表模式"
+            is_text = mode == "文本直输模式"
+            is_mask = mode == "Mask 模式"
+            return (
+                gr.update(visible=is_freq or is_mask),   # 频率表
+                gr.update(visible=is_text),               # 原始文本
+                gr.update(visible=is_text),               # 停用词
+                gr.update(visible=is_text),               # 自定义词典
+                gr.update(visible=is_mask),               # Mask 图像
+                gr.update(visible=is_mask),               # 颜色蒙版
+                gr.update(visible=is_mask),               # 轮廓线粗细
+                gr.update(visible=is_mask),               # 轮廓线颜色
+                gr.update(visible=not is_mask),           # 宽度（仅普通/文本模式）
+                gr.update(visible=not is_mask),           # 高度（仅普通/文本模式）
+            )
+
+        wc_mode.change(
+            fn=toggle_wc_mode,
+            inputs=wc_mode,
+            outputs=[
+                input_word_frequency, input_wc_text, input_wc_stopwords, input_wc_userdict,
+                input_wc_mask, input_wc_mask_color, input_wc_contour_width, input_wc_contour_color,
+                input_wc_width, input_wc_height,
+            ],
+        )
+
         def parse_word_freq(freq_str):
             import ast
             return ast.literal_eval(freq_str)
-        
-        def generate_wordcloud_from_freq(freq_str, font_path, max_font_size=100, min_font_size=20, margin=2, prefer_horizontal=0.9):
-            word_freq = parse_word_freq(freq_str)
-            img = utils_wordcloud.generate_wordcloud(word_freq, font_path, max_font_size, min_font_size, margin, prefer_horizontal)
-            return img
-        
-        gr.Button("生成").click(generate_wordcloud_from_freq, inputs=[input_word_frequency, input_font_path, input_max_font_size, input_min_font_size, input_margin, input_prefer_horizontal], outputs=output_image)
+
+        # 统一生成函数（集成自 AlionSSS/wordcloud-webui Apache-2.0）
+        def generate_wordcloud_enhanced(
+            mode, freq_str, text, stopwords, userdict, font_path,
+            max_font_size, min_font_size, margin, prefer_horizontal,
+            width, height, bg_color, mask_img, mask_color_img,
+            contour_width, contour_color, out_format,
+        ):
+            if not font_path:
+                gr.Warning("请输入字体文件路径！")
+                return None
+            try:
+                if mode == "文本直输模式":
+                    if not text:
+                        gr.Warning("请输入原始文本！")
+                        return None
+                    img = utils_wordcloud.text_to_wordcloud(
+                        text, font_path=font_path, background_color=bg_color,
+                        margin=margin, min_font_size=min_font_size, max_font_size=max_font_size,
+                        width=width, height=height, mask_image=mask_img, mask_color=mask_color_img,
+                        contour_width=contour_width, contour_color=contour_color,
+                        stopwords=stopwords, userdict=userdict, prefer_horizontal=prefer_horizontal,
+                    )
+                elif mode == "Mask 模式":
+                    if not freq_str:
+                        gr.Warning("请输入频率表！")
+                        return None
+                    if mask_img is None:
+                        gr.Warning("Mask 模式需要上传 Mask 图像！")
+                        return None
+                    word_freq = parse_word_freq(freq_str)
+                    img = utils_wordcloud.generate_wordcloud_mask(
+                        word_freq, font_path=font_path, background_color=bg_color,
+                        margin=margin, min_font_size=min_font_size, max_font_size=max_font_size,
+                        mask_image=mask_img, mask_color=mask_color_img,
+                        contour_width=contour_width, contour_color=contour_color,
+                        prefer_horizontal=prefer_horizontal,
+                    )
+                else:
+                    # 频率表模式
+                    if not freq_str:
+                        gr.Warning("请输入频率表！")
+                        return None
+                    word_freq = parse_word_freq(freq_str)
+                    img = utils_wordcloud.generate_wordcloud_normal(
+                        word_freq, font_path=font_path, background_color=bg_color,
+                        margin=margin, min_font_size=min_font_size, max_font_size=max_font_size,
+                        width=width, height=height, prefer_horizontal=prefer_horizontal,
+                    )
+                return img
+            except Exception as e:
+                raise gr.Error("词云生成失败：" + str(e))
+
+        gr.Button("生成").click(
+            fn=generate_wordcloud_enhanced,
+            inputs=[
+                wc_mode, input_word_frequency, input_wc_text, input_wc_stopwords, input_wc_userdict,
+                input_font_path, input_max_font_size, input_min_font_size, input_margin, input_prefer_horizontal,
+                input_wc_width, input_wc_height, input_wc_bg_color,
+                input_wc_mask, input_wc_mask_color, input_wc_contour_width, input_wc_contour_color,
+                input_wc_format,
+            ],
+            outputs=output_image,
+        )
 
     # 文本读取功能
     gr.Markdown("## 文本读取功能")

@@ -440,21 +440,65 @@ app.whenReady().then(() => {
     }
   });
 
-  // 词云图生成（Python wordcloud 加速）
-  ipcMain.handle('generate-wordcloud', async (_, freqJson: string, fontPath: string, maxFont: number, minFont: number, margin: number, preferH: number) => {
+  // 计算 gradio-app 目录路径（供 Python 脚本通过 sys.path.insert 引入）
+  const gradioAppPath = path.resolve(__dirname, '..', '..', '..', 'gradio-app');
+
+  // 词云图生成（Python wordcloud 加速，增强版集成自 AlionSSS/wordcloud-webui Apache-2.0）
+  // 支持三种模式: freq（频率表）/ text（文本直输）/ mask（Mask 蒙版）
+  ipcMain.handle('generate-wordcloud', async (
+    _,
+    inputContent: string,
+    fontPath: string,
+    maxFont: number,
+    minFont: number,
+    margin: number,
+    preferH: number,
+    mode: string = 'freq',
+    width: number = 400,
+    height: number = 200,
+    bgColor: string = 'white',
+    maskPath: string = '',
+    maskColorPath: string = '',
+    contourWidth: number = 3,
+    contourColor: string = 'steelblue',
+    stopwords: string = '',
+    userdict: string = '',
+    outputFormat: string = 'png',
+  ) => {
     try {
       const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
       const scriptPath = path.join(__dirname, 'py', 'generate_wordcloud.py');
-      log.info(`[WordCloud] 调用 Python 脚本: ${scriptPath}`);
+      log.info(`[WordCloud] 调用 Python 脚本: ${scriptPath} (mode=${mode})`);
 
-      // 将频率表写入临时文件，避免命令行长度限制
-      const tempFile = path.join(app.getPath('temp'), `wordcloud_freq_${Date.now()}.json`);
-      await fs.writeFile(tempFile, freqJson, 'utf-8');
+      // 将输入内容（频率表 JSON 或原始文本）写入临时文件
+      const tempFile = path.join(app.getPath('temp'), `wordcloud_input_${Date.now()}.txt`);
+      await fs.writeFile(tempFile, inputContent, 'utf-8');
+
+      // 构建命令行参数（顺序与 generate_wordcloud.py 的 sys.argv 对应）
+      const args = [
+        `"${tempFile}"`,
+        `"${fontPath}"`,
+        `${maxFont}`,
+        `${minFont}`,
+        `${margin}`,
+        `${preferH}`,
+        `${mode}`,
+        `${width}`,
+        `${height}`,
+        `${bgColor}`,
+        maskPath ? `"${maskPath}"` : '""',
+        maskColorPath ? `"${maskColorPath}"` : '""',
+        `${contourWidth}`,
+        `${contourColor}`,
+        stopwords ? `"${stopwords}"` : '""',
+        userdict ? `"${userdict}"` : '""',
+        `${outputFormat}`,
+      ].join(' ');
 
       const output = await new Promise<string>((resolve, reject) => {
         const child = exec(
-          `${pyCmd} "${scriptPath}" "${tempFile}" "${fontPath}" "${maxFont}" "${minFont}" "${margin}" "${preferH}"`,
-          { timeout: 60000, maxBuffer: 20 * 1024 * 1024 },
+          `${pyCmd} "${scriptPath}" ${args}`,
+          { timeout: 60000, maxBuffer: 20 * 1024 * 1024, env: { ...process.env, GRADIO_APP_PATH: gradioAppPath } },
           (err: Error | null, stdout: string, stderr: string) => {
             if (err) {
               log.error('[WordCloud] Python 执行错误:', err.message, stderr);
@@ -476,9 +520,6 @@ app.whenReady().then(() => {
       return { success: false, error: (err as Error).message };
     }
   });
-
-  // 计算 gradio-app 目录路径（供 Python 脚本通过 sys.path.insert 引入）
-  const gradioAppPath = path.resolve(__dirname, '..', '..', '..', 'gradio-app');
 
   // 周回文件夹整理 BAT 脚本生成（Python 加速）
   ipcMain.handle('weekly-folder', async (_, fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => {
