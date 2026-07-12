@@ -96,6 +96,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
                 { key: '3a_4', label: '文本比较', to: '/tools/text-diff' },
                 { key: '3a_5', label: '字数词数统计', to: '/tools/word-count' },
                 { key: '3a_6', label: 'Markdown 大纲工具', to: '/tools/markdown-outline' },
+                { key: '3a_15', label: 'Markdown → 静态网页', to: '/tools/md-to-web' },
                 { key: '3a_7', label: 'CSV 预览', to: '/tools/csv-preview' },
                 { key: '3a_8', label: '文本读取', to: '/tools/file-reader' },
                 { key: '3a_9', label: '多文档拼接', to: '/tools/doc-merge' },

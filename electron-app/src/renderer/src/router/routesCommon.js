@@ -7,6 +7,7 @@ import RegexFiler from '@renderer/pages/features/regex-filter'
 import TextDiff from '@renderer/pages/features/text-diff'
 import WordCount from '@renderer/pages/features/word-count'
 import MarkdownOutline from '@renderer/pages/features/markdown-outline'
+import MdToWeb from '@renderer/pages/features/md-to-web'
 import CsvPreview from '@renderer/pages/features/csv-preview'
 import FileReaderPage from '@renderer/pages/features/file-reader'
 import DocMerge from '@renderer/pages/features/doc-merge'
@@ -15,6 +16,7 @@ import TwitchAnalysis from '@renderer/pages/features/twitch-analysis'
 import WordFrequency from '@renderer/pages/features/word-frequency'
 import Wordcloud from '@renderer/pages/features/wordcloud'
 import TimestampConverter from '@renderer/pages/features/timestamp'
+import WeeklyFolder from '@renderer/pages/features/weekly-folder'
 
 const routesCommon = [
     {
@@ -48,6 +50,10 @@ const routesCommon = [
     {
         path: "/tools/markdown-outline",
         component: MarkdownOutline
+    },
+    {
+        path: "/tools/md-to-web",
+        component: MdToWeb
     },
     {
         path: "/tools/csv-preview",
