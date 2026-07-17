@@ -9,7 +9,7 @@
  */
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { Card, Button, Select, Message, Input, Typography, Tabs, Tag, Empty } from '@arco-design/web-react';
-import { IconPlus, IconDelete, IconPlayArrow, IconSave, IconDragDotVertical, IconFolder, IconDown, IconRight } from '@arco-design/web-react/icon';
+import { IconPlus, IconDelete, IconPlayArrow, IconSave, IconDragDotVertical, IconFolder, IconDown, IconRight, IconImport, IconExport } from '@arco-design/web-react/icon';
 import {
   type Workflow,
   type WorkflowNode,
@@ -29,6 +29,7 @@ import {
   type RunRecord,
 } from '@renderer/utils/workflow-engine';
 import { DEFAULT_PRESETS } from '@renderer/utils/md-to-web';
+import { workflowToYaml, workflowFromYaml, EXAMPLE_YAML } from '@renderer/utils/workflow-yaml';
 
 const { TabPane } = Tabs;
 
@@ -68,24 +69,86 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
 
   const selectedNode = workflow.nodes.find((n) => n.id === selectedNodeId) || null;
 
-  /** 计算选中节点可引用的上游变量列表（按节点顺序，取早于当前节点的输出变量） */
-  const availableInputVariables = useMemo(() => {
+  /**
+   * 计算选中节点可引用的上游节点列表（按节点顺序，取早于当前节点的、有产出的节点）。
+   * 用于 uses 字段的下拉选项（分叉场景显式引用某个上游节点产出）。
+   * 注意：write-directory 是终点节点无产出，不列入选项。
+   */
+  const availableUpstreamNodes = useMemo(() => {
     if (!selectedNode) return [];
     const idx = workflow.nodes.findIndex((n) => n.id === selectedNode.id);
     if (idx < 0) return [];
     const result: { label: string; value: string }[] = [];
     for (let i = 0; i < idx; i++) {
       const n = workflow.nodes[i];
-      const outName = n.config?.outputVariableName as string | undefined;
-      if (outName) {
+      // 只有有产出的节点类型才能被引用
+      if (n.type === 'source-files' || n.type === 'md-to-wiki-site') {
         result.push({
-          label: `${outName}（来自: ${n.label}）`,
-          value: outName,
+          label: `${n.label}（${n.type}）`,
+          value: n.id,
         });
       }
     }
     return result;
   }, [selectedNode, workflow.nodes]);
+
+  // === YAML 导入/导出 ===
+  const handleExportYaml = useCallback(() => {
+    try {
+      const yamlStr = workflowToYaml(workflow);
+      // 用 Blob + a 标签触发下载
+      const blob = new Blob([yamlStr], { type: 'text/yaml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // 文件名：工作流名 + .workflow.yaml
+      const safeName = workflow.name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'workflow';
+      a.download = `${safeName}.workflow.yaml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      Message.success('已导出 .workflow.yaml 文件');
+    } catch (e) {
+      Message.error(`导出失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [workflow]);
+
+  const handleImportYaml = useCallback(() => {
+    // 用隐藏的 input[type=file] 触发文件选择
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.yaml,.yml,.workflow.yaml,.workflow.yml';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const wf = workflowFromYaml(text);
+        setWorkflow(wf);
+        setSelectedNodeId(null);
+        setNodeProgress({});
+        setVariables({});
+        Message.success(`已导入: ${wf.name}（${wf.nodes.length} 个节点）`);
+      } catch (e) {
+        Message.error(`导入失败: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+    input.click();
+  }, []);
+
+  const handleLoadExampleYaml = useCallback(() => {
+    try {
+      const wf = workflowFromYaml(EXAMPLE_YAML);
+      setWorkflow(wf);
+      setSelectedNodeId(null);
+      setNodeProgress({});
+      setVariables({});
+      Message.success('已加载示例工作流');
+    } catch (e) {
+      Message.error(`加载示例失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, []);
 
   // === 节点操作 ===
   const addNode = useCallback((type: WorkflowNodeType) => {
@@ -121,6 +184,17 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
     setWorkflow((wf) => ({
       ...wf,
       nodes: wf.nodes.map((n) => (n.id === nodeId ? { ...n, label } : n)),
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  /** 更新 node.uses 字段（undefined = 清除，恢复默认引用上一步） */
+  const updateNodeUses = useCallback((nodeId: string, uses: string | undefined) => {
+    setWorkflow((wf) => ({
+      ...wf,
+      nodes: wf.nodes.map((n) =>
+        n.id === nodeId ? { ...n, uses: uses || undefined } : n,
+      ),
       updatedAt: new Date().toISOString(),
     }));
   }, []);
@@ -279,6 +353,11 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
         </Button>
         <Button icon={<IconSave />} onClick={handleSave}>保存</Button>
         <Button onClick={handleLoad}>加载</Button>
+        <Button icon={<IconImport />} onClick={handleImportYaml}>导入YAML</Button>
+        <Button icon={<IconExport />} onClick={handleExportYaml}>导出YAML</Button>
+        <Button type="text" size="small" onClick={handleLoadExampleYaml} style={{ color: 'var(--arco-color-text-3)' }}>
+          示例
+        </Button>
         {lastOutputDir && (
           <Button
             type="outline"
@@ -364,9 +443,10 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
           {selectedNode ? (
             <NodeConfigPanel
               node={selectedNode}
-              availableInputs={availableInputVariables}
+              availableUpstreamNodes={availableUpstreamNodes}
               onUpdateConfig={(patch) => updateNodeConfig(selectedNode.id, patch)}
               onUpdateLabel={(label) => updateNodeLabel(selectedNode.id, label)}
+              onUpdateUses={(uses) => updateNodeUses(selectedNode.id, uses)}
             />
           ) : (
             <div style={{ padding: '20px 8px', color: 'var(--arco-color-text-3)', fontSize: 13 }}>
@@ -502,12 +582,15 @@ function NodeCard({ node, index, selected, progress, onSelect, onRemove, onDragS
 
 interface NodeConfigPanelProps {
   node: WorkflowNode;
-  availableInputs: { label: string; value: string }[];
+  /** 可被 uses 引用的上游节点列表（早于当前节点、有产出的节点） */
+  availableUpstreamNodes: { label: string; value: string }[];
   onUpdateConfig: (patch: Record<string, unknown>) => void;
   onUpdateLabel: (label: string) => void;
+  /** 更新 node.uses 字段（undefined 表示清除，恢复默认引用上一步） */
+  onUpdateUses: (uses: string | undefined) => void;
 }
 
-function NodeConfigPanel({ node, availableInputs, onUpdateConfig, onUpdateLabel }: NodeConfigPanelProps) {
+function NodeConfigPanel({ node, availableUpstreamNodes, onUpdateConfig, onUpdateLabel, onUpdateUses }: NodeConfigPanelProps) {
   return (
     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
@@ -515,64 +598,62 @@ function NodeConfigPanel({ node, availableInputs, onUpdateConfig, onUpdateLabel 
         <Input value={node.label} onChange={onUpdateLabel} size="small" />
       </div>
       {node.type === 'source-files' && <SourceFilesConfigPanel node={node} onUpdate={onUpdateConfig} />}
-      {node.type === 'md-to-wiki-site' && <MdToWikiSiteConfigPanel node={node} availableInputs={availableInputs} onUpdate={onUpdateConfig} />}
-      {node.type === 'write-directory' && <WriteDirectoryConfigPanel node={node} availableInputs={availableInputs} onUpdate={onUpdateConfig} />}
+      {node.type === 'md-to-wiki-site' && (
+        <MdToWikiSiteConfigPanel
+          node={node}
+          onUpdate={onUpdateConfig}
+          availableUpstreamNodes={availableUpstreamNodes}
+          onUpdateUses={onUpdateUses}
+          currentUses={node.uses}
+        />
+      )}
+      {node.type === 'write-directory' && (
+        <WriteDirectoryConfigPanel
+          node={node}
+          onUpdate={onUpdateConfig}
+          availableUpstreamNodes={availableUpstreamNodes}
+          onUpdateUses={onUpdateUses}
+          currentUses={node.uses}
+        />
+      )}
     </div>
   );
 }
 
-/** 变量名输入框（输出变量命名） */
-function OutputVariableNameInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>
-        输出变量名
-      </label>
-      <Input
-        value={value}
-        onChange={onChange}
-        size="small"
-        placeholder="如：扫描结果"
-      />
-      <div style={{ marginTop: 4, fontSize: 11, color: 'var(--arco-color-text-3)' }}>
-        本节点产出将以此名写入变量，下游可通过此名引用
-      </div>
-    </div>
-  );
-}
-
-/** 输入变量下拉（引用上游变量） */
-function InputVariableSelect({
+/**
+ * 数据来源下拉（可选，用于分叉场景）。
+ * - 未选择（undefined）：默认引用「上一个有产出的节点」（隐式传递）
+ * - 选择某个节点 id：显式引用该节点的产出（分叉场景）
+ */
+function DataSourceSelect({
   value,
   onChange,
-  availableInputs,
+  availableUpstreamNodes,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  availableInputs: { label: string; value: string }[];
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+  availableUpstreamNodes: { label: string; value: string }[];
 }) {
   return (
     <div>
       <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>
-        输入变量
+        数据来源（可选）
       </label>
       <Select
-        value={value || undefined}
-        onChange={onChange}
+        value={value}
+        onChange={(v) => onChange(v || undefined)}
         size="small"
         style={{ width: '100%' }}
-        placeholder="选择上游变量"
-        showSearch
+        placeholder="默认：引用上一步产出"
+        allowClear
       >
-        {availableInputs.map((opt) => (
+        {availableUpstreamNodes.map((opt) => (
           <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
         ))}
       </Select>
-      {availableInputs.length === 0 && (
-        <div style={{ marginTop: 4, fontSize: 11, color: '#ff7d00' }}>
-          上游暂无可用变量（请先在更早的节点中声明输出变量名）
-        </div>
-      )}
+      <div style={{ marginTop: 4, fontSize: 11, color: 'var(--arco-color-text-3)' }}>
+        默认自动引用上一步产出；分叉场景可显式选择某个上游节点
+      </div>
     </div>
   );
 }
@@ -622,30 +703,30 @@ function SourceFilesConfigPanel({ node, onUpdate }: { node: WorkflowNode; onUpda
           placeholder=".md,.markdown"
         />
       </div>
-      <OutputVariableNameInput
-        value={config.outputVariableName || ''}
-        onChange={(v) => onUpdate({ outputVariableName: v })}
-      />
     </>
   );
 }
 
 function MdToWikiSiteConfigPanel({
   node,
-  availableInputs,
   onUpdate,
+  availableUpstreamNodes,
+  onUpdateUses,
+  currentUses,
 }: {
   node: WorkflowNode;
-  availableInputs: { label: string; value: string }[];
   onUpdate: (patch: Record<string, unknown>) => void;
+  availableUpstreamNodes: { label: string; value: string }[];
+  onUpdateUses: (uses: string | undefined) => void;
+  currentUses: string | undefined;
 }) {
   const config = node.config as unknown as MdToWikiSiteConfig;
   return (
     <>
-      <InputVariableSelect
-        value={config.inputVariableName || ''}
-        onChange={(v) => onUpdate({ inputVariableName: v })}
-        availableInputs={availableInputs}
+      <DataSourceSelect
+        value={currentUses}
+        onChange={onUpdateUses}
+        availableUpstreamNodes={availableUpstreamNodes}
       />
       <div>
         <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>规则预设</label>
@@ -660,22 +741,22 @@ function MdToWikiSiteConfigPanel({
           ))}
         </Select>
       </div>
-      <OutputVariableNameInput
-        value={config.outputVariableName || ''}
-        onChange={(v) => onUpdate({ outputVariableName: v })}
-      />
     </>
   );
 }
 
 function WriteDirectoryConfigPanel({
   node,
-  availableInputs,
   onUpdate,
+  availableUpstreamNodes,
+  onUpdateUses,
+  currentUses,
 }: {
   node: WorkflowNode;
-  availableInputs: { label: string; value: string }[];
   onUpdate: (patch: Record<string, unknown>) => void;
+  availableUpstreamNodes: { label: string; value: string }[];
+  onUpdateUses: (uses: string | undefined) => void;
+  currentUses: string | undefined;
 }) {
   const config = node.config as unknown as WriteDirectoryConfig;
   const handleSelectFolder = async () => {
@@ -684,10 +765,10 @@ function WriteDirectoryConfigPanel({
   };
   return (
     <>
-      <InputVariableSelect
-        value={config.inputVariableName || ''}
-        onChange={(v) => onUpdate({ inputVariableName: v })}
-        availableInputs={availableInputs}
+      <DataSourceSelect
+        value={currentUses}
+        onChange={onUpdateUses}
+        availableUpstreamNodes={availableUpstreamNodes}
       />
       <div>
         <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>输出目录</label>
