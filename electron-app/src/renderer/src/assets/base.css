@@ -43,18 +43,25 @@ ul {
   list-style: none;
 }
 
-/* Playground Tabs：让 Arco 内部 .arco-tabs-content / .arco-tabs-content-item
-   沿外层 flex 链路拉伸高度，否则 TabPane 上的 flex/height 全部失效，
-   内部使用说明页无法滚动 */
-.playground-tabs .arco-tabs-content {
-  flex: 1;
-  min-height: 0;
+/* Full-height Tabs：让 Arco Tabs 内部 .arco-tabs-content / .arco-tabs-content-inner
+   / .arco-tabs-content-item 沿外层 flex 链路拉伸高度。
+   Arco 默认 .arco-tabs-content-item 是 height: 0（active 才 auto），
+   .arco-tabs-content-inner 是 display: flex（横向排 TabPane 做动画），
+   不覆盖的话 TabPane 上的 flex/height 全部失效，内部页面无法滚动 */
+.full-height-tabs.arco-tabs-horizontal {
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
-.playground-tabs .arco-tabs-content-item {
+.full-height-tabs .arco-tabs-content {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+.full-height-tabs .arco-tabs-content-inner {
+  height: 100%;
+}
+.full-height-tabs .arco-tabs-content-item.arco-tabs-content-item-active {
   height: 100%;
 }
 

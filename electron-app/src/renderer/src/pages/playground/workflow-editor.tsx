@@ -392,9 +392,10 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
           activeTab={bottomTab}
           onChange={(v) => setBottomTab(v as 'logs' | 'variables')}
           size="small"
-          style={{ flex: 1, minHeight: 0, padding: '0 12px', display: 'flex', flexDirection: 'column' }}
+          className="full-height-tabs"
+          style={{ flex: 1, minHeight: 0, padding: '0 12px' }}
         >
-          <TabPane key="logs" title="📜 日志" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <TabPane key="logs" title="📜 日志" style={{ height: '100%', overflow: 'hidden' }}>
             <div
               ref={logPanelRef}
               style={{
@@ -421,7 +422,7 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
               )}
             </div>
           </TabPane>
-          <TabPane key="variables" title={`📦 变量 (${Object.keys(variables).length})`} style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <TabPane key="variables" title={`📦 变量 (${Object.keys(variables).length})`} style={{ height: '100%', overflow: 'hidden' }}>
             <VariablesPanel variables={variables} />
           </TabPane>
         </Tabs>

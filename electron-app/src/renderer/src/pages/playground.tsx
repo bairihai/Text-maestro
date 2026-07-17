@@ -74,20 +74,20 @@ function Playground() {
   };
 
   return (
-    <div style={{ height: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Tabs
         activeTab={activeTab}
         onChange={setActiveTab}
-        className="playground-tabs"
-        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+        className="full-height-tabs"
+        style={{ flex: 1, minHeight: 0 }}
       >
-        <TabPane key="guide" title="📖 使用说明" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <TabPane key="guide" title="📖 使用说明" style={{ height: '100%', overflow: 'auto' }}>
           <UsageGuide onLoadExample={handleLoadExample} />
         </TabPane>
-        <TabPane key="workflow" title="🔧 工作流编辑器" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <TabPane key="workflow" title="🔧 工作流编辑器" style={{ height: '100%', overflow: 'hidden' }}>
           <WorkflowEditor key={editorKey} initialWorkflow={pendingWorkflow} />
         </TabPane>
-        <TabPane key="demo" title="Demo">
+        <TabPane key="demo" title="Demo" style={{ height: '100%', overflow: 'auto' }}>
           <PlaygroundDemo />
         </TabPane>
       </Tabs>
