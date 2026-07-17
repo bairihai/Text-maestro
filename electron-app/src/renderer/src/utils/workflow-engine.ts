@@ -1,16 +1,16 @@
 /**
  * 工作流执行引擎
  *
- * 核心设计：
+ * 核心设计（v2 引入变量系统）：
  *   - 线性步骤序列：nodes 数组按顺序执行
- *   - 集合传递：context.files 始终是 { name, content }[] 数组，节点间天然传递文件集合
- *   - 节点内隐式遍历：高级节点（如 md-to-wiki-site）内部遍历所有文件
- *   - 子进度回调：onProgress 支持节点级 + 子进度（如 "3/10"）反馈
+ *   - 显式命名变量：每个节点声明 outputVariableName，下游通过 inputVariableName 引用
+ *   - 变量统一为 string：节点内部决定如何序列化/解析（JSON / 纯文本 / 路径列表）
+ *   - 子进度回调：onProgress 支持节点级 + 子进度 + variablesSnapshot 实时回传
  *
  * 三种节点类型：
- *   1. source-files    读文件 → context.files
- *   2. md-to-wiki-site  context.files(md) → context.files(html+assets)
- *   3. write-directory  context.files → 写盘
+ *   1. source-files     扫描+读盘 → 输出变量（JSON 文本：[{name,content}, ...]）
+ *   2. md-to-wiki-site  输入变量(JSON) → 转换 → 输出变量(JSON 文本：[{path,content}, ...])
+ *   3. write-directory  输入变量(JSON) → 写盘
  */
 import { DEFAULT_PRESETS, type MdToWebRule } from './md-to-web';
 import { convertSite, type SiteFile } from './md-to-wiki-site';
@@ -37,9 +37,20 @@ export interface Workflow {
   updatedAt: string;
 }
 
-export interface ContextFile {
-  name: string;
-  content: string;
+/**
+ * 单个变量的元信息（用于 UI 展示）。
+ * value 统一为 string；节点内部决定如何序列化/解析。
+ */
+export interface WorkflowVariable {
+  name: string;              // 变量名，工作流内可重名（后写覆盖先写）
+  value: string;             // 统一文本类型
+  sourceNodeId: string;      // 来源节点 ID
+  sourceNodeLabel: string;   // 来源节点名称（冗余，便于 UI 展示）
+  updatedAt: string;         // 更新时间戳
+  /** 格式提示：仅用于 UI 美化展示，不影响数据本身 */
+  formatHint: 'text' | 'json' | 'path-list';
+  /** 字节数（冗余，便于 UI 展示大小） */
+  byteLength: number;
 }
 
 export interface WorkflowLog {
@@ -50,8 +61,7 @@ export interface WorkflowLog {
 }
 
 export interface WorkflowContext {
-  files: ContextFile[];
-  variables: Record<string, unknown>;
+  variables: Record<string, WorkflowVariable>;
   logs: WorkflowLog[];
 }
 
@@ -60,7 +70,9 @@ export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
 export interface NodeProgress {
   nodeId: string;
   status: NodeStatus;
-  detail?: string; // 如 "正在转换 3/10: 赤心巡天第3章.md"
+  detail?: string;
+  /** 当前 ctx.variables 的深拷贝快照，节点 done 后回传，前端据此实时更新变量面板 */
+  variablesSnapshot?: Record<string, WorkflowVariable>;
 }
 
 // ============================================================
@@ -71,15 +83,19 @@ export interface SourceFilesConfig {
   inputMode: 'folder' | 'paths';
   folder?: string;
   paths?: string[];
-  exts: string[]; // 默认 ['.md']
+  exts: string[];                       // 默认 ['.md']
+  outputVariableName: string;           // 输出变量名，默认 '扫描结果'
 }
 
 export interface MdToWikiSiteConfig {
-  presetName: string; // DEFAULT_PRESETS 中的 name
+  presetName: string;                   // DEFAULT_PRESETS 中的 name
+  inputVariableName: string;            // 引用上游变量名
+  outputVariableName: string;           // 输出变量名，默认 '站点文件'
 }
 
 export interface WriteDirectoryConfig {
   targetDir?: string;
+  inputVariableName: string;            // 引用上游变量名
 }
 
 // ============================================================
@@ -91,7 +107,7 @@ export async function executeWorkflow(
   workflow: Workflow,
   onProgress?: (progress: NodeProgress) => void,
 ): Promise<{ success: boolean; context: WorkflowContext }> {
-  let ctx: WorkflowContext = { files: [], variables: {}, logs: [] };
+  let ctx: WorkflowContext = { variables: {}, logs: [] };
 
   for (const node of workflow.nodes) {
     if (!node.enabled) continue;
@@ -100,7 +116,11 @@ export async function executeWorkflow(
       ctx = await executeNode(node, ctx, (detail) =>
         onProgress?.({ nodeId: node.id, status: 'running', detail }),
       );
-      onProgress?.({ nodeId: node.id, status: 'done' });
+      onProgress?.({
+        nodeId: node.id,
+        status: 'done',
+        variablesSnapshot: { ...ctx.variables },
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       ctx.logs.push({
@@ -138,7 +158,52 @@ async function executeNode(
 // 四、节点执行器
 // ============================================================
 
-/** source-files 节点：读取文件填入 context.files */
+/** 内部文件结构（序列化前/反序列化后的中间形态） */
+interface InternalFile {
+  name: string;
+  content: string;
+}
+
+/** 把变量写入 ctx.variables，返回新 ctx（不可变更新） */
+function writeVariable(
+  ctx: WorkflowContext,
+  name: string,
+  value: string,
+  sourceNode: WorkflowNode,
+  formatHint: WorkflowVariable['formatHint'],
+): WorkflowContext {
+  const variable: WorkflowVariable = {
+    name,
+    value,
+    sourceNodeId: sourceNode.id,
+    sourceNodeLabel: sourceNode.label,
+    updatedAt: new Date().toISOString(),
+    formatHint,
+    byteLength: value.length,
+  };
+  return {
+    ...ctx,
+    variables: { ...ctx.variables, [name]: variable },
+  };
+}
+
+/** 从 ctx.variables 读取输入变量，返回 value；不存在则抛错 */
+function readInputVariable(
+  ctx: WorkflowContext,
+  inputVariableName: string,
+  consumerNodeLabel: string,
+): string {
+  if (!inputVariableName) {
+    throw new Error(`${consumerNodeLabel}：未配置输入变量名`);
+  }
+  const variable = ctx.variables[inputVariableName];
+  if (!variable) {
+    throw new Error(`${consumerNodeLabel}：输入变量「${inputVariableName}」不存在（请检查上游节点是否已执行）`);
+  }
+  return variable.value;
+}
+
+/** source-files 节点：扫描+读盘，输出 JSON 文本变量 */
 async function executeSourceFiles(
   node: WorkflowNode,
   ctx: WorkflowContext,
@@ -167,12 +232,13 @@ async function executeSourceFiles(
       message: '未找到任何匹配文件',
       timestamp: new Date().toISOString(),
     });
-    return { ...ctx, files: [] };
+    // 仍写入空数组变量，便于下游诊断
+    return writeVariable(ctx, config.outputVariableName, '[]', node, 'json');
   }
 
   // 批量读取文件
   const results = await window.electron.readMultipleFiles(filePaths);
-  const files: ContextFile[] = [];
+  const files: InternalFile[] = [];
   for (const r of results) {
     if (r.success && r.data !== undefined) {
       // name 只保留文件名（去掉目录路径）
@@ -191,14 +257,16 @@ async function executeSourceFiles(
   ctx.logs.push({
     nodeId: node.id,
     level: 'info',
-    message: `读取了 ${files.length}/${filePaths.length} 个文件`,
+    message: `读取了 ${files.length}/${filePaths.length} 个文件 → 变量「${config.outputVariableName}」`,
     timestamp: new Date().toISOString(),
   });
 
-  return { ...ctx, files };
+  // 序列化为 JSON 文本
+  const value = JSON.stringify(files);
+  return writeVariable(ctx, config.outputVariableName, value, node, 'json');
 }
 
-/** md-to-wiki-site 节点：批量转换 md → wiki 站点 */
+/** md-to-wiki-site 节点：输入变量(JSON) → 转换 → 输出变量(JSON) */
 async function executeMdToWikiSite(
   node: WorkflowNode,
   ctx: WorkflowContext,
@@ -206,8 +274,25 @@ async function executeMdToWikiSite(
 ): Promise<WorkflowContext> {
   const config = node.config as unknown as MdToWikiSiteConfig;
 
-  if (ctx.files.length === 0) {
-    throw new Error('md-to-wiki-site 节点没有输入文件（请先添加 source-files 节点）');
+  const inputValue = readInputVariable(ctx, config.inputVariableName, node.label);
+
+  // 反序列化输入
+  let siteFiles: SiteFile[];
+  try {
+    const parsed = JSON.parse(inputValue);
+    if (!Array.isArray(parsed)) {
+      throw new Error('输入变量不是数组');
+    }
+    siteFiles = parsed.map((f: { name?: string; content?: string }) => ({
+      name: String(f.name ?? ''),
+      content: String(f.content ?? ''),
+    }));
+  } catch (e) {
+    throw new Error(`${node.label}：输入变量「${config.inputVariableName}」解析失败 - ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  if (siteFiles.length === 0) {
+    throw new Error(`${node.label}：输入变量「${config.inputVariableName}」为空数组`);
   }
 
   // 查找规则预设
@@ -216,12 +301,6 @@ async function executeMdToWikiSite(
     throw new Error(`未找到规则预设: ${config.presetName}`);
   }
   const rule: MdToWebRule = preset.rule;
-
-  // 转换为 SiteFile 格式
-  const siteFiles: SiteFile[] = ctx.files.map((f) => ({
-    name: f.name,
-    content: f.content,
-  }));
 
   // 执行站点级转换（内部遍历，带子进度回调）
   const result = await convertSite({
@@ -253,20 +332,20 @@ async function executeMdToWikiSite(
   ctx.logs.push({
     nodeId: node.id,
     level: 'info',
-    message: `转换完成：${result.outputs.length} 个输出文件，${result.pageMetas.length} 个页面`,
+    message: `转换完成：${result.outputs.length} 个输出文件，${result.pageMetas.length} 个页面 → 变量「${config.outputVariableName}」`,
     timestamp: new Date().toISOString(),
   });
 
-  // 输出替换 context.files（md → html + assets）
-  const outputFiles: ContextFile[] = result.outputs.map((o) => ({
-    name: o.path,
+  // 序列化输出为 JSON 文本
+  const outputFiles: { path: string; content: string }[] = result.outputs.map((o) => ({
+    path: o.path,
     content: o.content,
   }));
-
-  return { ...ctx, files: outputFiles };
+  const outputValue = JSON.stringify(outputFiles);
+  return writeVariable(ctx, config.outputVariableName, outputValue, node, 'json');
 }
 
-/** write-directory 节点：把 context.files 写盘 */
+/** write-directory 节点：输入变量(JSON) → 写盘 */
 async function executeWriteDirectory(
   node: WorkflowNode,
   ctx: WorkflowContext,
@@ -277,11 +356,28 @@ async function executeWriteDirectory(
     throw new Error('write-directory 节点未配置输出目录');
   }
 
-  if (ctx.files.length === 0) {
-    throw new Error('write-directory 节点没有文件可写（context.files 为空）');
+  const inputValue = readInputVariable(ctx, config.inputVariableName, node.label);
+
+  // 反序列化输入
+  let filesToWrite: { path: string; content: string }[];
+  try {
+    const parsed = JSON.parse(inputValue);
+    if (!Array.isArray(parsed)) {
+      throw new Error('输入变量不是数组');
+    }
+    filesToWrite = parsed.map((f: { path?: string; content?: string; name?: string }) => ({
+      // 兼容：若上游输出的是 {name} 而非 {path}，自动适配
+      path: String(f.path ?? f.name ?? ''),
+      content: String(f.content ?? ''),
+    }));
+  } catch (e) {
+    throw new Error(`${node.label}：输入变量「${config.inputVariableName}」解析失败 - ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  const filesToWrite = ctx.files.map((f) => ({ path: f.name, content: f.content }));
+  if (filesToWrite.length === 0) {
+    throw new Error(`${node.label}：输入变量「${config.inputVariableName}」为空数组，无文件可写`);
+  }
+
   const result = await window.electron.writeDirectory(config.targetDir, filesToWrite);
 
   if (!result.success) {
@@ -310,7 +406,9 @@ export function loadWorkflows(): Workflow[] {
     const raw = localStorage.getItem(WORKFLOWS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // 自动迁移旧 Workflow（补全变量名字段）
+    return parsed.map(migrateWorkflow);
   } catch {
     return [];
   }
@@ -328,6 +426,8 @@ export interface RunRecord {
   fileCount: number;
   outputDir?: string;
   logs: WorkflowLog[];
+  /** 最终变量快照（运行完成时保存，便于历史回看） */
+  variablesSnapshot?: Record<string, WorkflowVariable>;
 }
 
 export function loadRunHistory(): RunRecord[] {
@@ -348,7 +448,7 @@ export function saveRunRecord(record: RunRecord): void {
 }
 
 // ============================================================
-// 六、工厂函数
+// 六、工厂函数与迁移
 // ============================================================
 
 let nodeIdCounter = 0;
@@ -375,9 +475,19 @@ export function createNode(type: WorkflowNodeType): WorkflowNode {
     'write-directory': '写入目录',
   };
   const defaultConfigs: Record<WorkflowNodeType, Record<string, unknown>> = {
-    'source-files': { inputMode: 'folder', exts: ['.md'] },
-    'md-to-wiki-site': { presetName: DEFAULT_PRESETS[0]?.name || 'Obsidian→Wiki' },
-    'write-directory': {},
+    'source-files': {
+      inputMode: 'folder',
+      exts: ['.md'],
+      outputVariableName: '扫描结果',
+    },
+    'md-to-wiki-site': {
+      presetName: DEFAULT_PRESETS[0]?.name || 'Obsidian→Wiki',
+      inputVariableName: '',
+      outputVariableName: '站点文件',
+    },
+    'write-directory': {
+      inputVariableName: '',
+    },
   };
   return {
     id: generateNodeId(),
@@ -389,18 +499,35 @@ export function createNode(type: WorkflowNodeType): WorkflowNode {
 }
 
 /**
+ * 迁移旧 Workflow：补全节点 config 中缺失的变量名字段。
+ * 兼容 v1（无变量系统）的工作流定义。
+ */
+export function migrateWorkflow(wf: Workflow): Workflow {
+  const migratedNodes = wf.nodes.map((node) => {
+    const config = { ...node.config };
+    if (node.type === 'source-files') {
+      if (!config.outputVariableName) config.outputVariableName = '扫描结果';
+    } else if (node.type === 'md-to-wiki-site') {
+      if (!config.inputVariableName) config.inputVariableName = '';
+      if (!config.outputVariableName) config.outputVariableName = '站点文件';
+    } else if (node.type === 'write-directory') {
+      if (!config.inputVariableName) config.inputVariableName = '';
+    }
+    return { ...node, config };
+  });
+  return { ...wf, nodes: migratedNodes };
+}
+
+/**
  * 创建示例工作流：赤心巡天 md → wiki 站点
  *
- * 预填好三个节点：
- *   1. 读取文件：扫描 test_data/example/赤心巡天2 3章 目录下的 .md 文件
- *   2. MD → Wiki 站点：使用 Obsidian→Wiki 预设
- *   3. 写入目录：输出到 test_data/output/赤心巡天站点（用户可改）
- *
- * 用户点「运行」即可看到效果：生成 index.html + 各章 html + 侧边栏站点导航
+ * 预填好三个节点（显式声明变量名）：
+ *   1. 读取文件：扫描 → 变量「扫描结果」
+ *   2. MD → Wiki 站点：输入「扫描结果」 → 输出「站点文件」
+ *   3. 写入目录：输入「站点文件」 → 写盘
  */
 export function createExampleWorkflow(): Workflow {
   const now = new Date().toISOString();
-  // 示例数据目录（相对于项目根目录）
   const exampleDir = 'E:\\100 项目\\130 编程开发\\132 其他中期或长期项目\\Text-maestro（文本分析工具箱）\\test_data\\example\\赤心巡天2 3章';
   const outputDir = 'E:\\100 项目\\130 编程开发\\132 其他中期或长期项目\\Text-maestro（文本分析工具箱）\\test_data\\output\\赤心巡天站点';
 
@@ -413,6 +540,7 @@ export function createExampleWorkflow(): Workflow {
       inputMode: 'folder',
       folder: exampleDir,
       exts: ['.md'],
+      outputVariableName: '扫描结果',
     },
   };
 
@@ -423,6 +551,8 @@ export function createExampleWorkflow(): Workflow {
     enabled: true,
     config: {
       presetName: 'Obsidian→Wiki',
+      inputVariableName: '扫描结果',
+      outputVariableName: '站点文件',
     },
   };
 
@@ -433,6 +563,7 @@ export function createExampleWorkflow(): Workflow {
     enabled: true,
     config: {
       targetDir: outputDir,
+      inputVariableName: '站点文件',
     },
   };
 

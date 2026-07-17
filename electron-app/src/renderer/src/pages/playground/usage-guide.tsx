@@ -79,9 +79,10 @@ function UsageGuide({ onLoadExample }: UsageGuideProps) {
           <li>在右侧配置面板选择「输入模式」为 <Text code>文件夹扫描</Text></li>
           <li>点击「浏览」选择 md 文件所在目录（如 <Text code>赤心巡天2 3章</Text>）</li>
           <li>扩展名保持 <Text code>.md</Text></li>
+          <li>在「输出变量名」处确认变量名（默认 <Text code>扫描结果</Text>）</li>
         </ol>
         <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--arco-color-fill-2)', borderRadius: 4, fontSize: 12, color: 'var(--arco-color-text-3)' }}>
-          作用：递归扫描目录下所有 .md 文件，批量读取内容到工作流上下文。
+          作用：递归扫描目录下所有 .md 文件，批量读取内容，写入名为「扫描结果」的变量（JSON 文本：[{`{name, content}`}, ...]），供下游节点引用。
         </div>
       </Card>
 
@@ -89,10 +90,12 @@ function UsageGuide({ onLoadExample }: UsageGuideProps) {
         <Title heading={6} style={{ marginTop: 0 }}>第 2 步：添加「MD → Wiki 站点」节点</Title>
         <ol style={{ marginBottom: 0, paddingLeft: 20 }}>
           <li>在左侧节点类型面板点击 <Text code>🔄 MD → Wiki 站点</Text></li>
-          <li>在右侧配置面板选择「规则预设」为 <Text code>Obsidian→Wiki</Text></li>
+          <li>在「输入变量」下拉选择上一步的 <Text code>扫描结果</Text></li>
+          <li>在「规则预设」选择 <Text code>Obsidian→Wiki</Text></li>
+          <li>在「输出变量名」处确认变量名（默认 <Text code>站点文件</Text>）</li>
         </ol>
         <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--arco-color-fill-2)', borderRadius: 4, fontSize: 12, color: 'var(--arco-color-text-3)' }}>
-          作用：遍历所有 md 文件，批量转成 html。自动生成 index.html 首页、每页顶部面包屑、左侧侧边栏站点导航（列出所有章节，可点击切换）。
+          作用：从输入变量读取 md 文件集合，批量转成 html。自动生成 index.html 首页、每页顶部面包屑、左侧侧边栏站点导航。产出写入「站点文件」变量（JSON 文本：[{`{path, content}`}, ...]）。
         </div>
       </Card>
 
@@ -100,10 +103,11 @@ function UsageGuide({ onLoadExample }: UsageGuideProps) {
         <Title heading={6} style={{ marginTop: 0 }}>第 3 步：添加「写入目录」节点</Title>
         <ol style={{ marginBottom: 0, paddingLeft: 20 }}>
           <li>在左侧节点类型面板点击 <Text code>💾 写入目录</Text></li>
-          <li>在右侧配置面板点击「浏览」选择输出目录</li>
+          <li>在「输入变量」下拉选择上一步的 <Text code>站点文件</Text></li>
+          <li>在「输出目录」点击「浏览」选择输出目录</li>
         </ol>
         <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--arco-color-fill-2)', borderRadius: 4, fontSize: 12, color: 'var(--arco-color-text-3)' }}>
-          作用：把生成的所有 html + css + js 文件写盘到指定目录。
+          作用：从输入变量读取所有 html + css + js 文件，写盘到指定目录。
         </div>
       </Card>
 
@@ -113,6 +117,7 @@ function UsageGuide({ onLoadExample }: UsageGuideProps) {
         <ol style={{ marginBottom: 0, paddingLeft: 20 }}>
           <li>点击顶部 <Text code>▶ 运行</Text> 按钮</li>
           <li>观察节点状态依次变蓝（运行中）→ 变绿（完成），日志面板显示进度</li>
+          <li>底部 Tab 切换到 <Text code>📦 变量</Text>，可实时看到每个节点产出的变量内容（点击卡片展开查看 JSON 详情）</li>
           <li>运行完成后，到输出目录打开 <Text code>index.html</Text> 即可看到站点首页</li>
           <li>首页列出所有章节，点击进入章节页，左侧侧边栏可切换不同章节</li>
         </ol>
@@ -120,11 +125,22 @@ function UsageGuide({ onLoadExample }: UsageGuideProps) {
 
       {/* 关键概念 */}
       <Title heading={5} style={{ marginTop: 24, marginBottom: 12 }}>关键概念</Title>
+      <Card style={{ marginBottom: 12, background: 'var(--arco-color-primary-light-1)', borderColor: '#165dff' }}>
+        <Title heading={6} style={{ marginTop: 0 }}>变量（核心概念）</Title>
+        <Paragraph style={{ marginBottom: 0 }}>
+          工作流通过 <span style={strongStyle}>命名变量</span> 在节点间传递数据。每个节点声明一个「输出变量名」（如「扫描结果」），下游节点通过「输入变量」下拉引用它。
+          变量统一为 <span style={strongStyle}>文本（string）</span> 类型 —— 至于文本是 txt 还是 json 完全是各节点内部的事情。
+          比如「扫描结果」存的就是一段 JSON 文本（文件列表的序列化形式），「站点文件」也是 JSON 文本。
+        </Paragraph>
+        <Paragraph style={{ marginTop: 8, marginBottom: 0 }}>
+          底部 <Text code>📦 变量</Text> Tab 实时展示所有变量：名称、来源节点、格式、大小、内容预览。点击卡片可展开查看完整文本（JSON 自动美化）。
+          这让你能清楚看到「扫描结果存到了哪里」「转换前后的数据长什么样」，不再有黑盒。
+        </Paragraph>
+      </Card>
       <Card style={{ marginBottom: 12 }}>
         <Title heading={6} style={{ marginTop: 0 }}>遍历（批量处理）</Title>
         <Paragraph style={{ marginBottom: 0 }}>
-          工作流的 <Text code>context.files</Text> 是一个文件数组，节点间天然传递整个集合。
-          「MD → Wiki 站点」节点内部会遍历所有文件：先预扫描建映射表，再逐个转换。
+          「MD → Wiki 站点」节点内部会遍历输入变量中的所有文件：先预扫描建映射表，再逐个转换。
           所以你只需要指定一个目录，N 个 md 文件会被批量处理，不需要手动循环。
         </Paragraph>
       </Card>

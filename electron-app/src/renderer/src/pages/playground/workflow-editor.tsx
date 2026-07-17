@@ -7,15 +7,16 @@
  *   - 右侧：选中节点的配置面板
  *   - 底部：运行/保存/加载 按钮 + 日志面板
  */
-import React, { useState, useCallback, useRef } from 'react';
-import { Card, Button, Select, Message, Input, Typography } from '@arco-design/web-react';
-import { IconPlus, IconDelete, IconPlayArrow, IconSave, IconDragDotVertical, IconFolder } from '@arco-design/web-react/icon';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
+import { Card, Button, Select, Message, Input, Typography, Tabs, Tag, Empty } from '@arco-design/web-react';
+import { IconPlus, IconDelete, IconPlayArrow, IconSave, IconDragDotVertical, IconFolder, IconDown, IconRight } from '@arco-design/web-react/icon';
 import {
   type Workflow,
   type WorkflowNode,
   type WorkflowNodeType,
   type NodeProgress,
   type WorkflowLog,
+  type WorkflowVariable,
   type SourceFilesConfig,
   type MdToWikiSiteConfig,
   type WriteDirectoryConfig,
@@ -28,6 +29,8 @@ import {
   type RunRecord,
 } from '@renderer/utils/workflow-engine';
 import { DEFAULT_PRESETS } from '@renderer/utils/md-to-web';
+
+const { TabPane } = Tabs;
 
 const { Text } = Typography;
 
@@ -59,9 +62,30 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
   const [running, setRunning] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [lastOutputDir, setLastOutputDir] = useState<string | null>(null);
+  const [variables, setVariables] = useState<Record<string, WorkflowVariable>>({});
+  const [bottomTab, setBottomTab] = useState<'logs' | 'variables'>('logs');
   const logPanelRef = useRef<HTMLDivElement>(null);
 
   const selectedNode = workflow.nodes.find((n) => n.id === selectedNodeId) || null;
+
+  /** 计算选中节点可引用的上游变量列表（按节点顺序，取早于当前节点的输出变量） */
+  const availableInputVariables = useMemo(() => {
+    if (!selectedNode) return [];
+    const idx = workflow.nodes.findIndex((n) => n.id === selectedNode.id);
+    if (idx < 0) return [];
+    const result: { label: string; value: string }[] = [];
+    for (let i = 0; i < idx; i++) {
+      const n = workflow.nodes[i];
+      const outName = n.config?.outputVariableName as string | undefined;
+      if (outName) {
+        result.push({
+          label: `${outName}（来自: ${n.label}）`,
+          value: outName,
+        });
+      }
+    }
+    return result;
+  }, [selectedNode, workflow.nodes]);
 
   // === 节点操作 ===
   const addNode = useCallback((type: WorkflowNodeType) => {
@@ -125,6 +149,7 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
     setRunning(true);
     setLogs([]);
     setNodeProgress({});
+    setVariables({});
     setLastOutputDir(null);
     const startedAt = new Date().toISOString();
     const runLogs: WorkflowLog[] = [];
@@ -132,6 +157,10 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
     try {
       const result = await executeWorkflow(workflow, (progress) => {
         setNodeProgress((prev) => ({ ...prev, [progress.nodeId]: progress }));
+        // 实时更新变量面板
+        if (progress.variablesSnapshot) {
+          setVariables(progress.variablesSnapshot);
+        }
         if (progress.detail) {
           runLogs.push({
             nodeId: progress.nodeId,
@@ -154,22 +183,36 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
       const writeNode = workflow.nodes.find((n) => n.type === 'write-directory');
       const outputDir = writeNode ? (writeNode.config as unknown as WriteDirectoryConfig).targetDir : undefined;
 
+      // 统计最终变量中的文件数（用于成功提示）
+      let fileCount = 0;
+      for (const v of Object.values(result.context.variables)) {
+        try {
+          const parsed = JSON.parse(v.value);
+          if (Array.isArray(parsed)) fileCount = parsed.length;
+        } catch {
+          // 非 JSON 变量忽略
+        }
+      }
+
       const record: RunRecord = {
         id: `run-${Date.now()}`,
         workflowName: workflow.name,
         startedAt,
         success: result.success,
-        fileCount: result.context.files.length,
+        fileCount,
         outputDir,
         logs: allLogs,
+        variablesSnapshot: result.context.variables,
       };
       saveRunRecord(record);
 
       if (result.success) {
-        Message.success(`工作流执行成功！输出 ${result.context.files.length} 个文件`);
+        Message.success(`工作流执行成功！产出 ${Object.keys(result.context.variables).length} 个变量`);
         if (outputDir) setLastOutputDir(outputDir);
+        setBottomTab('variables');  // 成功后自动切到变量面板
       } else {
         Message.error('工作流执行失败，请查看日志');
+        setBottomTab('logs');
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -181,6 +224,7 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
         timestamp: new Date().toISOString(),
       });
       setLogs([...runLogs]);
+      setBottomTab('logs');
     } finally {
       setRunning(false);
     }
@@ -320,6 +364,7 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
           {selectedNode ? (
             <NodeConfigPanel
               node={selectedNode}
+              availableInputs={availableInputVariables}
               onUpdateConfig={(patch) => updateNodeConfig(selectedNode.id, patch)}
               onUpdateLabel={(label) => updateNodeLabel(selectedNode.id, label)}
             />
@@ -331,34 +376,55 @@ function WorkflowEditor({ initialWorkflow }: WorkflowEditorProps = {}) {
         </div>
       </div>
 
-      {/* 底部：日志面板 */}
+      {/* 底部：日志/变量 Tab 面板 */}
       <div
-        ref={logPanelRef}
         style={{
-          height: 140,
-          overflowY: 'auto',
-          padding: '8px 12px',
+          height: 220,
           borderTop: '1px solid var(--arco-color-border-2)',
           background: 'var(--arco-color-fill-1)',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-          fontSize: 12,
-          lineHeight: 1.6,
           flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
         }}
       >
-        {logs.length === 0 ? (
-          <Text style={{ color: 'var(--arco-color-text-3)' }}>日志将显示在这里...</Text>
-        ) : (
-          logs.map((log, i) => (
-            <div key={i} style={{ color: log.level === 'error' ? '#f53f3f' : log.level === 'warn' ? '#ff7d00' : 'var(--arco-color-text-1)' }}>
-              <span style={{ color: 'var(--arco-color-text-3)' }}>{log.timestamp.slice(11, 19)}</span>
-              {' '}
-              <span style={{ fontWeight: 600 }}>[{log.level.toUpperCase()}]</span>
-              {' '}
-              {log.message}
+        <Tabs
+          activeTab={bottomTab}
+          onChange={(v) => setBottomTab(v as 'logs' | 'variables')}
+          size="small"
+          style={{ flex: 1, minHeight: 0, padding: '0 12px', display: 'flex', flexDirection: 'column' }}
+        >
+          <TabPane key="logs" title="📜 日志" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <div
+              ref={logPanelRef}
+              style={{
+                height: '100%',
+                overflowY: 'auto',
+                padding: '4px 0',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                fontSize: 12,
+                lineHeight: 1.6,
+              }}
+            >
+              {logs.length === 0 ? (
+                <Text style={{ color: 'var(--arco-color-text-3)' }}>日志将显示在这里...</Text>
+              ) : (
+                logs.map((log, i) => (
+                  <div key={i} style={{ color: log.level === 'error' ? '#f53f3f' : log.level === 'warn' ? '#ff7d00' : 'var(--arco-color-text-1)' }}>
+                    <span style={{ color: 'var(--arco-color-text-3)' }}>{log.timestamp.slice(11, 19)}</span>
+                    {' '}
+                    <span style={{ fontWeight: 600 }}>[{log.level.toUpperCase()}]</span>
+                    {' '}
+                    {log.message}
+                  </div>
+                ))
+              )}
             </div>
-          ))
-        )}
+          </TabPane>
+          <TabPane key="variables" title={`📦 变量 (${Object.keys(variables).length})`} style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <VariablesPanel variables={variables} />
+          </TabPane>
+        </Tabs>
       </div>
     </div>
   );
@@ -435,11 +501,12 @@ function NodeCard({ node, index, selected, progress, onSelect, onRemove, onDragS
 
 interface NodeConfigPanelProps {
   node: WorkflowNode;
+  availableInputs: { label: string; value: string }[];
   onUpdateConfig: (patch: Record<string, unknown>) => void;
   onUpdateLabel: (label: string) => void;
 }
 
-function NodeConfigPanel({ node, onUpdateConfig, onUpdateLabel }: NodeConfigPanelProps) {
+function NodeConfigPanel({ node, availableInputs, onUpdateConfig, onUpdateLabel }: NodeConfigPanelProps) {
   return (
     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
@@ -447,8 +514,64 @@ function NodeConfigPanel({ node, onUpdateConfig, onUpdateLabel }: NodeConfigPane
         <Input value={node.label} onChange={onUpdateLabel} size="small" />
       </div>
       {node.type === 'source-files' && <SourceFilesConfigPanel node={node} onUpdate={onUpdateConfig} />}
-      {node.type === 'md-to-wiki-site' && <MdToWikiSiteConfigPanel node={node} onUpdate={onUpdateConfig} />}
-      {node.type === 'write-directory' && <WriteDirectoryConfigPanel node={node} onUpdate={onUpdateConfig} />}
+      {node.type === 'md-to-wiki-site' && <MdToWikiSiteConfigPanel node={node} availableInputs={availableInputs} onUpdate={onUpdateConfig} />}
+      {node.type === 'write-directory' && <WriteDirectoryConfigPanel node={node} availableInputs={availableInputs} onUpdate={onUpdateConfig} />}
+    </div>
+  );
+}
+
+/** 变量名输入框（输出变量命名） */
+function OutputVariableNameInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>
+        输出变量名
+      </label>
+      <Input
+        value={value}
+        onChange={onChange}
+        size="small"
+        placeholder="如：扫描结果"
+      />
+      <div style={{ marginTop: 4, fontSize: 11, color: 'var(--arco-color-text-3)' }}>
+        本节点产出将以此名写入变量，下游可通过此名引用
+      </div>
+    </div>
+  );
+}
+
+/** 输入变量下拉（引用上游变量） */
+function InputVariableSelect({
+  value,
+  onChange,
+  availableInputs,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  availableInputs: { label: string; value: string }[];
+}) {
+  return (
+    <div>
+      <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>
+        输入变量
+      </label>
+      <Select
+        value={value || undefined}
+        onChange={onChange}
+        size="small"
+        style={{ width: '100%' }}
+        placeholder="选择上游变量"
+        showSearch
+      >
+        {availableInputs.map((opt) => (
+          <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
+        ))}
+      </Select>
+      {availableInputs.length === 0 && (
+        <div style={{ marginTop: 4, fontSize: 11, color: '#ff7d00' }}>
+          上游暂无可用变量（请先在更早的节点中声明输出变量名）
+        </div>
+      )}
     </div>
   );
 }
@@ -498,47 +621,228 @@ function SourceFilesConfigPanel({ node, onUpdate }: { node: WorkflowNode; onUpda
           placeholder=".md,.markdown"
         />
       </div>
+      <OutputVariableNameInput
+        value={config.outputVariableName || ''}
+        onChange={(v) => onUpdate({ outputVariableName: v })}
+      />
     </>
   );
 }
 
-function MdToWikiSiteConfigPanel({ node, onUpdate }: { node: WorkflowNode; onUpdate: (patch: Record<string, unknown>) => void }) {
+function MdToWikiSiteConfigPanel({
+  node,
+  availableInputs,
+  onUpdate,
+}: {
+  node: WorkflowNode;
+  availableInputs: { label: string; value: string }[];
+  onUpdate: (patch: Record<string, unknown>) => void;
+}) {
   const config = node.config as unknown as MdToWikiSiteConfig;
   return (
-    <div>
-      <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>规则预设</label>
-      <Select
-        value={config.presetName}
-        onChange={(v) => onUpdate({ presetName: v })}
-        size="small"
-        style={{ width: '100%' }}
-      >
-        {DEFAULT_PRESETS.map((p) => (
-          <Select.Option key={p.name} value={p.name}>{p.name}</Select.Option>
-        ))}
-      </Select>
-    </div>
+    <>
+      <InputVariableSelect
+        value={config.inputVariableName || ''}
+        onChange={(v) => onUpdate({ inputVariableName: v })}
+        availableInputs={availableInputs}
+      />
+      <div>
+        <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>规则预设</label>
+        <Select
+          value={config.presetName}
+          onChange={(v) => onUpdate({ presetName: v })}
+          size="small"
+          style={{ width: '100%' }}
+        >
+          {DEFAULT_PRESETS.map((p) => (
+            <Select.Option key={p.name} value={p.name}>{p.name}</Select.Option>
+          ))}
+        </Select>
+      </div>
+      <OutputVariableNameInput
+        value={config.outputVariableName || ''}
+        onChange={(v) => onUpdate({ outputVariableName: v })}
+      />
+    </>
   );
 }
 
-function WriteDirectoryConfigPanel({ node, onUpdate }: { node: WorkflowNode; onUpdate: (patch: Record<string, unknown>) => void }) {
+function WriteDirectoryConfigPanel({
+  node,
+  availableInputs,
+  onUpdate,
+}: {
+  node: WorkflowNode;
+  availableInputs: { label: string; value: string }[];
+  onUpdate: (patch: Record<string, unknown>) => void;
+}) {
   const config = node.config as unknown as WriteDirectoryConfig;
   const handleSelectFolder = async () => {
     const folder = await window.electron.saveFolder();
     if (folder) onUpdate({ targetDir: folder });
   };
   return (
-    <div>
-      <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>输出目录</label>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <Input
-          value={config.targetDir || ''}
-          onChange={(v) => onUpdate({ targetDir: v })}
-          size="small"
-          placeholder="选择或输入输出目录"
-        />
-        <Button size="small" onClick={handleSelectFolder}>浏览</Button>
+    <>
+      <InputVariableSelect
+        value={config.inputVariableName || ''}
+        onChange={(v) => onUpdate({ inputVariableName: v })}
+        availableInputs={availableInputs}
+      />
+      <div>
+        <label style={{ fontSize: 12, color: 'var(--arco-color-text-3)', display: 'block', marginBottom: 4 }}>输出目录</label>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <Input
+            value={config.targetDir || ''}
+            onChange={(v) => onUpdate({ targetDir: v })}
+            size="small"
+            placeholder="选择或输入输出目录"
+          />
+          <Button size="small" onClick={handleSelectFolder}>浏览</Button>
+        </div>
       </div>
+    </>
+  );
+}
+
+// ============================================================
+// 变量监控面板
+// ============================================================
+
+/** 把字节数格式化为人类可读大小 */
+function formatBytes(len: number): string {
+  if (len < 1024) return `${len} B`;
+  if (len < 1024 * 1024) return `${(len / 1024).toFixed(1)} KB`;
+  return `${(len / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+/** 根据格式提示渲染变量内容 */
+function renderVariableContent(variable: WorkflowVariable): string {
+  if (variable.formatHint === 'json') {
+    try {
+      const parsed = JSON.parse(variable.value);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return variable.value;
+    }
+  }
+  return variable.value;
+}
+
+function VariablesPanel({ variables }: { variables: Record<string, WorkflowVariable> }) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [showAllKeys, setShowAllKeys] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleShowAll = (key: string) => {
+    setShowAllKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const entries = Object.entries(variables);
+
+  if (entries.length === 0) {
+    return (
+      <div style={{ height: '100%', overflowY: 'auto', padding: '12px 0' }}>
+        <Empty description="运行工作流后，变量将显示在这里" />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', padding: '8px 0' }}>
+      {entries.map(([key, v]) => {
+        const expanded = expandedKeys.has(key);
+        const showAll = showAllKeys.has(key);
+        const content = renderVariableContent(v);
+        const TRUNCATE_LEN = 5000;
+        const truncated = !showAll && content.length > TRUNCATE_LEN;
+        const displayContent = truncated ? content.slice(0, TRUNCATE_LEN) : content;
+
+        // 尝试解析 JSON 数组，提取摘要信息
+        let summary = '';
+        if (v.formatHint === 'json') {
+          try {
+            const parsed = JSON.parse(v.value);
+            if (Array.isArray(parsed)) {
+              summary = `${parsed.length} 项`;
+            } else if (typeof parsed === 'object' && parsed !== null) {
+              summary = `${Object.keys(parsed).length} 字段`;
+            }
+          } catch {
+            // 非 JSON，不显示摘要
+          }
+        }
+
+        return (
+          <Card
+            key={key}
+            size="small"
+            style={{ marginBottom: 6, background: 'var(--arco-color-bg-1)' }}
+            bodyStyle={{ padding: '8px 12px' }}
+          >
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+              onClick={() => toggleExpand(key)}
+            >
+              {expanded ? <IconDown style={{ fontSize: 12 }} /> : <IconRight style={{ fontSize: 12 }} />}
+              <span style={{ fontSize: 13, fontWeight: 600 }}>📦 {v.name}</span>
+              <Tag size="small" color="arcoblue">{v.formatHint}</Tag>
+              {summary && (
+                <Tag size="small" color="green">{summary}</Tag>
+              )}
+              <span style={{ fontSize: 11, color: 'var(--arco-color-text-3)' }}>
+                {formatBytes(v.byteLength)}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--arco-color-text-3)', marginLeft: 'auto' }}>
+                ← {v.sourceNodeLabel}
+              </span>
+            </div>
+            {expanded && (
+              <div style={{ marginTop: 8 }}>
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: 8,
+                    background: 'var(--arco-color-fill-2)',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxHeight: showAll ? 'none' : '240px',
+                    overflowY: 'auto',
+                    color: 'var(--arco-color-text-1)',
+                  }}
+                >
+                  {displayContent}
+                </pre>
+                {truncated && (
+                  <Button
+                    size="mini"
+                    type="text"
+                    onClick={() => toggleShowAll(key)}
+                    style={{ marginTop: 4 }}
+                  >
+                    {showAll ? '收起' : `显示全部（共 ${content.length} 字符）`}
+                  </Button>
+                )}
+              </div>
+            )}
+          </Card>
+        );
+      })}
     </div>
   );
 }
