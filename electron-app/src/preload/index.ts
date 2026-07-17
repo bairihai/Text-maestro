@@ -86,6 +86,13 @@ const customAPI = {
   weeklyFolder: (fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => ipcRenderer.invoke('weekly-folder', fileList, timeFormat, targetFolder, year, autoCreate),
   discordTimeSlot: (text: string) => ipcRenderer.invoke('discord-time-slot', text),
   discordPreference: (userText: string, channelText: string) => ipcRenderer.invoke('discord-preference', userText, channelText),
+  // 工作流相关 API
+  selectFolder: () => ipcRenderer.invoke('dialog:select-folder'),
+  saveFolder: () => ipcRenderer.invoke('dialog:save-folder'),
+  listFilesByExt: (dir: string, exts: string[]) => ipcRenderer.invoke('list-files-by-ext', dir, exts),
+  writeDirectory: (targetDir: string, files: { path: string; content: string }[]) =>
+    ipcRenderer.invoke('write-directory', targetDir, files),
+  openFolder: (targetDir: string) => ipcRenderer.invoke('open-folder', targetDir),
 };
 
 // 合并标准 electronAPI 和自定义 API

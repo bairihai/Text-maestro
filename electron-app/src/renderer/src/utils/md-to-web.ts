@@ -477,6 +477,7 @@ export function preprocessObsidian(
   body: string,
   transform: MdToWebRule['transform'],
   wikiLinkMap?: Map<string, string>,
+  brokenLinksCollector?: { target: string }[],
 ): string {
   let out = body;
 
@@ -510,6 +511,7 @@ export function preprocessObsidian(
     }
     // map 存在但未命中，且模式为 link → 标记 broken（不静默丢失）
     if (wikiLinkMap && transform.wikilinkMode === 'link') {
+      brokenLinksCollector?.push({ target });
       return `<a class="wikilink broken" title="未找到目标文件">${escapeHtml(showText)}</a>`;
     }
     // 无 map 时回退到原逻辑（单文档行为保持不变）
@@ -664,10 +666,12 @@ export interface ConvertResult {
   innerHtml: string;
   meta: ContentMeta;
   resolvedRule: MdToWebRule;
+  brokenLinks: { from: string; target: string }[];
 }
 
 export interface ConvertOptions {
   filename?: string;
+  wikiLinkMap?: Map<string, string>;
 }
 
 /** 流水线总入口 */
@@ -687,8 +691,14 @@ export function convert(text: string, rule: MdToWebRule, options: ConvertOptions
   // 4. 内容筛选
   const filteredBody = applyFilter(bodyAfterFm, resolvedRule.filter, meta);
 
-  // 5. Obsidian 预处理
-  const preprocessed = preprocessObsidian(filteredBody, resolvedRule.transform);
+  // 5. Obsidian 预处理（透传 wikiLinkMap，收集 brokenLinks）
+  const brokenLinksRaw: { target: string }[] = [];
+  const preprocessed = preprocessObsidian(
+    filteredBody,
+    resolvedRule.transform,
+    options.wikiLinkMap,
+    brokenLinksRaw,
+  );
 
   // 6. 渲染（heading id 已由 markdown-it ruler 自动注入）
   const innerHtml = renderMarkdown(preprocessed);
@@ -712,7 +722,13 @@ export function convert(text: string, rule: MdToWebRule, options: ConvertOptions
     rule: resolvedRule,
   });
 
-  return { html, innerHtml, meta, resolvedRule };
+  return {
+    html,
+    innerHtml,
+    meta,
+    resolvedRule,
+    brokenLinks: brokenLinksRaw.map((b) => ({ from: filename, target: b.target })),
+  };
 }
 
 interface WrapParams {

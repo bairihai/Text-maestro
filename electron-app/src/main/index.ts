@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { registerWorkflowIpc } from './ipc-workflow'
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -635,6 +636,9 @@ app.whenReady().then(() => {
       return { success: false, error: (err as Error).message };
     }
   });
+
+  // 注册工作流相关 IPC handler（dialog / list-files / write-directory）
+  registerWorkflowIpc()
 
   createWindow()
 

@@ -80,6 +80,20 @@ interface DiscordAnalysisResult {
   error?: string;
 }
 
+// 工作流：扫描目录下文件的返回类型
+interface ListFilesByExtResult {
+  success: boolean;
+  files: string[];
+  error?: string;
+}
+
+// 工作流：批量写文件的返回类型
+interface WriteDirectoryResult {
+  success: boolean;
+  count?: number;
+  error?: string;
+}
+
 // 扩展 ElectronAPI，添加自定义方法
 interface CustomElectronAPI extends ElectronAPI {
   readFileByPath: (filePath: string) => Promise<ReadFileResult>;
@@ -107,6 +121,15 @@ interface CustomElectronAPI extends ElectronAPI {
   weeklyFolder: (fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => Promise<WeeklyFolderResult>;
   discordTimeSlot: (text: string) => Promise<DiscordAnalysisResult>;
   discordPreference: (userText: string, channelText: string) => Promise<DiscordAnalysisResult>;
+  // 工作流相关 API
+  selectFolder: () => Promise<string | null>;
+  saveFolder: () => Promise<string | null>;
+  listFilesByExt: (dir: string, exts: string[]) => Promise<ListFilesByExtResult>;
+  writeDirectory: (
+    targetDir: string,
+    files: { path: string; content: string }[],
+  ) => Promise<WriteDirectoryResult>;
+  openFolder: (targetDir: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {
