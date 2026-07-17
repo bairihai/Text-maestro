@@ -43,6 +43,21 @@ ul {
   list-style: none;
 }
 
+/* Playground Tabs：让 Arco 内部 .arco-tabs-content / .arco-tabs-content-item
+   沿外层 flex 链路拉伸高度，否则 TabPane 上的 flex/height 全部失效，
+   内部使用说明页无法滚动 */
+.playground-tabs .arco-tabs-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.playground-tabs .arco-tabs-content-item {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 body {
   min-height: 100vh;
   color: var(--color-text);

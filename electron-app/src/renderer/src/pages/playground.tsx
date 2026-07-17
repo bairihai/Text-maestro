@@ -78,9 +78,10 @@ function Playground() {
       <Tabs
         activeTab={activeTab}
         onChange={setActiveTab}
+        className="playground-tabs"
         style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
       >
-        <TabPane key="guide" title="📖 使用说明" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <TabPane key="guide" title="📖 使用说明" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <UsageGuide onLoadExample={handleLoadExample} />
         </TabPane>
         <TabPane key="workflow" title="🔧 工作流编辑器" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
