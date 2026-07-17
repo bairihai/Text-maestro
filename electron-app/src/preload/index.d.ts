@@ -94,6 +94,14 @@ interface WriteDirectoryResult {
   error?: string;
 }
 
+// README 读取 / 打开 的返回类型
+interface ReadmeResult {
+  success: boolean;
+  data?: string;
+  path?: string;
+  error?: string;
+}
+
 // 扩展 ElectronAPI，添加自定义方法
 interface CustomElectronAPI extends ElectronAPI {
   readFileByPath: (filePath: string) => Promise<ReadFileResult>;
@@ -130,6 +138,9 @@ interface CustomElectronAPI extends ElectronAPI {
     files: { path: string; content: string }[],
   ) => Promise<WriteDirectoryResult>;
   openFolder: (targetDir: string) => Promise<{ success: boolean; error?: string }>;
+  // README 查看 / 打开
+  readReadme: (which?: 'main' | 'project') => Promise<ReadmeResult>;
+  openReadme: (which?: 'main' | 'project') => Promise<ReadmeResult>;
 }
 
 declare global {

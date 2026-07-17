@@ -839,6 +839,87 @@ def cmd_social_discord_preference(args):
     print(result)
 
 
+# ==================== about 子命令 ====================
+
+def _resolve_readme_path(project=False):
+    """解析项目根目录下的 README 路径
+    project=True 时返回 README-project.md，否则返回 README.md
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    name = 'README-project.md' if project else 'README.md'
+    return os.path.normpath(os.path.join(here, '..', name))
+
+
+def _open_with_default_app(path):
+    """用系统默认应用打开文件，跨平台兼容"""
+    import subprocess
+    if platform.system() == 'Windows':
+        # os.startfile 仅 Windows 可用
+        os.startfile(path)  # type: ignore[attr-defined]
+    elif platform.system() == 'Darwin':
+        subprocess.Popen(['open', path])
+    else:
+        subprocess.Popen(['xdg-open', path])
+
+
+def _print_with_pager(text):
+    """TTY 下用 pager 显示长文本，非 TTY 直接打印"""
+    if not sys.stdout.isatty():
+        print(text)
+        return
+    # 优先用 pydoc.pager（Unix 下 less/more，Windows 下 pipe to stdout）
+    try:
+        import pydoc
+        pydoc.pager(text)
+    except Exception:
+        # 回退：直接打印
+        print(text)
+
+
+def setup_about_parser(subparsers):
+    parser = subparsers.add_parser('about', help='查看 / 打开项目 README',
+        epilog='''
+示例:
+  python cli/main.py about
+  python cli/main.py about --open
+  python cli/main.py about --project
+  python cli/main.py about --path
+''', formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--open', action='store_true', help='用系统默认应用打开 README 文件')
+    parser.add_argument('--project', action='store_true', help='查看 README-project.md（技术笔记）而非主 README')
+    parser.add_argument('--path', action='store_true', help='只打印 README 文件绝对路径')
+    parser.set_defaults(func=cmd_about)
+
+
+def cmd_about(args):
+    readme_path = _resolve_readme_path(project=args.project)
+    if not os.path.isfile(readme_path):
+        print_error(f'未找到 README 文件: {readme_path}')
+        sys.exit(1)
+
+    # --path：仅打印路径
+    if args.path:
+        print(readme_path)
+        return
+
+    # --open：用系统默认应用打开
+    if args.open:
+        try:
+            _open_with_default_app(readme_path)
+            print_success(f'已用系统默认应用打开: {readme_path}')
+        except Exception as e:
+            print_error(f'打开失败: {e}')
+            sys.exit(1)
+        return
+
+    # 默认：在终端查看 README 内容（TTY 下走 pager）
+    content = read_text_file(readme_path)
+    print_title(f'=== {os.path.basename(readme_path)} ===')
+    print_info(f'文件路径: {readme_path}')
+    print()
+    _print_with_pager(content)
+
+
 # ==================== 交互式 REPL 模式 ====================
 
 # 所有命令树（用于 Tab 补全）
@@ -909,6 +990,10 @@ _COMMAND_TREE = {
             },
         },
         'options': [],
+    },
+    'about': {
+        'subcommands': {},
+        'options': ['--open', '--project', '--path'],
     },
 }
 
@@ -1433,6 +1518,7 @@ def main():
     setup_file_parser(subparsers)
     setup_words_parser(subparsers)
     setup_social_parser(subparsers)
+    setup_about_parser(subparsers)
 
     args = parser.parse_args()
 

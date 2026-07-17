@@ -11,6 +11,15 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+# 将项目根目录的 README 文档作为额外资源打入安装包，
+# 供「关于」页面在打包后环境下读取与打开
+extraResources:
+  - from: ../README.md
+    to: README.md
+    filter: ['**/*']
+  - from: ../README-project.md
+    to: README-project.md
+    filter: ['**/*']
 win:
   executableName: '-2'
 nsis:

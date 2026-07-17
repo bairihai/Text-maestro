@@ -640,6 +640,66 @@ app.whenReady().then(() => {
   // 注册工作流相关 IPC handler（dialog / list-files / write-directory）
   registerWorkflowIpc()
 
+  // === README 查看 / 打开 ===
+  // 候选路径：
+  //   1) 打包后 extraResources 中的 README.md（process.resourcesPath）
+  //   2) 开发态项目根目录的 README.md（electron-app/out/main → 上溯 3 级）
+  //   3) Electron 自带 README.md（electron-app/README.md，开发态可用）
+  function resolveReadmePath(which: 'main' | 'project' = 'main'): string | null {
+    const filename = which === 'project' ? 'README-project.md' : 'README.md';
+    const candidates: string[] = [
+      path.join(process.resourcesPath, filename),                  // 打包后
+      path.resolve(__dirname, '..', '..', '..', filename),         // dev: out/main → ../../../
+      path.resolve(__dirname, '..', '..', '..', 'electron-app', filename), // electron-app 子 README
+    ];
+    for (const p of candidates) {
+      try {
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+          return p;
+        }
+      } catch {
+        // 忽略：路径不可访问
+      }
+    }
+    return null;
+  }
+
+  // 读取 README 内容（默认主 README，可通过参数指定 README-project）
+  ipcMain.handle('read-readme', async (_event, which: 'main' | 'project' = 'main') => {
+    try {
+      const readmePath = resolveReadmePath(which);
+      if (!readmePath) {
+        return { success: false, error: `未找到 README 文件（已查找 resourcesPath 与项目根目录）` };
+      }
+      const data = await fs.readFile(readmePath, 'utf8');
+      log.info(`[Readme] 读取 ${readmePath}（${data.length} 字符）`);
+      return { success: true, data, path: readmePath };
+    } catch (err) {
+      log.error('[Readme] 读取失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // 用系统默认应用打开 README 文件
+  ipcMain.handle('open-readme', async (_event, which: 'main' | 'project' = 'main') => {
+    try {
+      const readmePath = resolveReadmePath(which);
+      if (!readmePath) {
+        return { success: false, error: `未找到 README 文件` };
+      }
+      const errMsg = await shell.openPath(readmePath);
+      if (errMsg) {
+        log.error(`[Readme] openPath 失败: ${errMsg}`);
+        return { success: false, error: errMsg };
+      }
+      log.info(`[Readme] 已用系统默认应用打开: ${readmePath}`);
+      return { success: true, path: readmePath };
+    } catch (err) {
+      log.error('[Readme] 打开失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   createWindow()
 
   app.on('activate', function () {

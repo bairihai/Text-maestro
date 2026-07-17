@@ -93,6 +93,9 @@ const customAPI = {
   writeDirectory: (targetDir: string, files: { path: string; content: string }[]) =>
     ipcRenderer.invoke('write-directory', targetDir, files),
   openFolder: (targetDir: string) => ipcRenderer.invoke('open-folder', targetDir),
+  // README 查看 / 打开
+  readReadme: (which: 'main' | 'project' = 'main') => ipcRenderer.invoke('read-readme', which),
+  openReadme: (which: 'main' | 'project' = 'main') => ipcRenderer.invoke('open-readme', which),
 };
 
 // 合并标准 electronAPI 和自定义 API
