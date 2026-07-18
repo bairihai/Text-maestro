@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: '-2'
+appId: com.jituc.textmaestro
+productName: 'Text-maestro'
 directories:
   buildResources: build
 files:
@@ -21,7 +21,7 @@ extraResources:
     to: README-project.md
     filter: ['**/*']
 win:
-  executableName: '-2'
+  executableName: 'Text-maestro'
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -42,13 +42,18 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: bairihai
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates
+# 当前阶段：仅本地分发，不发布到自动更新源。
+# 未来切到 GitHub Releases 时，改成：
+#   publish:
+#     provider: github
+#     owner: bairihai
+#     repo: text-maestro
+# 并在 src/main/index.ts 中接入 electron-updater 的 autoUpdater.checkForUpdates()
+publish: null
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

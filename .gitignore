@@ -1,2 +1,5 @@
 /readme/
 # /module/
+
+# 测试产物（md-to-web 等功能生成的站点/文件）
+/test_data/output/

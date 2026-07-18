@@ -139,7 +139,8 @@ async function calcDirectorySize(dirPath: string): Promise<number> {
 app.whenReady().then(() => {
   // Set app user model id for windows
   // 使用应用专属 ID，避免 Windows 任务栏回退到 electron.exe 默认图标
-  electronApp.setAppUserModelId('com.textmaestro.app')
+  // 与 electron-builder.yml 中的 appId 保持一致
+  electronApp.setAppUserModelId('com.jituc.textmaestro')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

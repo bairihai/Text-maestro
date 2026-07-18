@@ -1,10 +1,10 @@
 {
   "name": "TextMaestro",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Text-maestro 文本分析工具箱 - Electron 桌面版",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "bairihai",
+  "homepage": "https://gitee.com/bairihai/text-maestro",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",

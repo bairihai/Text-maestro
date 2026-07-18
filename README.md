@@ -201,6 +201,132 @@ Text-maestro/
 - **Electron**：改 `electron-app/`，新增功能需补三处——React 页面 + IPC handler + Python 脚本（放 `src/main/py/`）
 - **Obsidian 插件**：预留
 
+## 版本与发布
+
+### 版本号策略
+
+遵循 [SemVer](https://semver.org/lang/zh-CN/)（语义化版本）：`MAJOR.MINOR.PATCH`
+
+- **MAJOR**：不兼容的 API 变更
+- **MINOR**：向后兼容的新功能
+- **PATCH**：向后兼容的缺陷修复
+
+**三端版本号统一从 `v1.0.0` 起步**，初始阶段保持同步。版本号定义位置：
+
+| 端 | 版本号定义位置 | 暴露方式 |
+|---|---|---|
+| Gradio-app | [gradio-app/app.py](./gradio-app/app.py) 顶部 `__version__` | WebUI 标题 |
+| CLI | [cli-app/main.py](./cli-app/main.py) 顶部 `__version__` | `python cli/main.py --version` |
+| Electron-app | [electron-app/package.json](./electron-app/package.json) `version` 字段 | 应用关于页 |
+
+未来三端迭代节奏可能不一致（例如 CLI 升 `1.0.1` 时 Electron 仍为 `1.0.0`），届时各自独立递增。发布时给仓库打 git tag：`git tag v1.0.0`。
+
+### 各端发布方式
+
+| 端 | 发布方式 | 产物 | 用户前置环境 |
+|---|---|---|---|
+| Gradio-app | **仅源码分发**，不打包 | `git clone` 源码 | Python 3.10+ |
+| CLI | **PyInstaller 单文件 exe** | `Text-maestro-CLI-<version>.exe` | 无（开箱即用） |
+| Electron-app | **electron-builder NSIS 安装包**（本地分发） | `Text-maestro-Setup-<version>.exe` | 无（开箱即用） |
+
+#### Gradio-app（不打包）
+
+Gradio 作为功能源头与开发主力端，不进行产物打包，仅以源码形式分发：
+
+```shell
+git clone https://gitee.com/bairihai/text-maestro.git
+cd text-maestro/gradio-app
+pip install -r requirements.txt
+python app.py
+```
+
+未来也不计划做 PyInstaller / Docker 打包，保持开发态原貌。
+
+#### CLI（PyInstaller 单文件 exe）
+
+打包脚本：[cli-app/build_exe.py](./cli-app/build_exe.py)
+
+```shell
+# 一次性准备环境
+pip install pyinstaller
+pip install -r gradio-app/requirements.txt
+
+# 打包
+cd cli-app
+python build_exe.py            # 默认单文件 exe
+python build_exe.py --clean     # 清理上次产物后重新打包
+```
+
+产物路径：`cli-app/dist/Text-maestro-CLI-1.0.0.exe`
+
+打包要点：
+- `--paths gradio-app` 让 PyInstaller 把 `gradio-app/utils*.py` 作为顶层模块收集进 exe
+- `--add-data gradio-app/resources:resources` 把停用词等数据文件打入 exe 内部
+- `utils_everything.py` 不被 CLI 引用，故 Everything-SDK 不打入（仅 Gradio 端使用）
+- 排除 PyQt/PySide/tkinter 等不必要模块以减小体积
+
+#### Electron-app（NSIS 安装包，本地分发）
+
+打包配置：[electron-app/electron-builder.yml](./electron-app/electron-builder.yml)
+
+```shell
+cd electron-app
+npm install
+npm run build:win     # Windows NSIS 安装包
+npm run build:mac     # macOS dmg
+npm run build:linux   # Linux AppImage/snap/deb
+```
+
+产物路径：`electron-app/dist/Text-maestro-Setup-1.0.0.exe`
+
+**当前阶段（v1.0.0）：仅本地分发，不接入自动更新**。`electron-builder.yml` 中 `publish: null`，主进程未调用 `autoUpdater.checkForUpdates()`。`electron-updater` 依赖已安装、配置入口已保留，便于后续切换。
+
+### 后续升级路径
+
+#### Electron 自动更新（未来）
+
+切到 GitHub Releases 作为自动更新源时，需要：
+
+1. 新增 github remote：`git remote add github git@github.com:<user>/text-maestro.git`
+2. 修改 [electron-app/electron-builder.yml](./electron-app/electron-builder.yml) 中的 `publish` 段：
+
+   ```yaml
+   publish:
+     provider: github
+     owner: <github-username>
+     repo: text-maestro
+   ```
+
+3. 修改 [electron-app/dev-app-update.yml](./electron-app/dev-app-update.yml) 同步配置
+4. 在 [electron-app/src/main/index.ts](./electron-app/src/main/index.ts) 接入：
+
+   ```typescript
+   import { autoUpdater } from 'electron-updater'
+   autoUpdater.checkForUpdatesAndNotify()
+   ```
+
+5. 发布时给仓库打 git tag，electron-builder 会自动上传 `latest.yml` 和安装包到 GitHub Releases
+
+#### CLI 分发渠道扩展（未来）
+
+如需更广的分发，可后续考虑：
+- 发布到 PyPI（`pip install text-maestro-cli`）：新增 `pyproject.toml`，将 `cli-app/` + `gradio-app/utils*.py` 做成 Python 包
+- 同时产 exe 和 PyPI 双轨分发
+
+### 发布 Checklist
+
+每次发版前确认：
+
+- [ ] 三端版本号同步更新（或按计划独立递增）
+- [ ] `cli-app/main.py` `__version__`
+- [ ] `gradio-app/app.py` `__version__`
+- [ ] `electron-app/package.json` `version`
+- [ ] 测试三端核心功能正常
+- [ ] 打 git tag：`git tag v<x.y.z>` 并 `git push gitee-remote v<x.y.z>`
+- [ ] 构建 CLI exe（`python cli-app/build_exe.py --clean`）
+- [ ] 构建 Electron 安装包（`cd electron-app && npm run build:win`）
+- [ ] 在 Gitee Release 上传产物（exe、安装包、Release Notes）
+
 ## 附录
 
 ### 测试用例

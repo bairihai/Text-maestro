@@ -4,6 +4,10 @@ import gradio as gr
 from difflib import Differ
 import re
 
+# 版本号：与 cli-app/main.py、electron-app/package.json 同步起步
+# 后续如需拉开差距，可在此独立递增
+__version__ = "1.0.0"
+
 # from tools import utils
 
 # 部分功能实现函数被拆分到了不同的模块（.py文件），这里进行引入。

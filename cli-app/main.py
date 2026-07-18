@@ -14,6 +14,10 @@ import threading
 import time
 import shlex
 
+# 版本号：与 electron-app/package.json、gradio-app/app.py 同步起步
+# 后续如需拉开差距，可在此独立递增
+__version__ = "1.0.0"
+
 # 将 gradio-app 加入 sys.path，以便 import 已有模块
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'gradio-app'))
 
@@ -1492,7 +1496,7 @@ def main():
         description=f'''
 {BOLD}╔══════════════════════════════════════╗
 ║     Text-maestro 文本分析工具箱 CLI    ║
-║     v1.0.0  by 云都官能团@白日海       ║
+║     v{__version__}  by 云都官能团@白日海       ║
 ╚══════════════════════════════════════╝{RESET}
 ''',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1507,7 +1511,7 @@ def main():
   python cli/main.py social twitch --file chat.json
 """
     )
-    parser.add_argument('-v', '--version', action='version', version=f'{BOLD}Text-maestro CLI{RESET} v1.0.0')
+    parser.add_argument('-v', '--version', action='version', version=f'{BOLD}Text-maestro CLI{RESET} v{__version__}')
     parser.add_argument('-i', '--interactive', action='store_true', help='进入交互式 REPL 模式')
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 

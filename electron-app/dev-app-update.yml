@@ -1,3 +1,9 @@
+# 开发期间 electron-updater 测试配置。
+# 当前阶段不接入自动更新（仅本地分发），保留此文件以备未来切到 GitHub Releases 时启用。
+# 切换时改成：
+#   provider: github
+#   owner: bairihai
+#   repo: text-maestro
 provider: generic
 url: https://example.com/auto-updates
-updaterCacheDirName: '-2-updater'
+updaterCacheDirName: text-maestro-updater
