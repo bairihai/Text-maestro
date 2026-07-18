@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { registerWorkflowIpc } from './ipc-workflow'
 
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 
@@ -654,7 +655,7 @@ app.whenReady().then(() => {
     ];
     for (const p of candidates) {
       try {
-        if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        if (fsSync.existsSync(p) && fsSync.statSync(p).isFile()) {
           return p;
         }
       } catch {
