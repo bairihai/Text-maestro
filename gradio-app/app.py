@@ -18,6 +18,8 @@ import utils_everything
 import utils_jieba
 import utils_wordcloud
 import utils_social_media
+import utils_qrcode
+import utils_wechat
 
 
 def auto_detect_time_format(file_list):
@@ -637,6 +639,116 @@ C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.
                 utils_folder.organize_files_by_week,
                 inputs=[file_list_input, time_format_input, target_folder_input, year_input, auto_create_folders, week_type_input],
                 outputs=move_files_output
+            )
+
+        # ===== 文与图：二维码生成 =====
+        with gr.Tab("生成二维码"):
+            gr.Markdown("将任意文本或 URL 编码为二维码图片。支持尺寸、颜色、容错级别、Logo 嵌入。")
+            qr_text_input = gr.Textbox(
+                label="文本 / URL",
+                lines=2,
+                value="https://github.com",
+                placeholder="输入要编码的内容",
+            )
+            with gr.Row():
+                qr_box_size = gr.Slider(label="方块像素大小", minimum=1, maximum=30, value=10, step=1)
+                qr_border = gr.Slider(label="边框宽度", minimum=0, maximum=10, value=4, step=1)
+                qr_error_correct = gr.Radio(label="容错级别", choices=["L", "M", "Q", "H"], value="M")
+            with gr.Row():
+                qr_fill_color = gr.Textbox(label="前景色（颜色名或 hex）", value="#000000")
+                qr_back_color = gr.Textbox(label="背景色（颜色名或 hex）", value="#FFFFFF")
+            with gr.Row():
+                qr_logo_path = gr.Textbox(label="Logo 图片路径（可选）", placeholder="嵌入到中心的 Logo")
+                qr_logo_ratio = gr.Slider(label="Logo 占比", minimum=0.05, maximum=0.4, value=0.2, step=0.05)
+            with gr.Row():
+                qr_output_width = gr.Number(label="输出宽度（0=自然）", value=0)
+                qr_output_height = gr.Number(label="输出高度（0=自然）", value=0)
+                qr_format = gr.Radio(label="输出格式", choices=["png", "jpeg", "webp"], value="png")
+            qr_output_image = gr.Image(label="二维码预览", format="png")
+
+            def _gen_qrcode(text, box_size, border, ec, fill, back, logo, ratio, w, h, fmt):
+                if not text or not text.strip():
+                    raise gr.Error("请输入要编码的文本/URL")
+                output_size = None
+                if w and h and int(w) > 0 and int(h) > 0:
+                    output_size = (int(w), int(h))
+                img = utils_qrcode.generate_qrcode(
+                    data=text,
+                    box_size=int(box_size),
+                    border=int(border),
+                    error_correct=ec,
+                    fill_color=fill,
+                    back_color=back,
+                    logo_path=logo if logo else None,
+                    logo_size_ratio=float(ratio),
+                    output_size=output_size,
+                )
+                return img
+
+            gr.Button("生成二维码").click(
+                _gen_qrcode,
+                inputs=[qr_text_input, qr_box_size, qr_border, qr_error_correct,
+                        qr_fill_color, qr_back_color, qr_logo_path, qr_logo_ratio,
+                        qr_output_width, qr_output_height, qr_format],
+                outputs=qr_output_image,
+            )
+
+        # ===== 文与图：微信聊天记录生成 =====
+        with gr.Tab("生成微信聊天记录"):
+            gr.Markdown(
+                "JSON 消息序列 → 微信风格聊天截图。\n\n"
+                "消息格式：`[{\"sender\": \"我\", \"text\": \"你好\", \"time\": \"14:30\", \"type\": \"text\"}]`\n\n"
+                "type 取值：`text` / `system`（系统消息居中灰色）/ `time`（时间分隔符）\n\n"
+                "sender 为 `\"我\"` 时气泡靠右，其他靠左。"
+            )
+            wc_messages_json = gr.Textbox(
+                label="消息 JSON",
+                lines=12,
+                value="""[
+  {"sender": "我", "text": "你好，在吗？", "time": "14:30", "type": "text"},
+  {"sender": "对方", "text": "在的，怎么了？", "time": "14:30", "type": "text"},
+  {"sender": "我", "text": "想问下明天的会议几点开始？", "time": "14:31", "type": "text"},
+  {"sender": "对方", "text": "上午十点，会议室三楼。", "time": "14:32", "type": "text"},
+  {"sender": "我", "text": "收到，谢谢！", "time": "14:32", "type": "text"}
+]""",
+                placeholder="消息 JSON 数组",
+            )
+            with gr.Row():
+                wc_theme = gr.Radio(
+                    label="风格预设",
+                    choices=["ios_classic", "ios_dark", "android"],
+                    value="ios_classic",
+                )
+                wc_canvas_width = gr.Number(label="画布宽度", value=420)
+                wc_font_size = gr.Number(label="字号", value=16)
+            with gr.Row():
+                wc_title = gr.Textbox(label="标题文字", value="微信")
+                wc_show_avatar = gr.Checkbox(label="显示头像", value=True)
+                wc_show_time = gr.Checkbox(label="显示时间", value=True)
+                wc_format = gr.Radio(label="输出格式", choices=["png", "jpeg", "webp"], value="png")
+            wc_output_image = gr.Image(label="微信聊天记录预览", format="png")
+
+            def _gen_wechat(messages_json, theme, canvas_w, font_sz, title, show_avatar, show_time, fmt):
+                try:
+                    messages = utils_wechat.parse_messages_from_json(messages_json)
+                except ValueError as e:
+                    raise gr.Error(str(e))
+                img = utils_wechat.generate_wechat_chat(
+                    messages=messages,
+                    theme=theme,
+                    canvas_width=int(canvas_w),
+                    font_size=int(font_sz),
+                    show_avatar=bool(show_avatar),
+                    show_time=bool(show_time),
+                    title=title or "微信",
+                )
+                return img
+
+            gr.Button("生成微信聊天记录").click(
+                _gen_wechat,
+                inputs=[wc_messages_json, wc_theme, wc_canvas_width, wc_font_size,
+                        wc_title, wc_show_avatar, wc_show_time, wc_format],
+                outputs=wc_output_image,
             )
 
 

@@ -26,6 +26,8 @@ import utils_folder
 import utils_jieba
 import utils_wordcloud
 import utils_social_media
+import utils_qrcode
+import utils_wechat
 
 
 # ==================== 输出工具函数 ====================
@@ -736,7 +738,140 @@ def cmd_words_cloud(args):
     print_success(f'词云图已保存到 {args.output}')
 
 
+# ==================== text-image 子命令（文生图） ====================
+
+def cmd_qrcode(args):
+    """二维码生成命令"""
+    data = read_input(args.input, args.file)
+    if not data:
+        print_error('请提供 --file 或 --input')
+        sys.exit(1)
+
+    output_size = None
+    if args.output_width and args.output_height:
+        output_size = (int(args.output_width), int(args.output_height))
+
+    spinner = Spinner('生成二维码中...')
+    spinner.start()
+    try:
+        img = utils_qrcode.generate_qrcode(
+            data=data,
+            box_size=args.box_size,
+            border=args.border,
+            error_correct=args.error_correct,
+            fill_color=args.fill_color,
+            back_color=args.back_color,
+            logo_path=args.logo if args.logo else None,
+            logo_size_ratio=args.logo_ratio,
+            output_size=output_size,
+        )
+        img.save(args.output, format=args.format.upper())
+    finally:
+        spinner.stop()
+    print_success(f'二维码已保存到 {args.output}')
+
+
+def cmd_wechat(args):
+    """微信聊天记录图片生成命令"""
+    # 输入：消息 JSON
+    messages_text = read_input(args.input, args.file)
+    if not messages_text:
+        print_error('请提供 --file 或 --input（消息 JSON）')
+        sys.exit(1)
+
+    try:
+        messages = utils_wechat.parse_messages_from_json(messages_text)
+    except ValueError as e:
+        print_error(f'JSON 解析失败: {e}')
+        sys.exit(1)
+
+    # 解析 overrides JSON
+    overrides = None
+    if args.overrides:
+        try:
+            overrides = json.loads(args.overrides)
+        except json.JSONDecodeError as e:
+            print_error(f'--overrides JSON 解析失败: {e}')
+            sys.exit(1)
+
+    spinner = Spinner('生成微信聊天记录中...')
+    spinner.start()
+    try:
+        img = utils_wechat.generate_wechat_chat(
+            messages=messages,
+            theme=args.theme,
+            canvas_width=args.width,
+            font_size=args.font_size,
+            font_path=args.font if args.font else None,
+            overrides=overrides,
+            show_avatar=args.show_avatar,
+            show_time=args.show_time,
+            title=args.title,
+        )
+        img.save(args.output, format=args.format.upper())
+    finally:
+        spinner.stop()
+    print_success(f'微信聊天记录已保存到 {args.output}')
+
+
 # ==================== social 子命令 ====================
+
+def setup_text_image_parser(subparsers):
+    """文生图子命令：二维码 + 微信聊天记录"""
+    parser = subparsers.add_parser('text-image', help='文生图工具（二维码 / 微信聊天记录）',
+        epilog='''
+示例:
+  # 二维码生成
+  python cli/main.py text-image qrcode --input "https://github.com" -o qr.png
+  python cli/main.py text-image qrcode --input "https://github.com" --fill-color "#0000FF" -o qr.png
+  python cli/main.py text-image qrcode --file url.txt --logo logo.png -o qr.png
+  # 微信聊天记录
+  python cli/main.py text-image wechat --file messages.json -o chat.png
+  python cli/main.py text-image wechat --file messages.json --theme ios_dark -o chat.png
+''', formatter_class=argparse.RawDescriptionHelpFormatter)
+    ti_sub = parser.add_subparsers(dest='text_image_command', help='文生图子命令')
+
+    # ---- qrcode ----
+    p_qr = ti_sub.add_parser('qrcode', help='生成二维码',
+        epilog='示例: python cli/main.py text-image qrcode --input "https://github.com" -o qr.png',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p_qr.add_argument('--file', help='输入文件路径（要编码的文本/URL）')
+    p_qr.add_argument('--input', help='直接输入要编码的文本/URL')
+    p_qr.add_argument('--box-size', type=int, default=10, help='方块像素大小（默认 10）')
+    p_qr.add_argument('--border', type=int, default=4, help='边框宽度（默认 4）')
+    p_qr.add_argument('--error-correct', choices=['L', 'M', 'Q', 'H'], default='M', help='容错级别（默认 M）')
+    p_qr.add_argument('--fill-color', default='#000000', help='前景色（颜色名或 hex，默认 #000000）')
+    p_qr.add_argument('--back-color', default='#FFFFFF', help='背景色（颜色名或 hex，默认 #FFFFFF）')
+    p_qr.add_argument('--logo', help='Logo 图片路径（嵌入到中心，自动提升容错级别）')
+    p_qr.add_argument('--logo-ratio', type=float, default=0.2, help='Logo 占比（0.05-0.4，默认 0.2）')
+    p_qr.add_argument('--output-width', type=int, default=0, help='输出宽度（0=自然尺寸）')
+    p_qr.add_argument('--output-height', type=int, default=0, help='输出高度（0=自然尺寸）')
+    p_qr.add_argument('--format', choices=['png', 'jpeg', 'webp'], default='png', help='输出格式（默认 png）')
+    p_qr.add_argument('-o', '--output', default='qrcode.png', help='输出图片路径（默认 qrcode.png）')
+    p_qr.set_defaults(func=cmd_qrcode)
+
+    # ---- wechat ----
+    p_wc = ti_sub.add_parser('wechat', help='生成微信聊天记录图片',
+        epilog='''
+示例:
+  python cli/main.py text-image wechat --file messages.json -o chat.png
+  python cli/main.py text-image wechat --file messages.json --theme ios_dark -o chat.png
+  python cli/main.py text-image wechat --file messages.json --no-avatar --no-time -o chat.png
+''', formatter_class=argparse.RawDescriptionHelpFormatter)
+    p_wc.add_argument('--file', help='输入 JSON 文件路径（消息数组）')
+    p_wc.add_argument('--input', help='直接输入消息 JSON 文本')
+    p_wc.add_argument('--theme', choices=['ios_classic', 'ios_dark', 'android'], default='ios_classic', help='风格预设（默认 ios_classic）')
+    p_wc.add_argument('--width', type=int, default=420, help='画布宽度（默认 420）')
+    p_wc.add_argument('--font-size', type=int, default=16, help='字号（默认 16）')
+    p_wc.add_argument('--font', default='', help='字体文件路径（空=自动找系统字体）')
+    p_wc.add_argument('--overrides', default='', help='主题颜色覆盖 JSON 字符串')
+    p_wc.add_argument('--title', default='微信', help='标题文字（默认 微信）')
+    p_wc.add_argument('--no-avatar', action='store_false', dest='show_avatar', help='不显示头像')
+    p_wc.add_argument('--no-time', action='store_false', dest='show_time', help='不显示时间')
+    p_wc.add_argument('--format', choices=['png', 'jpeg', 'webp'], default='png', help='输出格式（默认 png）')
+    p_wc.add_argument('-o', '--output', default='wechat_chat.png', help='输出图片路径（默认 wechat_chat.png）')
+    p_wc.set_defaults(func=cmd_wechat)
+
 
 def setup_social_parser(subparsers):
     parser = subparsers.add_parser('social', help='社交媒体分析工具',
@@ -992,6 +1127,13 @@ _COMMAND_TREE = {
                 },
                 'options': [],
             },
+        },
+        'options': [],
+    },
+    'text-image': {
+        'subcommands': {
+            'qrcode': {'options': ['--file', '--input', '--box-size', '--border', '--error-correct', '--fill-color', '--back-color', '--logo', '--logo-ratio', '--output-width', '--output-height', '--format', '-o', '--output']},
+            'wechat': {'options': ['--file', '--input', '--theme', '--width', '--font-size', '--font', '--overrides', '--title', '--no-avatar', '--no-time', '--format', '-o', '--output']},
         },
         'options': [],
     },
@@ -1522,6 +1664,7 @@ def main():
     setup_file_parser(subparsers)
     setup_words_parser(subparsers)
     setup_social_parser(subparsers)
+    setup_text_image_parser(subparsers)
     setup_about_parser(subparsers)
 
     args = parser.parse_args()

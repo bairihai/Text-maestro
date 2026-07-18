@@ -5,3 +5,5 @@ wordcloud
 openai
 pandas
 opencc
+qrcode
+Pillow

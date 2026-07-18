@@ -525,6 +525,132 @@ app.whenReady().then(() => {
     }
   });
 
+  // 二维码生成（Python qrcode + Pillow 加速）
+  // 支持尺寸、颜色、容错级别、Logo 嵌入
+  ipcMain.handle('generate-qrcode', async (
+    _,
+    data: string,
+    boxSize: number = 10,
+    border: number = 4,
+    errorCorrect: string = 'M',
+    fillColor: string = 'black',
+    backColor: string = 'white',
+    logoPath: string = '',
+    logoRatio: number = 0.2,
+    outputWidth: number = 0,
+    outputHeight: number = 0,
+    outputFormat: string = 'png',
+  ) => {
+    try {
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const scriptPath = path.join(__dirname, 'py', 'generate_qrcode.py');
+      log.info(`[QrCode] 调用 Python 脚本: ${scriptPath} (data 长度=${data.length})`);
+
+      // 将数据写入临时文件（避免命令行长度限制，特别是长 URL）
+      const tempFile = path.join(app.getPath('temp'), `qrcode_input_${Date.now()}.txt`);
+      await fs.writeFile(tempFile, data, 'utf-8');
+
+      const args = [
+        `"${tempFile}"`,
+        `${boxSize}`,
+        `${border}`,
+        `${errorCorrect}`,
+        `${fillColor}`,
+        `${backColor}`,
+        logoPath ? `"${logoPath}"` : '""',
+        `${logoRatio}`,
+        outputWidth ? `${outputWidth}` : '""',
+        outputHeight ? `${outputHeight}` : '""',
+        `${outputFormat}`,
+      ].join(' ');
+
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = exec(
+          `${pyCmd} "${scriptPath}" ${args}`,
+          { timeout: 60000, maxBuffer: 20 * 1024 * 1024, env: { ...process.env, GRADIO_APP_PATH: gradioAppPath } },
+          (err: Error | null, stdout: string, stderr: string) => {
+            if (err) {
+              log.error('[QrCode] Python 执行错误:', err.message, stderr);
+              reject(err);
+            } else {
+              resolve(stdout.trim());
+            }
+          }
+        );
+        setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
+      });
+
+      await fs.unlink(tempFile).catch(() => {});
+      return JSON.parse(output);
+    } catch (err) {
+      log.error('[QrCode] 失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // 微信聊天记录图片生成（Python Pillow 加速）
+  // 输入 JSON 消息数组，输出微信风格聊天截图
+  ipcMain.handle('generate-wechat', async (
+    _,
+    messagesJson: string,
+    theme: string = 'ios_classic',
+    canvasWidth: number = 420,
+    fontSize: number = 16,
+    fontPath: string = '',
+    overridesJson: string = '',
+    showAvatar: boolean = true,
+    showTime: boolean = true,
+    title: string = '微信',
+    outputFormat: string = 'png',
+  ) => {
+    try {
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+      const scriptPath = path.join(__dirname, 'py', 'generate_wechat.py');
+      log.info(`[WeChat] 调用 Python 脚本: ${scriptPath} (theme=${theme}, 消息数=${messagesJson.length} 字节)`);
+
+      // 将消息 JSON 写入临时文件
+      const tempFile = path.join(app.getPath('temp'), `wechat_messages_${Date.now()}.json`);
+      await fs.writeFile(tempFile, messagesJson, 'utf-8');
+
+      // overridesJson 可能含特殊字符，写入临时文件再传路径（更稳妥）；
+      // 这里直接作为命令行参数（已是 JSON 字符串，shell 引号包裹），短字符串可接受。
+      const args = [
+        `"${tempFile}"`,
+        `${theme}`,
+        `${canvasWidth}`,
+        `${fontSize}`,
+        fontPath ? `"${fontPath}"` : '""',
+        overridesJson ? `"${overridesJson.replace(/"/g, '\\"')}"` : '""',
+        showAvatar ? '1' : '0',
+        showTime ? '1' : '0',
+        `"${title}"`,
+        `${outputFormat}`,
+      ].join(' ');
+
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = exec(
+          `${pyCmd} "${scriptPath}" ${args}`,
+          { timeout: 60000, maxBuffer: 30 * 1024 * 1024, env: { ...process.env, GRADIO_APP_PATH: gradioAppPath } },
+          (err: Error | null, stdout: string, stderr: string) => {
+            if (err) {
+              log.error('[WeChat] Python 执行错误:', err.message, stderr);
+              reject(err);
+            } else {
+              resolve(stdout.trim());
+            }
+          }
+        );
+        setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
+      });
+
+      await fs.unlink(tempFile).catch(() => {});
+      return JSON.parse(output);
+    } catch (err) {
+      log.error('[WeChat] 失败:', err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   // 周回文件夹整理 BAT 脚本生成（Python 加速）
   ipcMain.handle('weekly-folder', async (_, fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => {
     try {

@@ -66,6 +66,13 @@ interface WordcloudResult {
   error?: string;
 }
 
+// 图片生成通用返回类型（二维码、微信聊天记录等文生图功能复用）
+interface ImageGenerationResult {
+  success: boolean;
+  data?: string;       // base64 编码的图片字符串
+  error?: string;
+}
+
 // 周回文件夹整理 BAT 脚本生成的返回类型
 interface WeeklyFolderResult {
   success: boolean;
@@ -126,6 +133,31 @@ interface CustomElectronAPI extends ElectronAPI {
     userdict?: string,
     outputFormat?: string,
   ) => Promise<WordcloudResult>;
+  generateQrcode: (
+    data: string,
+    boxSize?: number,
+    border?: number,
+    errorCorrect?: string,    // L / M / Q / H
+    fillColor?: string,
+    backColor?: string,
+    logoPath?: string,
+    logoRatio?: number,       // 0.0 - 1.0
+    outputWidth?: number,     // 0 表示按 box_size 自然输出
+    outputHeight?: number,
+    outputFormat?: string,    // png / jpeg / webp
+  ) => Promise<ImageGenerationResult>;
+  generateWechat: (
+    messagesJson: string,     // JSON 字符串，格式见 utils_wechat.py
+    theme?: string,           // ios_classic / ios_dark / android
+    canvasWidth?: number,
+    fontSize?: number,
+    fontPath?: string,
+    overridesJson?: string,   // 主题颜色覆盖 JSON
+    showAvatar?: boolean,
+    showTime?: boolean,
+    title?: string,
+    outputFormat?: string,
+  ) => Promise<ImageGenerationResult>;
   weeklyFolder: (fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => Promise<WeeklyFolderResult>;
   discordTimeSlot: (text: string) => Promise<DiscordAnalysisResult>;
   discordPreference: (userText: string, channelText: string) => Promise<DiscordAnalysisResult>;

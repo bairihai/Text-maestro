@@ -66,8 +66,7 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             icon: <IconDriveFile />,
             items: [
                 { key: '2_0', label: 'discord聊天记录' },
-                { key: '2_1', label: 'qq聊天记录' },
-                { key: '2_2', label: '微信聊天记录' }
+                { key: '2_1', label: 'qq聊天记录' }
             ]
         },
         {
@@ -112,8 +111,10 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             title: '文与图',
             icon: <IconDriveFile />,
             items: [
-                { key: '4_0', label: '手写信生成' },
-                { key: '4_1', label: '学信网学历截图（有造假水印）' }
+                { key: '4_0', label: '二维码生成', to: '/text-image/qrcode', needPython: true },
+                { key: '4_1', label: '微信聊天记录', to: '/text-image/wechat-chat', needPython: true },
+                { key: '4_2', label: '手写信生成' },
+                { key: '4_3', label: '学信网学历截图（有造假水印）' }
             ]
         },
         {
