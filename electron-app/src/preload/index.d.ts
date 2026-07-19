@@ -180,6 +180,10 @@ interface CustomElectronAPI extends ElectronAPI {
   // 微信聊天记录：文件持久化
   wechatChatLoad: () => Promise<{ success: boolean; data?: unknown; error?: string }>;
   wechatChatSave: (data: unknown) => Promise<{ success: boolean; error?: string }>;
+  wechatChatSaveImage: (
+    dataUrl: string,
+    filename: string,
+  ) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
 }
 
 declare global {

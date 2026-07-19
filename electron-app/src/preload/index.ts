@@ -128,6 +128,8 @@ const customAPI = {
   // 微信聊天记录：文件持久化
   wechatChatLoad: () => ipcRenderer.invoke('wechat-chat:load'),
   wechatChatSave: (data: unknown) => ipcRenderer.invoke('wechat-chat:save', data),
+  wechatChatSaveImage: (dataUrl: string, filename: string) =>
+    ipcRenderer.invoke('wechat-chat:save-image', dataUrl, filename),
 };
 
 // 合并标准 electronAPI 和自定义 API

@@ -2000,21 +2000,40 @@ export default function WechatChat() {
     return canvas;
   }, []);
 
+  // 通过 IPC 保存图片（避免 Chromium 默认下载到无权限目录）
+  const saveImageViaIpc = useCallback(async (dataUrl: string, filename: string) => {
+    if (window.electron?.wechatChatSaveImage) {
+      const result = await window.electron.wechatChatSaveImage(dataUrl, filename);
+      if (result.success) {
+        showToast('图片已保存：' + result.filePath);
+      } else if (result.canceled) {
+        showToast('已取消保存');
+      } else {
+        showToast('保存失败：' + (result.error || '未知错误'));
+      }
+    } else {
+      // 回退到浏览器下载
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = dataUrl;
+      link.click();
+      showToast('图片已下载');
+    }
+  }, [showToast]);
+
   const handleGenerateImage = useCallback(async () => {
     if (!phoneRef.current) return;
     showToast('正在生成图片...');
     try {
       const canvas = await capturePhone(false);
       if (!canvas) return;
-      const link = document.createElement('a');
-      link.download = '微信聊天记录_' + Date.now() + '.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      showToast('图片已生成并下载！');
+      const dataUrl = canvas.toDataURL('image/png');
+      const filename = '微信聊天记录_' + Date.now() + '.png';
+      await saveImageViaIpc(dataUrl, filename);
     } catch (e: unknown) {
       showToast('生成失败：' + (e instanceof Error ? e.message : String(e)));
     }
-  }, [showToast, capturePhone]);
+  }, [showToast, capturePhone, saveImageViaIpc]);
 
   const handleCopyImage = useCallback(async () => {
     if (!phoneRef.current) return;
@@ -2042,15 +2061,13 @@ export default function WechatChat() {
     try {
       const canvas = await capturePhone(true);
       if (!canvas) return;
-      const link = document.createElement('a');
-      link.download = '微信聊天记录_长截图_' + Date.now() + '.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      showToast('长截图已生成并下载！');
+      const dataUrl = canvas.toDataURL('image/png');
+      const filename = '微信聊天记录_长截图_' + Date.now() + '.png';
+      await saveImageViaIpc(dataUrl, filename);
     } catch (e: unknown) {
       showToast('生成失败：' + (e instanceof Error ? e.message : String(e)));
     }
-  }, [showToast, capturePhone]);
+  }, [showToast, capturePhone, saveImageViaIpc]);
 
   const hasMessages = messages.length > 0;
 

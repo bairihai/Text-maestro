@@ -875,6 +875,31 @@ app.whenReady().then(() => {
       return { success: false, error: (err as Error).message };
     }
   });
+  // 保存生成的 PNG 图片（data:URL 不触发 will-download，必须走 IPC + fs.writeFile）
+  ipcMain.handle('wechat-chat:save-image', async (_event, dataUrl: string, filename: string) => {
+    try {
+      // data:image/png;base64,xxxxx
+      const match = /^data:image\/(\w+);base64,(.+)$/.exec(dataUrl);
+      if (!match) return { success: false, error: '无效的图片数据' };
+      const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+      const buf = Buffer.from(match[2], 'base64');
+      const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+      const defaultPath = join(app.getPath('pictures'), filename.endsWith(`.${ext}`) ? filename : `${filename}.${ext}`);
+      const result = await dialog.showSaveDialog(win, {
+        title: '保存图片',
+        defaultPath,
+        filters: [
+          { name: `${ext.toUpperCase()} 图片`, extensions: [ext] },
+          { name: '所有文件', extensions: ['*'] },
+        ],
+      });
+      if (result.canceled || !result.filePath) return { success: false, canceled: true };
+      await fs.writeFile(result.filePath, buf);
+      return { success: true, filePath: result.filePath };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
 
   // 拦截渲染进程触发的下载（如 html-to-image 生成的 PNG），
   // 弹出"另存为"对话框让用户选择保存位置，避免默认下载目录权限问题。
