@@ -1,12 +1,18 @@
 /**
- * 微信聊天记录生成器 - Electron 渲染端
+ * 微信聊天记录生成器 - Electron 渲染端（v3 重构）
  *
  * 参考: https://github.com/bairihai/wechat-dialog-generator
  * 核心思路: HTML/CSS 渲染真实微信 UI（1125×2436 iPhone 高清画布） + html-to-image 截图
- * 不再使用 Python PIL 加速，所有视觉细节由 CSS 矢量渲染保证真实性
+ *
+ * v3 改进:
+ *  - 左侧单卡片 + 3 个主 Tab（消息 / 用户 / 设置），消息 Tab 内部再用子 Tab 切换视图
+ *  - 数据自动持久化到 localStorage，并支持手动另存为文件 / 从文件加载
+ *  - 群聊昵称开关
+ *  - 消息列表支持切换发送者
+ *  - 气泡内联编辑框尺寸修复（适配 1125 画布缩放）
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { toCanvas } from 'html-to-image';
 import defaultAvatar from '@renderer/assets/wechat_default_avatar.jpg';
 import './wechat-chat.css';
@@ -42,6 +48,15 @@ interface PhoneSettings {
   selfBubbleColor: string;
   otherBubbleColor: string;
   theme: string;
+  showGroupNick: boolean; // 群聊模式下是否显示气泡上方的昵称
+}
+
+interface PersistedState {
+  version: number;
+  users: ChatUser[];
+  messages: ChatMessage[];
+  settings: PhoneSettings;
+  selfId: number | null;
 }
 
 // ==================== 主题预设 ====================
@@ -81,6 +96,70 @@ const THEME_PRESETS: Record<string, ThemePreset> = {
     swatch: ['#ffffff', '#b2dfdb', '#ffffff'],
   },
 };
+
+// ==================== 持久化 ====================
+
+const STORAGE_KEY = 'wechat-chat-state-v3';
+
+const DEFAULT_USERS: ChatUser[] = [
+  { id: 1, name: '我', avatar: null },
+  { id: 2, name: '对方', avatar: null },
+];
+
+const DEFAULT_SETTINGS: PhoneSettings = {
+  time: '12:02',
+  signal: 4,
+  battery: 60,
+  contactName: '',
+  unreadCount: 1,
+  selfBubbleColor: '#95ec69',
+  otherBubbleColor: '#ffffff',
+  theme: 'ios_classic',
+  showGroupNick: true,
+};
+
+function loadPersistedState(): PersistedState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as PersistedState;
+    if (!data || !Array.isArray(data.users) || !Array.isArray(data.messages)) return null;
+    // 兼容老版本 settings
+    if (!data.settings) data.settings = { ...DEFAULT_SETTINGS };
+    if (typeof data.settings.showGroupNick !== 'boolean') data.settings.showGroupNick = true;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedState(state: PersistedState) {
+  try {
+    // 头像和图片是 data:URL，体积可能较大；若超出 localStorage 配额则降级保存（不含头像）
+    const payload = JSON.stringify(state);
+    try {
+      localStorage.setItem(STORAGE_KEY, payload);
+    } catch {
+      // 配额超限：剥离 data:URL 后再保存（至少保住文字部分）
+      const lite: PersistedState = {
+        ...state,
+        users: state.users.map(u => ({ ...u, avatar: u.avatar && u.avatar.startsWith('data:') ? null : u.avatar })),
+        messages: state.messages.map(m =>
+          m.type === 'image' && m.content.startsWith('data:')
+            ? { ...m, content: '' }
+            : m
+        ),
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(lite));
+      } catch {
+        // 还是失败就放弃
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
 
 // ==================== 解析器（参考开源 parser.ts） ====================
 
@@ -260,7 +339,7 @@ const EXAMPLE_TEXT = `**【3月1日 14:32】**
 // ==================== JSON 数据格式（约定） ====================
 
 interface WechatChatJson {
-  version: 1;
+  version: number;
   settings: PhoneSettings;
   users: ChatUser[];
   selfId: number | null;
@@ -276,12 +355,10 @@ function exportToJson(
   return {
     version: 1,
     settings: { ...settings },
-    users: users.map(u => ({ ...u, avatar: null })),
+    // 头像和图片 data:URL 一起保留（用于"另存为文件"，体积大没关系）
+    users: users.map(u => ({ ...u })),
     selfId,
-    messages: messages.map(m => ({
-      ...m,
-      content: m.type === 'image' && m.content.startsWith('data:') ? '' : m.content,
-    })),
+    messages: messages.map(m => ({ ...m })),
   };
 }
 
@@ -299,7 +376,7 @@ function importFromJson(json: WechatChatJson): {
   const users: ChatUser[] = json.users.map(u => ({
     id: u.id ?? nextId++,
     name: String(u.name || '未命名'),
-    avatar: null,
+    avatar: u.avatar ?? null,
   }));
   const messages: ChatMessage[] = json.messages.map(m => ({
     id: m.id ?? nextId++,
@@ -309,14 +386,15 @@ function importFromJson(json: WechatChatJson): {
     params: m.params || {},
   }));
   const settings: PhoneSettings = {
-    time: json.settings?.time || '12:02',
-    signal: json.settings?.signal ?? 4,
-    battery: json.settings?.battery ?? 60,
+    time: json.settings?.time || DEFAULT_SETTINGS.time,
+    signal: json.settings?.signal ?? DEFAULT_SETTINGS.signal,
+    battery: json.settings?.battery ?? DEFAULT_SETTINGS.battery,
     contactName: json.settings?.contactName || '',
-    unreadCount: json.settings?.unreadCount ?? 1,
-    selfBubbleColor: json.settings?.selfBubbleColor || '#95ec69',
-    otherBubbleColor: json.settings?.otherBubbleColor || '#ffffff',
+    unreadCount: json.settings?.unreadCount ?? DEFAULT_SETTINGS.unreadCount,
+    selfBubbleColor: json.settings?.selfBubbleColor || DEFAULT_SETTINGS.selfBubbleColor,
+    otherBubbleColor: json.settings?.otherBubbleColor || DEFAULT_SETTINGS.otherBubbleColor,
     theme: json.settings?.theme || 'ios_classic',
+    showGroupNick: typeof json.settings?.showGroupNick === 'boolean' ? json.settings.showGroupNick : true,
   };
   return { users, messages, settings, selfId: json.selfId ?? users[0]?.id ?? null };
 }
@@ -326,7 +404,7 @@ function importFromJson(json: WechatChatJson): {
 function messagesToMarkdown(
   users: ChatUser[],
   messages: ChatMessage[],
-  selfId: number | null,
+  _selfId: number | null,
 ): string {
   const lines: string[] = [];
   for (const msg of messages) {
@@ -336,9 +414,7 @@ function messagesToMarkdown(
       continue;
     }
     const user = users.find(u => u.id === msg.senderId);
-    const name = user?.name || '?';
-    const isSelf = msg.senderId === selfId;
-    const displayName = isSelf ? '我' : name;
+    const displayName = user?.name || '?';
     let content = '';
     switch (msg.type) {
       case 'text':
@@ -414,7 +490,6 @@ function MicIcon() {
   );
 }
 
-// 底部栏图标（语音/表情/加号）用 SVG 简化
 function BottomVoiceIcon() {
   return (
     <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--wc-icon-color, #333)' }}>
@@ -452,7 +527,6 @@ const IconPlus = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="no
 const IconTrash = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>);
 const IconUp = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>);
 const IconDown = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>);
-
 // ==================== 微信预览子组件 ====================
 
 function escHtml(str: string): string {
@@ -476,6 +550,7 @@ function ChatBubble({
   user,
   isSelf,
   isGroup,
+  showGroupNick,
   selfColor,
   otherColor,
   defaultAvatarSrc,
@@ -485,12 +560,16 @@ function ChatBubble({
   user: ChatUser;
   isSelf: boolean;
   isGroup: boolean;
+  showGroupNick: boolean;
   selfColor: string;
   otherColor: string;
   defaultAvatarSrc: string;
   onUpdateMessage?: (msgId: number, patch: Partial<Pick<ChatMessage, 'content' | 'params'>>) => void;
 }) {
-  const avatarSrc = user.avatar || defaultAvatarSrc;
+  const [avatarSrc, setAvatarSrc] = useState(user.avatar || defaultAvatarSrc);
+  useEffect(() => {
+    setAvatarSrc(user.avatar || defaultAvatarSrc);
+  }, [user.avatar, defaultAvatarSrc]);
   const bubbleColor = isSelf ? selfColor : otherColor;
   const imgInputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
@@ -592,7 +671,7 @@ function ChatBubble({
             onClick={() => imgInputRef.current?.click()}
           >
             {hasImage ? (
-              <img src={msg.content} alt="" />
+              <img src={msg.content} alt="" onError={() => setAvatarSrc(defaultAvatarSrc)} />
             ) : (
               <div className="wc-img-placeholder">
                 <ImageIcon />
@@ -675,10 +754,10 @@ function ChatBubble({
   return (
     <div className={`wc-dialog ${isSelf ? 'wc-dialog-right' : ''}`}>
       <div className="wc-face">
-        <img src={avatarSrc} alt={user.name} />
+        <img src={avatarSrc} alt={user.name} onError={() => setAvatarSrc(defaultAvatarSrc)} />
       </div>
       <div className="wc-body">
-        {!isSelf && isGroup && <div className="wc-nick">{user.name}</div>}
+        {!isSelf && isGroup && showGroupNick && <div className="wc-nick">{user.name}</div>}
         {renderContent()}
       </div>
     </div>
@@ -703,8 +782,15 @@ function PhonePreview({
   onUpdateMessage?: (msgId: number, patch: Partial<Pick<ChatMessage, 'content' | 'params'>>) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
-
   const isGroup = users.length > 2;
+
+  // 消息变化时自动滚到底部
+  useEffect(() => {
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [messages]);
+
   return (
     <div className="wc-phone-scale-wrap">
       <div className="wc-phone-wrap">
@@ -760,6 +846,7 @@ function PhonePreview({
                       user={user}
                       isSelf={isSelf}
                       isGroup={isGroup}
+                      showGroupNick={settings.showGroupNick}
                       selfColor={settings.selfBubbleColor}
                       otherColor={settings.otherBubbleColor}
                       defaultAvatarSrc={defaultAvatarSrc}
@@ -798,31 +885,79 @@ function PhonePreview({
   );
 }
 
-// ==================== 编辑面板子组件 ====================
+// ==================== 主 Tab 容器 ====================
 
-// 「当前数据」面板：实时显示当前聊天记录的 Markdown / JSON 双视图，可切换、可编辑、可应用回主状态
-function CurrentDataPanel({
+type MainTab = 'messages' | 'users' | 'settings';
+
+function MainTabs({
+  active,
+  onChange,
+}: {
+  active: MainTab;
+  onChange: (t: MainTab) => void;
+}) {
+  const tabs: { key: MainTab; label: string }[] = [
+    { key: 'messages', label: '消息' },
+    { key: 'users', label: '用户' },
+    { key: 'settings', label: '设置' },
+  ];
+  return (
+    <div className="wc-main-tabs">
+      {tabs.map(t => (
+        <button
+          key={t.key}
+          className={`wc-main-tab ${active === t.key ? 'active' : ''}`}
+          onClick={() => onChange(t.key)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ==================== 消息 Tab：内含子 Tab（列表/Markdown/JSON） ====================
+
+type MsgView = 'list' | 'markdown' | 'json';
+
+function MessagesTab({
   users,
   messages,
   settings,
   selfId,
+  onAddMessage,
+  onDeleteMessage,
+  onMoveUp,
+  onMoveDown,
+  onChangeSender,
   onApplyMarkdown,
   onApplyJson,
+  onLoadExample,
+  onClearAll,
+  onImportFile,
   showToast,
 }: {
   users: ChatUser[];
   messages: ChatMessage[];
   settings: PhoneSettings;
   selfId: number | null;
+  onAddMessage: (msg: Omit<ChatMessage, 'id'>) => void;
+  onDeleteMessage: (id: number) => void;
+  onMoveUp: (id: number) => void;
+  onMoveDown: (id: number) => void;
+  onChangeSender: (id: number, senderId: number) => void;
   onApplyMarkdown: (text: string) => void;
   onApplyJson: (jsonText: string) => void;
+  onLoadExample: () => void;
+  onClearAll: () => void;
+  onImportFile: (text: string, filename: string) => void;
   showToast: (msg: string) => void;
 }) {
-  const [view, setView] = useState<'markdown' | 'json'>('markdown');
+  const [view, setView] = useState<MsgView>('list');
   const [editText, setEditText] = useState('');
   const [editing, setEditing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 当前数据的 Markdown / JSON 字符串
   const markdownText = React.useMemo(
     () => messagesToMarkdown(users, messages, selfId),
     [users, messages, selfId],
@@ -831,8 +966,16 @@ function CurrentDataPanel({
     () => JSON.stringify(exportToJson(users, messages, settings, selfId), null, 2),
     [users, messages, settings, selfId],
   );
-
   const displayText = view === 'markdown' ? markdownText : jsonText;
+
+  const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => onImportFile(ev.target?.result as string, file.name);
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(displayText).then(
@@ -878,9 +1021,8 @@ function CurrentDataPanel({
     }
   };
 
-  const handleSwapView = (newView: 'markdown' | 'json') => {
+  const handleSwapView = (newView: MsgView) => {
     if (editing) {
-      // 切换视图前先取消编辑
       setEditing(false);
       setEditText('');
     }
@@ -888,307 +1030,205 @@ function CurrentDataPanel({
   };
 
   return (
-    <div className="wc-card">
-      <div className="wc-card-header">
-        <IconImage /> 当前数据
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af' }}>
-          {messages.length} 条消息 · {users.length} 个用户
-        </span>
-      </div>
-      <div className="wc-card-body">
-        <div className="wc-input-mode-tabs">
-          <button
-            className={`wc-input-mode-tab ${view === 'markdown' ? 'active' : ''}`}
-            onClick={() => handleSwapView('markdown')}
-          >
-            Markdown 视图
-          </button>
-          <button
-            className={`wc-input-mode-tab ${view === 'json' ? 'active' : ''}`}
-            onClick={() => handleSwapView('json')}
-          >
-            JSON 视图
-          </button>
-        </div>
-        {!editing ? (
-          <pre
-            style={{
-              margin: 0,
-              padding: 12,
-              background: 'rgba(0,0,0,0.03)',
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-              maxHeight: 320,
-              overflow: 'auto',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-all',
-              color: 'var(--arco-color-text-1, #000)',
-              border: '1px solid var(--arco-color-border-2, #e5e5e5)',
-            }}
-          >
-            {displayText || '(空)'}
-          </pre>
-        ) : (
-          <textarea
-            className="wc-textarea"
-            style={{ minHeight: 240, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}
-            value={editText}
-            onChange={e => setEditText(e.target.value)}
-            autoFocus
-          />
-        )}
-        <div className="wc-json-actions">
-          {!editing ? (
-            <>
-              <button className="wc-btn wc-btn-sm" onClick={handleCopy}>
-                <IconCopy /> 复制
-              </button>
-              <button className="wc-btn wc-btn-sm" onClick={handleDownload}>
-                <IconDownload /> 下载
-              </button>
-              <button className="wc-btn wc-btn-sm" onClick={handleStartEdit}>
-                <IconPlus /> 编辑并应用
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleApply}>
-                应用到预览
-              </button>
-              <button className="wc-btn wc-btn-sm" onClick={handleCancelEdit}>
-                取消
-              </button>
-              <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
-                {view === 'markdown' ? '编辑后点击「应用到预览」会替换当前所有消息' : '编辑后点击「应用到预览」会替换当前所有数据（含设置/用户）'}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ImportPanel({
-  text,
-  onTextChange,
-  onImport,
-}: {
-  text: string;
-  onTextChange: (t: string) => void;
-  onImport: () => void;
-}) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => onTextChange(ev.target?.result as string);
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  return (
-    <div className="wc-card">
-      <div className="wc-card-header">
-        <IconImage /> 导入聊天记录
-      </div>
-      <div className="wc-card-body">
-        <div className="wc-format-tip">
-          <strong>支持的格式：</strong>
-          <br />
-          文字消息：<code>**用户名**：消息内容</code>
-          <br />
-          图片消息：<code>**用户名**：[图片]</code> 或 <code>**用户名**：[图片]URL</code>
-          <br />
-          红包消息：<code>**用户名**：[红包]备注</code>
-          <br />
-          转账消息：<code>**用户名**：[转账]金额:备注</code>
-          <br />
-          语音消息：<code>**用户名**：[语音]秒数</code>
-          <br />
-          时间节点：<code>**【3月1日 14:32】**</code>
-          <br />
-          <div style={{ marginTop: 6, color: '#9ca3af' }}>
-            标题行(#)、引用行(&gt;)、空行自动跳过。第一个出现的用户默认为"自己"。图片不带URL时可在预览中点击上传本地图片。
-          </div>
-        </div>
-        <div className="wc-btn-row">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.txt,.markdown"
-            hidden
-            onChange={handleFileLoad}
-          />
-          <button className="wc-btn wc-btn-sm" onClick={() => fileInputRef.current?.click()}>
+    <div className="wc-tab-pane">
+      {/* 子 Tab 切换 */}
+      <div className="wc-sub-tabs">
+        <button className={`wc-sub-tab ${view === 'list' ? 'active' : ''}`} onClick={() => handleSwapView('list')}>
+          列表编辑
+        </button>
+        <button className={`wc-sub-tab ${view === 'markdown' ? 'active' : ''}`} onClick={() => handleSwapView('markdown')}>
+          Markdown
+        </button>
+        <button className={`wc-sub-tab ${view === 'json' ? 'active' : ''}`} onClick={() => handleSwapView('json')}>
+          JSON
+        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <input ref={fileInputRef} type="file" accept=".md,.txt,.markdown,.json" hidden onChange={handleFileLoad} />
+          <button className="wc-btn wc-btn-sm" onClick={() => fileInputRef.current?.click()} title="从文件导入 Markdown 或 JSON">
             <IconImage /> 导入文件
           </button>
-          <button className="wc-btn wc-btn-sm" onClick={() => onTextChange(EXAMPLE_TEXT)}>
-            加载示例
+          <button className="wc-btn wc-btn-sm" onClick={onLoadExample} title="加载示例">
+            <IconPlus /> 示例
           </button>
-        </div>
-        <textarea
-          className="wc-textarea"
-          value={text}
-          onChange={e => onTextChange(e.target.value)}
-          placeholder="在此粘贴聊天记录文本，或点击上方按钮导入文件..."
-        />
-        <div className="wc-btn-row">
-          <button className="wc-btn wc-btn-primary" onClick={onImport} disabled={!text.trim()}>
-            <IconPlus /> 解析并导入
-          </button>
-          <button className="wc-btn wc-btn-sm" onClick={() => onTextChange('')} disabled={!text}>
+          <button className="wc-btn wc-btn-sm" onClick={onClearAll} disabled={messages.length === 0} title="清空所有消息">
             <IconTrash /> 清空
           </button>
         </div>
       </div>
-    </div>
-  );
-}
 
-function UserAvatarManager({
-  users,
-  selfId,
-  defaultAvatarSrc,
-  onUpdateAvatar,
-  onRemoveAvatar,
-  onSetSelf,
-  onAddUser,
-}: {
-  users: ChatUser[];
-  selfId: number | null;
-  defaultAvatarSrc: string;
-  onUpdateAvatar: (userId: number, avatar: string) => void;
-  onRemoveAvatar: (userId: number) => void;
-  onSetSelf: (userId: number) => void;
-  onAddUser?: (name: string) => void;
-}) {
-  const [newUserName, setNewUserName] = useState('');
-  const handleAdd = () => {
-    const name = newUserName.trim();
-    if (!name) return;
-    onAddUser?.(name);
-    setNewUserName('');
-  };
-  return (
-    <div className="wc-card">
-      <div className="wc-card-header">
-        <IconImage /> 用户管理
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af' }}>{users.length} 个用户</span>
-      </div>
-      <div className="wc-card-body">
-        <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>鼠标悬停头像可上传自定义图片，点击「设为自己」切换左右方向</p>
-        <div className="wc-avatar-grid">
-          {users.map((user) => (
-            <AvatarCard
-              key={user.id}
-              user={user}
-              isSelf={user.id === selfId}
-              defaultAvatarSrc={defaultAvatarSrc}
-              onUpdateAvatar={onUpdateAvatar}
-              onRemoveAvatar={onRemoveAvatar}
-              onSetSelf={onSetSelf}
-            />
-          ))}
-        </div>
-        {onAddUser && (
-          <div className="wc-me-row" style={{ marginTop: 8 }}>
-            <input
-              className="wc-me-input"
-              type="text"
-              placeholder="新用户昵称"
-              value={newUserName}
-              onChange={e => setNewUserName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAdd();
-                }
-              }}
-              style={{ flex: 1 }}
-            />
-            <button className="wc-btn wc-btn-sm" onClick={handleAdd} disabled={!newUserName.trim()}>
-              <IconPlus /> 添加用户
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AvatarCard({
-  user,
-  isSelf,
-  defaultAvatarSrc,
-  onUpdateAvatar,
-  onRemoveAvatar,
-  onSetSelf,
-}: {
-  user: ChatUser;
-  isSelf: boolean;
-  defaultAvatarSrc: string;
-  onUpdateAvatar: (userId: number, avatar: string) => void;
-  onRemoveAvatar: (userId: number) => void;
-  onSetSelf: (userId: number) => void;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const avatarSrc = user.avatar || defaultAvatarSrc;
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => onUpdateAvatar(user.id, ev.target?.result as string);
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-  return (
-    <div className="wc-avatar-card">
-      <div className="wc-avatar-img-wrap">
-        <img src={avatarSrc} alt={user.name} />
-        <div className="wc-avatar-overlay" onClick={() => fileRef.current?.click()}>
-          <IconImage />
-        </div>
-        {user.avatar && (
-          <button
-            className="wc-avatar-remove"
-            onClick={() => onRemoveAvatar(user.id)}
-            style={{
-              position: 'absolute',
-              top: 2,
-              right: 2,
-              width: 18,
-              height: 18,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.6)',
-              color: '#fff',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 11,
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
-        )}
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleUpload} />
-      </div>
-      <span className="wc-avatar-name">{user.name}</span>
-      {isSelf ? (
-        <span className="wc-avatar-tag">自己</span>
+      {view === 'list' ? (
+        <>
+          {/* 添加消息 */}
+          <MessageAddForm users={users} selfId={selfId} onAddMessage={onAddMessage} />
+          {/* 消息列表 */}
+          <MessageListSection
+            messages={messages}
+            users={users}
+            selfId={selfId}
+            onDelete={onDeleteMessage}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+            onChangeSender={onChangeSender}
+          />
+        </>
       ) : (
-        <button className="wc-avatar-set-self" onClick={() => onSetSelf(user.id)}>
-          设为自己
-        </button>
+        <>
+          {!editing ? (
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                background: 'rgba(0,0,0,0.03)',
+                borderRadius: 6,
+                fontSize: 12,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                maxHeight: 420,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                color: 'var(--arco-color-text-1, #000)',
+                border: '1px solid var(--arco-color-border-2, #e5e5e5)',
+              }}
+            >
+              {displayText || '(空)'}
+            </pre>
+          ) : (
+            <textarea
+              className="wc-textarea"
+              style={{ minHeight: 320, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              autoFocus
+            />
+          )}
+          <div className="wc-json-actions">
+            {!editing ? (
+              <>
+                <button className="wc-btn wc-btn-sm" onClick={handleCopy}>
+                  <IconCopy /> 复制
+                </button>
+                <button className="wc-btn wc-btn-sm" onClick={handleDownload}>
+                  <IconDownload /> 下载
+                </button>
+                <button className="wc-btn wc-btn-sm" onClick={handleStartEdit}>
+                  <IconPlus /> 编辑并应用
+                </button>
+                <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+                  {messages.length} 条消息 · {users.length} 个用户
+                </span>
+              </>
+            ) : (
+              <>
+                <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleApply}>
+                  应用到预览
+                </button>
+                <button className="wc-btn wc-btn-sm" onClick={handleCancelEdit}>
+                  取消
+                </button>
+                <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+                  {view === 'markdown' ? '编辑后点击「应用到预览」会替换当前所有消息' : '编辑后点击「应用到预览」会替换当前所有数据（含设置/用户）'}
+                </span>
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function MessageEditor({
+// ---- 消息列表区段（含切换发送者） ----
+function MessageListSection({
+  messages,
+  users,
+  selfId,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  onChangeSender,
+}: {
+  messages: ChatMessage[];
+  users: ChatUser[];
+  selfId: number | null;
+  onDelete: (id: number) => void;
+  onMoveUp: (id: number) => void;
+  onMoveDown: (id: number) => void;
+  onChangeSender: (id: number, senderId: number) => void;
+}) {
+  if (messages.length === 0) {
+    return (
+      <div className="wc-empty-hint">
+        暂无消息。可以在上方直接添加，或切换到 Markdown / JSON 视图批量编辑。
+      </div>
+    );
+  }
+  const typeLabel: Record<MessageType, string> = {
+    text: '文字',
+    image: '图片',
+    voice: '语音',
+    redpacket: '红包',
+    transfer: '转账',
+    time: '时间',
+  };
+  const previewText = (msg: ChatMessage): string => {
+    switch (msg.type) {
+      case 'text': return msg.content;
+      case 'image': return msg.content ? '[已上传图片]' : '[占位图片]';
+      case 'voice': return `[语音] ${msg.params.duration || 3}"`;
+      case 'redpacket': return `[红包] ${msg.params.remark || ''}`;
+      case 'transfer': return `[转账] ¥${msg.params.amount || 0} ${msg.params.remark || ''}`;
+      case 'time': return msg.content;
+      default: return '';
+    }
+  };
+  return (
+    <div className="wc-msg-list">
+      {messages.map((msg, idx) => {
+        const user = users.find(u => u.id === msg.senderId) || users[0];
+        const isTimeOrSpecial = msg.type === 'time';
+        return (
+          <div key={msg.id} className="wc-msg-item">
+            <div className="wc-msg-meta">
+              <span className="wc-msg-sender">
+                [{typeLabel[msg.type]}]
+                {!isTimeOrSpecial && (
+                  <select
+                    className="wc-msg-sender-select"
+                    value={msg.senderId}
+                    onChange={e => onChangeSender(msg.id, Number(e.target.value))}
+                    title="切换发送者"
+                  >
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}{u.id === selfId ? '（自己）' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {isTimeOrSpecial && <span style={{ marginLeft: 4 }}>{user?.name || '系统'}</span>}
+              </span>
+              <span className="wc-msg-preview">{previewText(msg)}</span>
+            </div>
+            <div className="wc-msg-actions">
+              <button className="wc-msg-action-btn up" onClick={() => onMoveUp(msg.id)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.4 : 1 }} title="上移">
+                <IconUp />
+              </button>
+              <button className="wc-msg-action-btn up" onClick={() => onMoveDown(msg.id)} disabled={idx === messages.length - 1} style={{ opacity: idx === messages.length - 1 ? 0.4 : 1 }} title="下移">
+                <IconDown />
+              </button>
+              <button className="wc-msg-action-btn" onClick={() => onDelete(msg.id)} title="删除">
+                <IconTrash />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---- 添加消息表单 ----
+function MessageAddForm({
   users,
   selfId,
   onAddMessage,
@@ -1198,7 +1238,13 @@ function MessageEditor({
   onAddMessage: (msg: Omit<ChatMessage, 'id'>) => void;
 }) {
   const [msgType, setMsgType] = useState<MessageType>('text');
-  const [senderId, setSenderId] = useState<number | ''>(selfId ?? '');
+  // 跟随 selfId 变化（修复旧版不跟随的 bug）
+  const [senderId, setSenderId] = useState<number | ''>(selfId ?? users[0]?.id ?? '');
+  useEffect(() => {
+    if (selfId !== null && (senderId === '' || !users.some(u => u.id === senderId))) {
+      setSenderId(selfId);
+    }
+  }, [selfId, users, senderId]);
   const [textContent, setTextContent] = useState('');
   const [remark, setRemark] = useState('');
   const [amount, setAmount] = useState('');
@@ -1236,18 +1282,14 @@ function MessageEditor({
         break;
       case 'redpacket':
         onAddMessage({
-          type: 'redpacket',
-          senderId: senderId as number,
-          content: '',
+          type: 'redpacket', senderId: senderId as number, content: '',
           params: { remark: remark || '恭喜发财，大吉大利' },
         });
         setRemark('');
         break;
       case 'transfer':
         onAddMessage({
-          type: 'transfer',
-          senderId: senderId as number,
-          content: '',
+          type: 'transfer', senderId: senderId as number, content: '',
           params: { amount: amount || '0', remark: remark || '转账' },
         });
         setAmount('');
@@ -1255,9 +1297,7 @@ function MessageEditor({
         break;
       case 'voice':
         onAddMessage({
-          type: 'voice',
-          senderId: senderId as number,
-          content: '',
+          type: 'voice', senderId: senderId as number, content: '',
           params: { duration: parseInt(duration || '3', 10) },
         });
         setDuration('3');
@@ -1274,138 +1314,237 @@ function MessageEditor({
     { type: 'time', label: '时间' },
   ];
 
-  const renderFields = () => {
-    if (msgType === 'time') {
-      return (
-        <input
-          className="wc-me-input"
-          type="text"
-          placeholder="如：3月15日 下午14:00"
-          value={timeContent}
-          onChange={e => setTimeContent(e.target.value)}
-        />
-      );
-    }
-    return (
-      <>
-        <select
-          className="wc-me-select"
-          value={senderId}
-          onChange={e => setSenderId(e.target.value ? Number(e.target.value) : '')}
-        >
-          <option value="">选择发送人</option>
-          {users.map(u => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-              {u.id === selfId ? '（自己）' : ''}
-            </option>
-          ))}
-        </select>
-        {msgType === 'text' && (
-          <textarea
-            className="wc-me-input wc-me-textarea"
-            placeholder="输入消息内容..."
-            value={textContent}
-            onChange={e => setTextContent(e.target.value)}
-            rows={2}
-          />
-        )}
-        {msgType === 'image' && (
-          <div>
-            {imagePreview ? (
-              <div className="wc-me-img-preview">
-                <img src={imagePreview} alt="" />
-                <button className="wc-me-img-remove" onClick={() => setImagePreview(null)}>×</button>
-              </div>
-            ) : (
-              <button className="wc-me-img-upload" onClick={() => imgRef.current?.click()}>
-                <IconImage />
-                <span>选择图片</span>
-              </button>
-            )}
-            <input ref={imgRef} type="file" accept="image/*" hidden onChange={handleImageChange} />
-          </div>
-        )}
-        {msgType === 'redpacket' && (
-          <input
-            className="wc-me-input"
-            type="text"
-            placeholder="红包备注（默认：恭喜发财，大吉大利）"
-            value={remark}
-            onChange={e => setRemark(e.target.value)}
-          />
-        )}
-        {msgType === 'transfer' && (
-          <div className="wc-me-row">
-            <input
-              className="wc-me-input"
-              type="text"
-              placeholder="金额"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <input
-              className="wc-me-input"
-              type="text"
-              placeholder="备注（默认：转账）"
-              value={remark}
-              onChange={e => setRemark(e.target.value)}
-              style={{ flex: 2 }}
-            />
-          </div>
-        )}
-        {msgType === 'voice' && (
-          <div className="wc-me-row">
-            <input
-              className="wc-me-input"
-              type="number"
-              min={1}
-              max={60}
-              placeholder="语音秒数"
-              value={duration}
-              onChange={e => setDuration(e.target.value)}
-              style={{ width: 100 }}
-            />
-            <span style={{ fontSize: 12, color: '#6b7280', alignSelf: 'center' }}>秒</span>
-          </div>
-        )}
-      </>
-    );
-  };
-
   return (
-    <div className="wc-card">
-      <div className="wc-card-header">
-        <IconPlus /> 添加消息
+    <div className="wc-add-form">
+      <div className="wc-me-type-tabs">
+        {MSG_TYPES.map(t => (
+          <button key={t.type} className={`wc-me-type-tab ${msgType === t.type ? 'active' : ''}`} onClick={() => setMsgType(t.type)}>
+            {t.label}
+          </button>
+        ))}
       </div>
-      <div className="wc-card-body">
-        <div className="wc-me-type-tabs">
-          {MSG_TYPES.map(t => (
-            <button
-              key={t.type}
-              className={`wc-me-type-tab ${msgType === t.type ? 'active' : ''}`}
-              onClick={() => setMsgType(t.type)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {renderFields()}
-        <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleAdd}>
-          <IconPlus /> 添加
+      {msgType === 'time' ? (
+        <input className="wc-me-input" type="text" placeholder="如：3月15日 下午14:00" value={timeContent} onChange={e => setTimeContent(e.target.value)} />
+      ) : (
+        <>
+          <select className="wc-me-select" value={senderId} onChange={e => setSenderId(e.target.value ? Number(e.target.value) : '')}>
+            <option value="">选择发送人</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.name}{u.id === selfId ? '（自己）' : ''}
+              </option>
+            ))}
+          </select>
+          {msgType === 'text' && (
+            <textarea className="wc-me-input wc-me-textarea" placeholder="输入消息内容..." value={textContent} onChange={e => setTextContent(e.target.value)} rows={2} />
+          )}
+          {msgType === 'image' && (
+            <div>
+              {imagePreview ? (
+                <div className="wc-me-img-preview">
+                  <img src={imagePreview} alt="" />
+                  <button className="wc-me-img-remove" onClick={() => setImagePreview(null)}>×</button>
+                </div>
+              ) : (
+                <button className="wc-me-img-upload" onClick={() => imgRef.current?.click()}>
+                  <IconImage />
+                  <span>选择图片</span>
+                </button>
+              )}
+              <input ref={imgRef} type="file" accept="image/*" hidden onChange={handleImageChange} />
+            </div>
+          )}
+          {msgType === 'redpacket' && (
+            <input className="wc-me-input" type="text" placeholder="红包备注（默认：恭喜发财，大吉大利）" value={remark} onChange={e => setRemark(e.target.value)} />
+          )}
+          {msgType === 'transfer' && (
+            <div className="wc-me-row">
+              <input className="wc-me-input" type="text" placeholder="金额" value={amount} onChange={e => setAmount(e.target.value)} style={{ flex: 1 }} />
+              <input className="wc-me-input" type="text" placeholder="备注（默认：转账）" value={remark} onChange={e => setRemark(e.target.value)} style={{ flex: 2 }} />
+            </div>
+          )}
+          {msgType === 'voice' && (
+            <div className="wc-me-row">
+              <input className="wc-me-input" type="number" min={1} max={60} placeholder="语音秒数" value={duration} onChange={e => setDuration(e.target.value)} style={{ width: 100 }} />
+              <span style={{ fontSize: 12, color: '#6b7280', alignSelf: 'center' }}>秒</span>
+            </div>
+          )}
+        </>
+      )}
+      <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleAdd}>
+        <IconPlus /> 添加
+      </button>
+    </div>
+  );
+}
+
+// ==================== 用户 Tab ====================
+
+function UsersTab({
+  users,
+  selfId,
+  defaultAvatarSrc,
+  onUpdateAvatar,
+  onRemoveAvatar,
+  onSetSelf,
+  onAddUser,
+  onRenameUser,
+  onDeleteUser,
+}: {
+  users: ChatUser[];
+  selfId: number | null;
+  defaultAvatarSrc: string;
+  onUpdateAvatar: (userId: number, avatar: string) => void;
+  onRemoveAvatar: (userId: number) => void;
+  onSetSelf: (userId: number) => void;
+  onAddUser: (name: string) => void;
+  onRenameUser: (userId: number, name: string) => void;
+  onDeleteUser: (userId: number) => void;
+}) {
+  const [newUserName, setNewUserName] = useState('');
+  const handleAdd = () => {
+    const name = newUserName.trim();
+    if (!name) return;
+    onAddUser(name);
+    setNewUserName('');
+  };
+  return (
+    <div className="wc-tab-pane">
+      <p className="wc-tab-tip">
+        鼠标悬停头像可上传自定义图片；点击「设为自己」切换左右方向；点击昵称可重命名。
+      </p>
+      <div className="wc-avatar-grid">
+        {users.map(user => (
+          <AvatarCard
+            key={user.id}
+            user={user}
+            isSelf={user.id === selfId}
+            defaultAvatarSrc={defaultAvatarSrc}
+            onUpdateAvatar={onUpdateAvatar}
+            onRemoveAvatar={onRemoveAvatar}
+            onSetSelf={onSetSelf}
+            onRename={onRenameUser}
+            onDelete={onDeleteUser}
+            canDelete={users.length > 1 && user.id !== selfId}
+          />
+        ))}
+      </div>
+      <div className="wc-me-row" style={{ marginTop: 12 }}>
+        <input className="wc-me-input" type="text" placeholder="新用户昵称" value={newUserName}
+          onChange={e => setNewUserName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+          style={{ flex: 1 }} />
+        <button className="wc-btn wc-btn-sm" onClick={handleAdd} disabled={!newUserName.trim()}>
+          <IconPlus /> 添加用户
         </button>
       </div>
     </div>
   );
 }
 
-function SettingsPanel({
+function AvatarCard({
+  user,
+  isSelf,
+  defaultAvatarSrc,
+  onUpdateAvatar,
+  onRemoveAvatar,
+  onSetSelf,
+  onRename,
+  onDelete,
+  canDelete,
+}: {
+  user: ChatUser;
+  isSelf: boolean;
+  defaultAvatarSrc: string;
+  onUpdateAvatar: (userId: number, avatar: string) => void;
+  onRemoveAvatar: (userId: number) => void;
+  onSetSelf: (userId: number) => void;
+  onRename: (userId: number, name: string) => void;
+  onDelete: (userId: number) => void;
+  canDelete: boolean;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarSrc, setAvatarSrc] = useState(user.avatar || defaultAvatarSrc);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(user.name);
+  useEffect(() => { setAvatarSrc(user.avatar || defaultAvatarSrc); }, [user.avatar, defaultAvatarSrc]);
+  useEffect(() => { setNameValue(user.name); }, [user.name]);
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => onUpdateAvatar(user.id, ev.target?.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  const commitName = () => {
+    const v = nameValue.trim();
+    if (v && v !== user.name) onRename(user.id, v);
+    else setNameValue(user.name);
+    setEditingName(false);
+  };
+  return (
+    <div className="wc-avatar-card">
+      <div className="wc-avatar-img-wrap">
+        <img src={avatarSrc} alt={user.name} onError={() => setAvatarSrc(defaultAvatarSrc)} />
+        <div className="wc-avatar-overlay" onClick={() => fileRef.current?.click()}>
+          <IconImage />
+        </div>
+        {user.avatar && (
+          <button className="wc-avatar-remove" onClick={() => onRemoveAvatar(user.id)} title="移除自定义头像">
+            ×
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleUpload} />
+      </div>
+      {editingName ? (
+        <input
+          className="wc-avatar-name-input"
+          value={nameValue}
+          onChange={e => setNameValue(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); commitName(); }
+            else if (e.key === 'Escape') { setNameValue(user.name); setEditingName(false); }
+          }}
+          autoFocus
+        />
+      ) : (
+        <span className="wc-avatar-name" onClick={() => setEditingName(true)} title="点击重命名">
+          {user.name}
+        </span>
+      )}
+      {isSelf ? (
+        <span className="wc-avatar-tag">自己</span>
+      ) : (
+        <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+          <button className="wc-avatar-set-self" onClick={() => onSetSelf(user.id)}>设为自己</button>
+          {canDelete && (
+            <button className="wc-avatar-set-self" style={{ color: '#d4380d' }} onClick={() => onDelete(user.id)} title="删除用户">
+              删除
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== 设置 Tab ====================
+
+function SettingsTab({
   settings,
   onSettingsChange,
+  onSaveToFile,
+  onLoadFromFile,
+  onClearStorage,
 }: {
   settings: PhoneSettings;
   onSettingsChange: (s: PhoneSettings) => void;
+  onSaveToFile: () => void;
+  onLoadFromFile: () => void;
+  onClearStorage: () => void;
 }) {
   const update = (patch: Partial<PhoneSettings>) => onSettingsChange({ ...settings, ...patch });
 
@@ -1421,206 +1560,93 @@ function SettingsPanel({
   };
 
   return (
-    <div className="wc-card">
-      <div className="wc-card-header">
-        <IconImage /> 外观设置
-      </div>
-      <div className="wc-card-body">
-        <div className="wc-form-item" style={{ marginBottom: 12 }}>
-          <label className="wc-form-label">主题预设</label>
-          <div className="wc-theme-selector">
-            {Object.entries(THEME_PRESETS).map(([key, preset]) => (
-              <div
-                key={key}
-                className={`wc-theme-option ${settings.theme === key ? 'active' : ''}`}
-                onClick={() => applyTheme(key)}
-              >
-                <div className="wc-theme-swatch">
-                  <span style={{ background: preset.swatch[0] }} />
-                  <span style={{ background: preset.swatch[1] }} />
-                  <span style={{ background: preset.swatch[2] }} />
-                </div>
-                <span>{preset.name}</span>
+    <div className="wc-tab-pane">
+      {/* 主题预设 */}
+      <div className="wc-form-item" style={{ marginBottom: 12 }}>
+        <label className="wc-form-label">主题预设</label>
+        <div className="wc-theme-selector">
+          {Object.entries(THEME_PRESETS).map(([key, preset]) => (
+            <div key={key} className={`wc-theme-option ${settings.theme === key ? 'active' : ''}`} onClick={() => applyTheme(key)}>
+              <div className="wc-theme-swatch">
+                <span style={{ background: preset.swatch[0] }} />
+                <span style={{ background: preset.swatch[1] }} />
+                <span style={{ background: preset.swatch[2] }} />
               </div>
-            ))}
-          </div>
-        </div>
-        <div className="wc-form-grid">
-          <div className="wc-form-item">
-            <label className="wc-form-label">手机时间</label>
-            <input
-              type="time"
-              className="wc-form-input"
-              value={settings.time}
-              onChange={e => update({ time: e.target.value })}
-            />
-          </div>
-          <div className="wc-form-item">
-            <label className="wc-form-label">聊天标题</label>
-            <input
-              type="text"
-              className="wc-form-input"
-              value={settings.contactName}
-              onChange={e => update({ contactName: e.target.value })}
-            />
-          </div>
-          <div className="wc-form-item">
-            <label className="wc-form-label">信号格数</label>
-            <select
-              className="wc-form-input"
-              value={settings.signal}
-              onChange={e => update({ signal: parseInt(e.target.value) })}
-            >
-              <option value={1}>1格</option>
-              <option value={2}>2格</option>
-              <option value={3}>3格</option>
-              <option value={4}>4格</option>
-            </select>
-          </div>
-          <div className="wc-form-item">
-            <label className="wc-form-label">未读消息</label>
-            <input
-              type="number"
-              className="wc-form-input"
-              min={0}
-              max={99}
-              value={settings.unreadCount}
-              onChange={e => update({ unreadCount: parseInt(e.target.value) || 0 })}
-            />
-          </div>
-          <div className="wc-form-item">
-            <label className="wc-form-label">电量 {settings.battery}%</label>
-            <input
-              type="range"
-              className="wc-form-range"
-              min={0}
-              max={100}
-              value={settings.battery}
-              onChange={e => update({ battery: parseInt(e.target.value) })}
-            />
-          </div>
-          <div className="wc-form-item">
-            <label className="wc-form-label">自己气泡色</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input
-                type="color"
-                className="wc-form-color"
-                value={settings.selfBubbleColor}
-                onChange={e => update({ selfBubbleColor: e.target.value })}
-              />
-              <span style={{ fontSize: 12, color: '#6b7280' }}>{settings.selfBubbleColor}</span>
+              <span>{preset.name}</span>
             </div>
-          </div>
-          <div className="wc-form-item">
-            <label className="wc-form-label">他人气泡色</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input
-                type="color"
-                className="wc-form-color"
-                value={settings.otherBubbleColor}
-                onChange={e => update({ otherBubbleColor: e.target.value })}
-              />
-              <span style={{ fontSize: 12, color: '#6b7280' }}>{settings.otherBubbleColor}</span>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
-    </div>
-  );
-}
 
-function MessageList({
-  messages,
-  users,
-  selfId,
-  onDelete,
-  onMoveUp,
-  onMoveDown,
-}: {
-  messages: ChatMessage[];
-  users: ChatUser[];
-  selfId: number | null;
-  onDelete: (id: number) => void;
-  onMoveUp: (id: number) => void;
-  onMoveDown: (id: number) => void;
-}) {
-  if (messages.length === 0) return null;
-  const typeLabel: Record<MessageType, string> = {
-    text: '文字',
-    image: '图片',
-    voice: '语音',
-    redpacket: '红包',
-    transfer: '转账',
-    time: '时间',
-  };
-  const previewText = (msg: ChatMessage): string => {
-    switch (msg.type) {
-      case 'text':
-        return msg.content;
-      case 'image':
-        return msg.content ? '[已上传图片]' : '[占位图片]';
-      case 'voice':
-        return `[语音] ${msg.params.duration || 3}"`;
-      case 'redpacket':
-        return `[红包] ${msg.params.remark || ''}`;
-      case 'transfer':
-        return `[转账] ¥${msg.params.amount || 0} ${msg.params.remark || ''}`;
-      case 'time':
-        return msg.content;
-      default:
-        return '';
-    }
-  };
-  return (
-    <div className="wc-card">
-      <div className="wc-card-header">
-        <IconImage /> 消息列表
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af' }}>{messages.length} 条</span>
+      <div className="wc-form-grid">
+        <div className="wc-form-item">
+          <label className="wc-form-label">手机时间</label>
+          <input type="time" className="wc-form-input" value={settings.time} onChange={e => update({ time: e.target.value })} />
+        </div>
+        <div className="wc-form-item">
+          <label className="wc-form-label">聊天标题</label>
+          <input type="text" className="wc-form-input" value={settings.contactName} onChange={e => update({ contactName: e.target.value })} placeholder="留空显示「对方」" />
+        </div>
+        <div className="wc-form-item">
+          <label className="wc-form-label">信号格数</label>
+          <select className="wc-form-input" value={settings.signal} onChange={e => update({ signal: parseInt(e.target.value) })}>
+            <option value={1}>1格</option>
+            <option value={2}>2格</option>
+            <option value={3}>3格</option>
+            <option value={4}>4格</option>
+          </select>
+        </div>
+        <div className="wc-form-item">
+          <label className="wc-form-label">未读消息</label>
+          <input type="number" className="wc-form-input" min={0} max={99} value={settings.unreadCount} onChange={e => update({ unreadCount: parseInt(e.target.value) || 0 })} />
+        </div>
+        <div className="wc-form-item">
+          <label className="wc-form-label">电量 {settings.battery}%</label>
+          <input type="range" className="wc-form-range" min={0} max={100} value={settings.battery} onChange={e => update({ battery: parseInt(e.target.value) })} />
+        </div>
+        <div className="wc-form-item">
+          <label className="wc-form-label">自己气泡色</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input type="color" className="wc-form-color" value={settings.selfBubbleColor} onChange={e => update({ selfBubbleColor: e.target.value })} />
+            <span style={{ fontSize: 12, color: '#6b7280' }}>{settings.selfBubbleColor}</span>
+          </div>
+        </div>
+        <div className="wc-form-item">
+          <label className="wc-form-label">他人气泡色</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input type="color" className="wc-form-color" value={settings.otherBubbleColor} onChange={e => update({ otherBubbleColor: e.target.value })} />
+            <span style={{ fontSize: 12, color: '#6b7280' }}>{settings.otherBubbleColor}</span>
+          </div>
+        </div>
+        {/* 群聊昵称开关 */}
+        <div className="wc-form-item">
+          <label className="wc-form-label">群聊昵称</label>
+          <label className="wc-toggle">
+            <input type="checkbox" checked={settings.showGroupNick} onChange={e => update({ showGroupNick: e.target.checked })} />
+            <span className="wc-toggle-track"><span className="wc-toggle-thumb" /></span>
+            <span className="wc-toggle-label">
+              {settings.showGroupNick ? '显示' : '隐藏'}（仅群聊生效）
+            </span>
+          </label>
+        </div>
       </div>
-      <div className="wc-card-body">
-        <div className="wc-msg-list">
-          {messages.map((msg, idx) => {
-            const user = users.find(u => u.id === msg.senderId) || users[0];
-            const isSelf = msg.senderId === selfId;
-            return (
-              <div key={msg.id} className="wc-msg-item">
-                <div className="wc-msg-meta">
-                  <span className="wc-msg-sender">
-                    [{typeLabel[msg.type]}] {user?.name || '?'}
-                    {isSelf ? '（自己）' : ''}
-                  </span>
-                  <span className="wc-msg-preview">{previewText(msg)}</span>
-                </div>
-                <div className="wc-msg-actions">
-                  <button
-                    className="wc-msg-action-btn up"
-                    onClick={() => onMoveUp(msg.id)}
-                    disabled={idx === 0}
-                    style={{ opacity: idx === 0 ? 0.4 : 1 }}
-                    title="上移"
-                  >
-                    <IconUp />
-                  </button>
-                  <button
-                    className="wc-msg-action-btn up"
-                    onClick={() => onMoveDown(msg.id)}
-                    disabled={idx === messages.length - 1}
-                    style={{ opacity: idx === messages.length - 1 ? 0.4 : 1 }}
-                    title="下移"
-                  >
-                    <IconDown />
-                  </button>
-                  <button
-                    className="wc-msg-action-btn"
-                    onClick={() => onDelete(msg.id)}
-                    title="删除"
-                  >
-                    <IconTrash />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+
+      {/* 保存管理 */}
+      <div className="wc-save-section">
+        <div className="wc-form-label">数据持久化</div>
+        <p className="wc-tab-tip" style={{ marginTop: 0, marginBottom: 8 }}>
+          所有修改会自动保存到浏览器本地存储（localStorage），重启应用后自动恢复。也可手动另存为文件或从文件加载覆盖当前数据。
+        </p>
+        <div className="wc-btn-row">
+          <button className="wc-btn wc-btn-sm" onClick={onSaveToFile}>
+            <IconDownload /> 另存为文件
+          </button>
+          <button className="wc-btn wc-btn-sm" onClick={onLoadFromFile}>
+            <IconPlus /> 从文件加载
+          </button>
+          <button className="wc-btn wc-btn-sm" onClick={onClearStorage} style={{ color: '#d4380d' }}>
+            <IconTrash /> 清除本地存储
+          </button>
         </div>
       </div>
     </div>
@@ -1630,27 +1656,34 @@ function MessageList({
 // ==================== 主组件 ====================
 
 export default function WechatChat() {
-  const [importText, setImportText] = useState('');
-  // 默认提供「我」和「对方」两个用户，让用户一进来就能直接添加消息，不需要先导入
-  const [users, setUsers] = useState<ChatUser[]>(() => [
-    { id: 1, name: '我', avatar: null },
-    { id: 2, name: '对方', avatar: null },
-  ]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [settings, setSettings] = useState<PhoneSettings>({
-    time: '12:02',
-    signal: 4,
-    battery: 60,
-    contactName: '',
-    unreadCount: 1,
-    selfBubbleColor: '#95ec69',
-    otherBubbleColor: '#ffffff',
-    theme: 'ios_classic',
+  // 初始化：尝试从 localStorage 恢复
+  const [users, setUsers] = useState<ChatUser[]>(() => {
+    const persisted = loadPersistedState();
+    return persisted?.users?.length ? persisted.users : DEFAULT_USERS;
   });
-  const [selfId, setSelfId] = useState<number | null>(1);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const persisted = loadPersistedState();
+    return persisted?.messages ?? [];
+  });
+  const [settings, setSettings] = useState<PhoneSettings>(() => {
+    const persisted = loadPersistedState();
+    return persisted?.settings ?? DEFAULT_SETTINGS;
+  });
+  const [selfId, setSelfId] = useState<number | null>(() => {
+    const persisted = loadPersistedState();
+    return persisted?.selfId ?? 1;
+  });
+
+  const [activeTab, setActiveTab] = useState<MainTab>('messages');
   const [toast, setToast] = useState('');
   const phoneRef = useRef<HTMLDivElement | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const loadFileRef = useRef<HTMLInputElement>(null);
+
+  // 自动持久化
+  useEffect(() => {
+    savePersistedState({ version: 1, users, messages, settings, selfId });
+  }, [users, messages, settings, selfId]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -1658,39 +1691,30 @@ export default function WechatChat() {
     toastTimer.current = setTimeout(() => setToast(''), 2500);
   }, []);
 
-  const handleImport = useCallback(() => {
-    if (!importText.trim()) {
-      showToast('请先输入聊天记录文本');
-      return;
-    }
-    const result = parseChatRecord(importText);
-    if (result.messages.length === 0) {
-      showToast('未解析到任何消息');
-      return;
-    }
-    setUsers(result.users);
-    setMessages(result.messages);
-    setSelfId(result.users[0]?.id ?? null);
-    if (result.users.length >= 3) {
-      const otherNames = result.users.slice(1).map(u => u.name);
-      const nameStr = result.users.length <= 4
-        ? otherNames.join('、')
-        : otherNames.slice(0, 2).join('、') + '等';
-      setSettings(s => ({ ...s, contactName: nameStr + '(' + result.users.length + ')' }));
-    } else if (result.users.length === 2) {
-      setSettings(s => ({ ...s, contactName: result.users[1].name }));
-    } else if (result.users.length === 1) {
-      setSettings(s => ({ ...s, contactName: result.users[0].name }));
-    }
-    showToast(`成功导入 ${result.messages.length} 条消息（${result.users.length} 个用户）`);
-  }, [importText, showToast]);
-
+  // ---- 用户操作 ----
   const handleUpdateAvatar = useCallback((userId: number, avatar: string) => {
     setUsers(prev => prev.map(u => (u.id === userId ? { ...u, avatar } : u)));
   }, []);
   const handleRemoveAvatar = useCallback((userId: number) => {
     setUsers(prev => prev.map(u => (u.id === userId ? { ...u, avatar: null } : u)));
   }, []);
+  const handleAddUser = useCallback((name: string) => {
+    setUsers(prev => {
+      const maxId = prev.reduce((max, u) => Math.max(max, u.id), 0);
+      return [...prev, { id: maxId + 1, name, avatar: null }];
+    });
+    showToast(`已添加用户「${name}」`);
+  }, [showToast]);
+  const handleRenameUser = useCallback((userId: number, name: string) => {
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, name } : u)));
+  }, []);
+  const handleDeleteUser = useCallback((userId: number) => {
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    setMessages(prev => prev.filter(m => m.senderId !== userId));
+    showToast('已删除用户及其消息');
+  }, [showToast]);
+
+  // ---- 消息操作 ----
   const handleUpdateMessage = useCallback((msgId: number, patch: Partial<Pick<ChatMessage, 'content' | 'params'>>) => {
     setMessages(prev => prev.map(m => {
       if (m.id !== msgId) return m;
@@ -1728,8 +1752,109 @@ export default function WechatChat() {
       return next;
     });
   }, []);
+  const handleChangeSender = useCallback((id: number, senderId: number) => {
+    setMessages(prev => prev.map(m => (m.id === id ? { ...m, senderId } : m)));
+  }, []);
 
-  // html-to-image 截图（基于浏览器自身渲染，无文字偏移问题）
+  // ---- Markdown / JSON 应用 ----
+  const applyMarkdown = useCallback((text: string) => {
+    try {
+      const result = parseChatRecord(text);
+      if (result.messages.length === 0) {
+        showToast('未解析到任何消息');
+        return;
+      }
+      setUsers(result.users);
+      setMessages(result.messages);
+      setSelfId(result.users[0]?.id ?? null);
+      if (result.users.length >= 3) {
+        const otherNames = result.users.slice(1).map(u => u.name);
+        const nameStr = result.users.length <= 4 ? otherNames.join('、') : otherNames.slice(0, 2).join('、') + '等';
+        setSettings(s => ({ ...s, contactName: nameStr + '(' + result.users.length + ')' }));
+      } else if (result.users.length === 2) {
+        setSettings(s => ({ ...s, contactName: result.users[1].name }));
+      } else if (result.users.length === 1) {
+        setSettings(s => ({ ...s, contactName: result.users[0].name }));
+      }
+      showToast(`已应用 Markdown（${result.messages.length} 条消息）`);
+    } catch (err) {
+      showToast('Markdown 解析失败：' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, [showToast]);
+
+  const applyJson = useCallback((jsonText: string) => {
+    try {
+      const json = JSON.parse(jsonText);
+      const result = importFromJson(json);
+      setUsers(result.users);
+      setMessages(result.messages);
+      setSettings(result.settings);
+      setSelfId(result.selfId);
+      showToast(`已应用 JSON（${result.messages.length} 条消息）`);
+    } catch (err) {
+      showToast('JSON 解析失败：' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, [showToast]);
+
+  const handleImportFile = useCallback((text: string, filename: string) => {
+    const lower = filename.toLowerCase();
+    if (lower.endsWith('.json')) {
+      applyJson(text);
+    } else {
+      applyMarkdown(text);
+    }
+  }, [applyJson, applyMarkdown]);
+
+  const handleLoadExample = useCallback(() => {
+    applyMarkdown(EXAMPLE_TEXT);
+  }, [applyMarkdown]);
+
+  const handleClearAll = useCallback(() => {
+    setMessages([]);
+    showToast('已清空所有消息');
+  }, [showToast]);
+
+  // ---- 持久化文件管理 ----
+  const handleSaveToFile = useCallback(() => {
+    const data = exportToJson(users, messages, settings, selfId);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = '微信聊天记录_' + Date.now() + '.json';
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('已另存为文件');
+  }, [users, messages, settings, selfId, showToast]);
+
+  const handleLoadFromFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        const result = importFromJson(json);
+        setUsers(result.users);
+        setMessages(result.messages);
+        setSettings(result.settings);
+        setSelfId(result.selfId);
+        showToast(`已从文件加载（${result.messages.length} 条消息）`);
+      } catch (err) {
+        showToast('文件加载失败：' + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }, [showToast]);
+
+  const handleClearStorage = useCallback(() => {
+    if (!confirm('确定要清除本地存储吗？这会丢失当前所有数据（包括头像和图片）。')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    showToast('已清除本地存储');
+  }, [showToast]);
+
+  // ---- 截图 ----
   const capturePhone = useCallback(async (longshot = false): Promise<HTMLCanvasElement | null> => {
     const phone = phoneRef.current;
     if (!phone) return null;
@@ -1737,26 +1862,18 @@ export default function WechatChat() {
     const wrap = phone.closest('.wc-phone-wrap') as HTMLElement | null;
     const scaleWrap = phone.closest('.wc-phone-scale-wrap') as HTMLElement | null;
     if (!content || !wrap) return null;
-    // 保存原始样式
     const saved = {
-      ct: content.style.transform,
-      co: content.style.transformOrigin,
-      ww: wrap.style.width,
-      wh: wrap.style.height,
-      wo: wrap.style.overflow,
-      wr: wrap.style.borderRadius,
-      ws: wrap.style.boxShadow,
-      sp: scaleWrap?.style.position ?? '',
-      st: scaleWrap?.style.top ?? '',
-      sl: scaleWrap?.style.left ?? '',
-      sw: scaleWrap?.style.width ?? '',
+      ct: content.style.transform, co: content.style.transformOrigin,
+      ww: wrap.style.width, wh: wrap.style.height, wo: wrap.style.overflow,
+      wr: wrap.style.borderRadius, ws: wrap.style.boxShadow,
+      sp: scaleWrap?.style.position ?? '', st: scaleWrap?.style.top ?? '',
+      sl: scaleWrap?.style.left ?? '', sw: scaleWrap?.style.width ?? '',
       sh: scaleWrap?.style.height ?? '',
     };
     const chatBody = phone.querySelector('.wc-chat-body') as HTMLElement | null;
     const chatContent = phone.querySelector('.wc-chat-content') as HTMLElement | null;
     const scrollTop = chatBody?.scrollTop ?? 0;
     const savedContentMargin = chatContent?.style.marginTop ?? '';
-    // 移除缩放，展开至原始尺寸
     content.style.transform = 'none';
     wrap.style.width = '1125px';
     wrap.style.height = '2436px';
@@ -1764,42 +1881,30 @@ export default function WechatChat() {
     wrap.style.borderRadius = '0';
     wrap.style.boxShadow = 'none';
     if (scaleWrap) {
-      scaleWrap.style.position = 'fixed';
-      scaleWrap.style.top = '0';
-      scaleWrap.style.left = '-9999px';
-      scaleWrap.style.width = '1125px';
+      scaleWrap.style.position = 'fixed'; scaleWrap.style.top = '0';
+      scaleWrap.style.left = '-9999px'; scaleWrap.style.width = '1125px';
       scaleWrap.style.height = '2436px';
     }
-    // 普通截图: 用 margin-top 偏移模拟滚动
     if (!longshot && chatContent && scrollTop > 0) {
       chatContent.style.marginTop = `-${scrollTop}px`;
     }
-    // 长截图: 释放 chat body 滚动
     let longOrig: Record<string, string> | null = null;
     if (longshot) {
       const bottom = phone.querySelector('.wc-bottom') as HTMLElement;
       if (chatBody && bottom) {
         longOrig = {
-          ph: phone.style.height,
-          po: phone.style.overflow,
-          bp: chatBody.style.position,
-          bt: chatBody.style.top,
-          bb: chatBody.style.bottom,
-          bo: chatBody.style.overflowY,
+          ph: phone.style.height, po: phone.style.overflow,
+          bp: chatBody.style.position, bt: chatBody.style.top,
+          bb: chatBody.style.bottom, bo: chatBody.style.overflowY,
           bh: chatBody.style.height,
-          dp: bottom.style.position,
-          db: bottom.style.bottom,
+          dp: bottom.style.position, db: bottom.style.bottom,
         };
-        phone.style.height = 'auto';
-        phone.style.overflow = 'visible';
+        phone.style.height = 'auto'; phone.style.overflow = 'visible';
         wrap.style.height = 'auto';
-        chatBody.style.position = 'relative';
-        chatBody.style.top = 'auto';
-        chatBody.style.bottom = 'auto';
-        chatBody.style.overflowY = 'visible';
+        chatBody.style.position = 'relative'; chatBody.style.top = 'auto';
+        chatBody.style.bottom = 'auto'; chatBody.style.overflowY = 'visible';
         chatBody.style.height = 'auto';
-        bottom.style.position = 'relative';
-        bottom.style.bottom = 'auto';
+        bottom.style.position = 'relative'; bottom.style.bottom = 'auto';
       }
     }
     await new Promise(r => setTimeout(r, 50));
@@ -1807,46 +1912,32 @@ export default function WechatChat() {
     let canvas: HTMLCanvasElement | null = null;
     try {
       canvas = await toCanvas(phone, {
-        width: 1125,
-        height: totalH,
-        pixelRatio: 1,
+        width: 1125, height: totalH, pixelRatio: 1,
         backgroundColor: '#ededed',
       });
     } finally {
-      // 还原所有样式
-      content.style.transform = saved.ct;
-      content.style.transformOrigin = saved.co;
-      wrap.style.width = saved.ww;
-      wrap.style.height = saved.wh;
-      wrap.style.overflow = saved.wo;
-      wrap.style.borderRadius = saved.wr;
+      content.style.transform = saved.ct; content.style.transformOrigin = saved.co;
+      wrap.style.width = saved.ww; wrap.style.height = saved.wh;
+      wrap.style.overflow = saved.wo; wrap.style.borderRadius = saved.wr;
       wrap.style.boxShadow = saved.ws;
       if (scaleWrap) {
-        scaleWrap.style.position = saved.sp;
-        scaleWrap.style.top = saved.st;
-        scaleWrap.style.left = saved.sl;
-        scaleWrap.style.width = saved.sw;
+        scaleWrap.style.position = saved.sp; scaleWrap.style.top = saved.st;
+        scaleWrap.style.left = saved.sl; scaleWrap.style.width = saved.sw;
         scaleWrap.style.height = saved.sh;
       }
       if (chatContent) chatContent.style.marginTop = savedContentMargin;
       if (chatBody && scrollTop > 0) {
-        requestAnimationFrame(() => {
-          if (chatBody) chatBody.scrollTop = scrollTop;
-        });
+        requestAnimationFrame(() => { if (chatBody) chatBody.scrollTop = scrollTop; });
       }
       if (longshot && longOrig) {
         const cb = phone.querySelector('.wc-chat-body') as HTMLElement;
         const bt = phone.querySelector('.wc-bottom') as HTMLElement;
         if (cb && bt) {
-          phone.style.height = longOrig.ph;
-          phone.style.overflow = longOrig.po;
-          cb.style.position = longOrig.bp;
-          cb.style.top = longOrig.bt;
-          cb.style.bottom = longOrig.bb;
-          cb.style.overflowY = longOrig.bo;
+          phone.style.height = longOrig.ph; phone.style.overflow = longOrig.po;
+          cb.style.position = longOrig.bp; cb.style.top = longOrig.bt;
+          cb.style.bottom = longOrig.bb; cb.style.overflowY = longOrig.bo;
           cb.style.height = longOrig.bh;
-          bt.style.position = longOrig.dp;
-          bt.style.bottom = longOrig.db;
+          bt.style.position = longOrig.dp; bt.style.bottom = longOrig.db;
         }
       }
     }
@@ -1905,100 +1996,6 @@ export default function WechatChat() {
     }
   }, [showToast, capturePhone]);
 
-  const handleExportJson = useCallback(() => {
-    if (messages.length === 0) {
-      showToast('没有消息可导出');
-      return;
-    }
-    const data = exportToJson(users, messages, settings, selfId);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = '微信聊天记录_' + Date.now() + '.json';
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('JSON 已导出');
-  }, [users, messages, settings, selfId, showToast]);
-
-  const jsonImportRef = useRef<HTMLInputElement>(null);
-  const handleImportJson = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const json = JSON.parse(ev.target?.result as string);
-        const result = importFromJson(json);
-        if (result.messages.length === 0) {
-          showToast('JSON 中没有消息');
-          return;
-        }
-        setUsers(result.users);
-        setMessages(result.messages);
-        setSettings(result.settings);
-        setSelfId(result.selfId);
-        showToast(`成功导入 ${result.messages.length} 条消息`);
-      } catch (err) {
-        showToast('JSON 解析失败：' + (err instanceof Error ? err.message : String(err)));
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  }, [showToast]);
-
-  // 「当前数据」面板 - 应用 Markdown：直接接收面板里编辑过的 Markdown 文本，覆盖当前状态
-  const applyMarkdownFromPanel = useCallback((text: string) => {
-    try {
-      const result = parseChatRecord(text);
-      if (result.messages.length === 0) {
-        showToast('未解析到任何消息');
-        return;
-      }
-      setUsers(result.users);
-      setMessages(result.messages);
-      setSelfId(result.users[0]?.id ?? null);
-      if (result.users.length >= 3) {
-        const otherNames = result.users.slice(1).map(u => u.name);
-        const nameStr = result.users.length <= 4
-          ? otherNames.join('、')
-          : otherNames.slice(0, 2).join('、') + '等';
-        setSettings(s => ({ ...s, contactName: nameStr + '(' + result.users.length + ')' }));
-      } else if (result.users.length === 2) {
-        setSettings(s => ({ ...s, contactName: result.users[1].name }));
-      } else if (result.users.length === 1) {
-        setSettings(s => ({ ...s, contactName: result.users[0].name }));
-      }
-      showToast(`已应用 Markdown（${result.messages.length} 条消息）`);
-    } catch (err) {
-      showToast('Markdown 解析失败：' + (err instanceof Error ? err.message : String(err)));
-    }
-  }, [showToast]);
-
-  // 「当前数据」面板 - 应用 JSON：直接接收面板里编辑过的 JSON 文本，覆盖整个状态
-  const applyJsonFromPanel = useCallback((jsonText: string) => {
-    try {
-      const json = JSON.parse(jsonText);
-      const result = importFromJson(json);
-      setUsers(result.users);
-      setMessages(result.messages);
-      setSettings(result.settings);
-      setSelfId(result.selfId);
-      showToast(`已应用 JSON（${result.messages.length} 条消息）`);
-    } catch (err) {
-      showToast('JSON 解析失败：' + (err instanceof Error ? err.message : String(err)));
-    }
-  }, [showToast]);
-
-  // 「用户管理」面板 - 添加新用户（空状态下也能直接添加，不必先导入）
-  const handleAddUser = useCallback((name: string) => {
-    setUsers(prev => {
-      const maxId = prev.reduce((max, u) => Math.max(max, u.id), 0);
-      return [...prev, { id: maxId + 1, name, avatar: null }];
-    });
-    showToast(`已添加用户「${name}」`);
-  }, [showToast]);
-
   const hasMessages = messages.length > 0;
 
   return (
@@ -2006,90 +2003,68 @@ export default function WechatChat() {
       <div className="wc-header">
         <h1>微信聊天记录生成</h1>
         <span style={{ fontSize: 12, color: '#9ca3af' }}>
-          · HTML/CSS 渲染 + html-to-image 截图（参考 bairihai/wechat-dialog-generator）
+          · 数据自动保存到本地 ·
         </span>
         <div className="wc-header-actions">
-          <button
-            className="wc-btn wc-btn-primary wc-btn-sm"
-            onClick={handleGenerateImage}
-            disabled={!hasMessages}
-            style={{ opacity: hasMessages ? 1 : 0.5 }}
-          >
+          <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleGenerateImage} disabled={!hasMessages} style={{ opacity: hasMessages ? 1 : 0.5 }}>
             <IconDownload /> 生成图片
           </button>
-          <button
-            className="wc-btn wc-btn-sm"
-            onClick={handleCopyImage}
-            disabled={!hasMessages}
-            style={{ opacity: hasMessages ? 1 : 0.5 }}
-          >
+          <button className="wc-btn wc-btn-sm" onClick={handleCopyImage} disabled={!hasMessages} style={{ opacity: hasMessages ? 1 : 0.5 }}>
             <IconCopy /> 复制
           </button>
-          <button
-            className="wc-btn wc-btn-sm"
-            onClick={handleGenerateLongImage}
-            disabled={!hasMessages}
-            style={{ opacity: hasMessages ? 1 : 0.5 }}
-          >
+          <button className="wc-btn wc-btn-sm" onClick={handleGenerateLongImage} disabled={!hasMessages} style={{ opacity: hasMessages ? 1 : 0.5 }}>
             <IconImage /> 长截图
           </button>
-          <button className="wc-btn wc-btn-sm" onClick={handleExportJson} disabled={!hasMessages} style={{ opacity: hasMessages ? 1 : 0.5 }}>
-            <IconDownload /> 导出JSON
-          </button>
-          <button className="wc-btn wc-btn-sm" onClick={() => jsonImportRef.current?.click()}>
-            <IconPlus /> 导入JSON
-          </button>
-          <input
-            ref={jsonImportRef}
-            type="file"
-            accept=".json,application/json"
-            hidden
-            onChange={handleImportJson}
-          />
+          <input ref={loadFileRef} type="file" accept=".json,application/json" hidden onChange={handleLoadFromFile} />
         </div>
       </div>
       <div className="wc-main">
         <div className="wc-left">
-          <CurrentDataPanel
-            users={users}
-            messages={messages}
-            settings={settings}
-            selfId={selfId}
-            onApplyMarkdown={applyMarkdownFromPanel}
-            onApplyJson={applyJsonFromPanel}
-            showToast={showToast}
-          />
-          <div style={{ marginTop: 16 }}>
-            <ImportPanel text={importText} onTextChange={setImportText} onImport={handleImport} />
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <UserAvatarManager
-              users={users}
-              selfId={selfId}
-              defaultAvatarSrc={defaultAvatar}
-              onUpdateAvatar={handleUpdateAvatar}
-              onRemoveAvatar={handleRemoveAvatar}
-              onSetSelf={setSelfId}
-              onAddUser={handleAddUser}
-            />
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <MessageEditor users={users} selfId={selfId} onAddMessage={handleAddMessage} />
-          </div>
-          {hasMessages && (
-            <div style={{ marginTop: 16 }}>
-              <MessageList
-                messages={messages}
-                users={users}
-                selfId={selfId}
-                onDelete={handleDeleteMessage}
-                onMoveUp={handleMoveUp}
-                onMoveDown={handleMoveDown}
-              />
+          <div className="wc-card wc-card-main">
+            <MainTabs active={activeTab} onChange={setActiveTab} />
+            <div className="wc-card-body">
+              {activeTab === 'messages' && (
+                <MessagesTab
+                  users={users}
+                  messages={messages}
+                  settings={settings}
+                  selfId={selfId}
+                  onAddMessage={handleAddMessage}
+                  onDeleteMessage={handleDeleteMessage}
+                  onMoveUp={handleMoveUp}
+                  onMoveDown={handleMoveDown}
+                  onChangeSender={handleChangeSender}
+                  onApplyMarkdown={applyMarkdown}
+                  onApplyJson={applyJson}
+                  onLoadExample={handleLoadExample}
+                  onClearAll={handleClearAll}
+                  onImportFile={handleImportFile}
+                  showToast={showToast}
+                />
+              )}
+              {activeTab === 'users' && (
+                <UsersTab
+                  users={users}
+                  selfId={selfId}
+                  defaultAvatarSrc={defaultAvatar}
+                  onUpdateAvatar={handleUpdateAvatar}
+                  onRemoveAvatar={handleRemoveAvatar}
+                  onSetSelf={setSelfId}
+                  onAddUser={handleAddUser}
+                  onRenameUser={handleRenameUser}
+                  onDeleteUser={handleDeleteUser}
+                />
+              )}
+              {activeTab === 'settings' && (
+                <SettingsTab
+                  settings={settings}
+                  onSettingsChange={setSettings}
+                  onSaveToFile={handleSaveToFile}
+                  onLoadFromFile={() => loadFileRef.current?.click()}
+                  onClearStorage={handleClearStorage}
+                />
+              )}
             </div>
-          )}
-          <div style={{ marginTop: 16 }}>
-            <SettingsPanel settings={settings} onSettingsChange={setSettings} />
           </div>
         </div>
         {hasMessages && (
@@ -2104,6 +2079,11 @@ export default function WechatChat() {
           />
         )}
       </div>
+      {!hasMessages && (
+        <div className="wc-empty-preview-hint">
+          右侧预览需要至少一条消息。可在左侧「消息」Tab 中添加，或点击「示例」加载演示数据。
+        </div>
+      )}
       {toast && <div className="wc-toast">{toast}</div>}
     </div>
   );
