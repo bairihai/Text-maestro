@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, session, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -856,6 +856,26 @@ app.whenReady().then(() => {
   });
 
   createWindow()
+
+  // 拦截渲染进程触发的下载（如 html-to-image 生成的 PNG），
+  // 弹出"另存为"对话框让用户选择保存位置，避免默认下载目录权限问题。
+  session.defaultSession.on('will-download', async (_event, item) => {
+    const defaultName = item.getFilename();
+    const defaultPath = join(app.getPath('pictures'), defaultName);
+    const result = await dialog.showSaveDialog(BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0], {
+      title: '保存图片',
+      defaultPath,
+      filters: [
+        { name: 'PNG 图片', extensions: ['png'] },
+        { name: '所有文件', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || !result.filePath) {
+      item.cancel();
+      return;
+    }
+    item.setSavePath(result.filePath);
+  });
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
