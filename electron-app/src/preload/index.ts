@@ -125,6 +125,9 @@ const customAPI = {
   // README 查看 / 打开
   readReadme: (which: 'main' | 'project' = 'main') => ipcRenderer.invoke('read-readme', which),
   openReadme: (which: 'main' | 'project' = 'main') => ipcRenderer.invoke('open-readme', which),
+  // 微信聊天记录：文件持久化
+  wechatChatLoad: () => ipcRenderer.invoke('wechat-chat:load'),
+  wechatChatSave: (data: unknown) => ipcRenderer.invoke('wechat-chat:save', data),
 };
 
 // 合并标准 electronAPI 和自定义 API

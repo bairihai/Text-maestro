@@ -177,6 +177,9 @@ interface CustomElectronAPI extends ElectronAPI {
   // README 查看 / 打开
   readReadme: (which?: 'main' | 'project') => Promise<ReadmeResult>;
   openReadme: (which?: 'main' | 'project') => Promise<ReadmeResult>;
+  // 微信聊天记录：文件持久化
+  wechatChatLoad: () => Promise<{ success: boolean; data?: unknown; error?: string }>;
+  wechatChatSave: (data: unknown) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

@@ -133,7 +133,34 @@ function loadPersistedState(): PersistedState | null {
   }
 }
 
+// 从主进程的 userData 文件加载（更稳定的持久化，dev 模式重启不丢）
+async function loadPersistedStateFromFile(): Promise<PersistedState | null> {
+  try {
+    if (!window.electron?.wechatChatLoad) return null;
+    const result = await window.electron.wechatChatLoad();
+    if (!result.success || !result.data) return null;
+    const data = result.data as PersistedState;
+    if (!data || !Array.isArray(data.users) || !Array.isArray(data.messages)) return null;
+    if (!data.settings) data.settings = { ...DEFAULT_SETTINGS };
+    if (typeof data.settings.showGroupNick !== 'boolean') data.settings.showGroupNick = true;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+// 写入主进程文件（异步，不阻塞 UI）
+async function savePersistedStateToFile(state: PersistedState): Promise<void> {
+  try {
+    if (!window.electron?.wechatChatSave) return;
+    await window.electron.wechatChatSave(state);
+  } catch {
+    // ignore
+  }
+}
+
 function savePersistedState(state: PersistedState) {
+  // 1. 同步写 localStorage（快速缓存，可能因配额或 dev 重启丢失）
   try {
     // 头像和图片是 data:URL，体积可能较大；若超出 localStorage 配额则降级保存（不含头像）
     const payload = JSON.stringify(state);
@@ -159,6 +186,8 @@ function savePersistedState(state: PersistedState) {
   } catch {
     // ignore
   }
+  // 2. 异步写 userData 文件（更稳定的持久化）
+  void savePersistedStateToFile(state);
 }
 
 // ==================== 解析器（参考开源 parser.ts） ====================
@@ -1656,22 +1685,19 @@ function SettingsTab({
 // ==================== 主组件 ====================
 
 export default function WechatChat() {
-  // 初始化：尝试从 localStorage 恢复
+  // 初始化：先用 localStorage 做快速初始值（同步，避免首屏空白）
+  const initialLocal = useRef<PersistedState | null>(loadPersistedState());
   const [users, setUsers] = useState<ChatUser[]>(() => {
-    const persisted = loadPersistedState();
-    return persisted?.users?.length ? persisted.users : DEFAULT_USERS;
+    return initialLocal.current?.users?.length ? initialLocal.current.users : DEFAULT_USERS;
   });
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const persisted = loadPersistedState();
-    return persisted?.messages ?? [];
+    return initialLocal.current?.messages ?? [];
   });
   const [settings, setSettings] = useState<PhoneSettings>(() => {
-    const persisted = loadPersistedState();
-    return persisted?.settings ?? DEFAULT_SETTINGS;
+    return initialLocal.current?.settings ?? DEFAULT_SETTINGS;
   });
   const [selfId, setSelfId] = useState<number | null>(() => {
-    const persisted = loadPersistedState();
-    return persisted?.selfId ?? 1;
+    return initialLocal.current?.selfId ?? 1;
   });
 
   const [activeTab, setActiveTab] = useState<MainTab>('messages');
@@ -1679,10 +1705,40 @@ export default function WechatChat() {
   const phoneRef = useRef<HTMLDivElement | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const loadFileRef = useRef<HTMLInputElement>(null);
+  const fileLoadedRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // 自动持久化
+  // 启动时异步从 userData 文件加载（文件优先级高于 localStorage，因为更稳定）
   useEffect(() => {
-    savePersistedState({ version: 1, users, messages, settings, selfId });
+    let cancelled = false;
+    (async () => {
+      const fileState = await loadPersistedStateFromFile();
+      if (cancelled || fileLoadedRef.current) return;
+      fileLoadedRef.current = true;
+      if (fileState) {
+        // 文件有数据，覆盖当前 state
+        setUsers(fileState.users?.length ? fileState.users : DEFAULT_USERS);
+        setMessages(fileState.messages ?? []);
+        setSettings(fileState.settings ?? DEFAULT_SETTINGS);
+        setSelfId(fileState.selfId ?? (fileState.users[0]?.id ?? 1));
+      } else if (initialLocal.current) {
+        // 文件没有数据但 localStorage 有（迁移场景）：把 localStorage 数据写入文件
+        void savePersistedStateToFile(initialLocal.current);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 自动持久化（debounce 1s，避免连续输入时频繁写文件）
+  useEffect(() => {
+    if (!fileLoadedRef.current) return; // 等文件加载完再开始保存，避免覆盖文件数据
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      savePersistedState({ version: 1, users, messages, settings, selfId });
+    }, 1000);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
   }, [users, messages, settings, selfId]);
 
   const showToast = useCallback((msg: string) => {

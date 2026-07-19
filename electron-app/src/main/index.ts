@@ -857,6 +857,25 @@ app.whenReady().then(() => {
 
   createWindow()
 
+  // ===== 微信聊天记录：文件持久化（防止 localStorage 在 dev 模式下丢失） =====
+  const wechatBackupPath = path.join(app.getPath('userData'), 'wechat-chat-backup.json');
+  ipcMain.handle('wechat-chat:load', async () => {
+    try {
+      const txt = await fs.readFile(wechatBackupPath, 'utf8');
+      return { success: true, data: JSON.parse(txt) };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+  ipcMain.handle('wechat-chat:save', async (_event, data) => {
+    try {
+      await fs.writeFile(wechatBackupPath, JSON.stringify(data), 'utf8');
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   // 拦截渲染进程触发的下载（如 html-to-image 生成的 PNG），
   // 弹出"另存为"对话框让用户选择保存位置，避免默认下载目录权限问题。
   session.defaultSession.on('will-download', async (_event, item) => {
