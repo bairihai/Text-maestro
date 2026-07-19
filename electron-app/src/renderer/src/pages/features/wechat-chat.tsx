@@ -1,1464 +1,1531 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { useTheme } from '@renderer/context/ThemeContext';
+/**
+ * 微信聊天记录生成器 - Electron 渲染端
+ *
+ * 参考: https://github.com/bairihai/wechat-dialog-generator
+ * 核心思路: HTML/CSS 渲染真实微信 UI（1125×2436 iPhone 高清画布） + html-to-image 截图
+ * 不再使用 Python PIL 加速，所有视觉细节由 CSS 矢量渲染保证真实性
+ */
+
+import { useState, useRef, useCallback } from 'react';
+import { toCanvas } from 'html-to-image';
 import defaultAvatar from '@renderer/assets/wechat_default_avatar.jpg';
+import './wechat-chat.css';
 
-// 微信聊天记录生成器（v2 重写版）
-// 参考: https://github.com/bairihai/wechat-dialog-generator
-//
-// 核心改进：
-//   1. Markdown / JSON 双模式输入（开源项目 Markdown 格式兼容）
-//   2. 多消息类型: text / image / redpacket / transfer / voice / time / system
-//   3. 用户列表管理: 每个 sender 可设头像、可标记为"我"
-//   4. 点击气泡 inline 编辑
-//   5. 真实微信视觉: 顶部状态栏(信号/WiFi/电池) + 标题栏(返回箭头/联系人/更多)
-//   6. 头像用真实默认头像（用户提供的下载.jpg）
-//   7. 时间节点灰色小卡片，仿真实微信 >5min 间隔显示
+// ==================== 类型定义 ====================
 
-// ============================================================
-// 类型定义
-// ============================================================
-type MessageType = 'text' | 'image' | 'redpacket' | 'transfer' | 'voice' | 'time' | 'system';
+interface ChatUser {
+  id: number;
+  name: string;
+  avatar: string | null;
+}
+
+type MessageType = 'text' | 'time' | 'image' | 'voice' | 'redpacket' | 'transfer';
 
 interface ChatMessage {
-  sender: string;
-  text?: string;
-  time?: string;
+  id: number;
   type: MessageType;
-  image_path?: string;
-  amount?: string;
-  duration?: number;
+  senderId: number;
+  content: string;
+  params: {
+    duration?: number;
+    amount?: string;
+    remark?: string;
+  };
 }
 
-interface UserConfig {
-  name: string;
-  avatarPath?: string;   // 自定义头像路径（空=用默认头像）
-  isMe?: boolean;        // 是否为"我"（消息靠右）
+interface PhoneSettings {
+  time: string;
+  signal: number;
+  battery: number;
+  contactName: string;
+  unreadCount: number;
+  selfBubbleColor: string;
+  otherBubbleColor: string;
 }
 
-interface WechatTheme {
-  background_color: string;
-  status_bar_color: string;
-  status_bar_text_color: string;
-  header_color: string;
-  header_text_color: string;
-  header_border_color: string;
-  my_bubble_color: string;
-  other_bubble_color: string;
-  my_text_color: string;
-  other_text_color: string;
-  system_bg_color: string;
-  system_text_color: string;
-  time_bg_color: string;
-  time_text_color: string;
-  redpacket_color: string;
-  redpacket_text_color: string;
-  transfer_color: string;
-  transfer_text_color: string;
-  voice_color: string;
-  voice_text_color: string;
-  status_bar_height: number;
-  header_height: number;
-  bubble_radius: number;
-  avatar_radius: number;
-  avatar_size: number;
-}
+// ==================== 解析器（参考开源 parser.ts） ====================
 
-const THEME_PRESETS: Record<string, WechatTheme> = {
-  ios_classic: {
-    background_color: '#EDEDED',
-    status_bar_color: '#EDEDED',
-    status_bar_text_color: '#000000',
-    header_color: '#EDEDED',
-    header_text_color: '#111111',
-    header_border_color: '#DCDCDC',
-    my_bubble_color: '#95EC69',
-    other_bubble_color: '#FFFFFF',
-    my_text_color: '#000000',
-    other_text_color: '#000000',
-    system_bg_color: '#DADADA',
-    system_text_color: '#999999',
-    time_bg_color: '#DADADA',
-    time_text_color: '#FFFFFF',
-    redpacket_color: '#FA9D3B',
-    redpacket_text_color: '#FFFFFF',
-    transfer_color: '#FF7D7D',
-    transfer_text_color: '#FFFFFF',
-    voice_color: '#95EC69',
-    voice_text_color: '#000000',
-    status_bar_height: 24,
-    header_height: 48,
-    bubble_radius: 8,
-    avatar_radius: 6,
-    avatar_size: 38,
-  },
-  ios_dark: {
-    background_color: '#1A1A1A',
-    status_bar_color: '#2C2C2E',
-    status_bar_text_color: '#FFFFFF',
-    header_color: '#2C2C2E',
-    header_text_color: '#FFFFFF',
-    header_border_color: '#3A3A3C',
-    my_bubble_color: '#2D5B3E',
-    other_bubble_color: '#3A3A3C',
-    my_text_color: '#FFFFFF',
-    other_text_color: '#FFFFFF',
-    system_bg_color: '#3A3A3C',
-    system_text_color: '#BBBBBB',
-    time_bg_color: '#3A3A3C',
-    time_text_color: '#FFFFFF',
-    redpacket_color: '#C77A2E',
-    redpacket_text_color: '#FFFFFF',
-    transfer_color: '#CC6666',
-    transfer_text_color: '#FFFFFF',
-    voice_color: '#2D5B3E',
-    voice_text_color: '#FFFFFF',
-    status_bar_height: 24,
-    header_height: 48,
-    bubble_radius: 8,
-    avatar_radius: 6,
-    avatar_size: 38,
-  },
-  android: {
-    background_color: '#F5F5F5',
-    status_bar_color: '#E0E0E0',
-    status_bar_text_color: '#212121',
-    header_color: '#E0E0E0',
-    header_text_color: '#212121',
-    header_border_color: '#BDBDBD',
-    my_bubble_color: '#B2DFDB',
-    other_bubble_color: '#FFFFFF',
-    my_text_color: '#212121',
-    other_text_color: '#212121',
-    system_bg_color: '#E0E0E0',
-    system_text_color: '#757575',
-    time_bg_color: '#E0E0E0',
-    time_text_color: '#FFFFFF',
-    redpacket_color: '#FB8C00',
-    redpacket_text_color: '#FFFFFF',
-    transfer_color: '#E57373',
-    transfer_text_color: '#FFFFFF',
-    voice_color: '#B2DFDB',
-    voice_text_color: '#212121',
-    status_bar_height: 24,
-    header_height: 48,
-    bubble_radius: 4,
-    avatar_radius: 4,
-    avatar_size: 38,
-  },
-};
+const SELF_ALIASES = new Set(['我', '自己', 'me', 'Me', 'ME', 'myself', '本人']);
+const MD_MSG_REG = /^\*\*(.+?)\*\*\s*[：:]\s*(.+)$/;
+const MD_TIME_REG = /^\*{0,2}【(.+?)】\*{0,2}$/;
+const TIME_REG = /^\d{4}[-/]\d{1,2}[-/]\d{1,2}(\s+\d{1,2}:\d{2})?$/;
+const TIME_REG2 = /^\d{1,2}:\d{2}$/;
+const TIME_REG3 = /^(\d{4}年)?\d{1,2}月\d{1,2}日/;
+const TIME_REG4 = /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+(上午|下午|凌晨)$/;
+const IMG_REG = /^\[图片\]\s*(.*)$/;
+const IMG_MD_REG = /^!\[.*?\]\((.+?)\)$/;
+const RP_REG = /^\[红包\]\s*(.*)$/;
+const TRANSFER_REG = /^\[转账\]\s*(.*)$/;
+const VOICE_REG = /^\[语音\]\s*(\d+)?$/;
 
-// 默认 Markdown 示例
-const DEFAULT_MARKDOWN = `**【3月1日 14:32】**
-**我**：你好，在忙不？
-**张三**：不忙，怎么了？
-**我**：想问下明天的会议几点开始？
-**张三**：上午十点，会议室三楼。
-**我**：[图片]
-**张三**：[红包]恭喜发财
-**我**：[转账]200:饭钱
-**张三**：[语音]5
-**我**：收到，谢谢！`;
-
-// ============================================================
-// Markdown 解析（与 utils_wechat.py 保持一致）
-// ============================================================
-const TIME_NODE_PATTERN = /^\*\*【(.+?)】\*\*\s*$/;
-const MSG_PATTERN = /^\*\*(.+?)\*\*[：:]\s*(.*)$/;
-
-function parseMarkdownToMessages(md: string): ChatMessage[] {
-  if (!md) return [];
-  const messages: ChatMessage[] = [];
-  for (const line of md.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    let m = TIME_NODE_PATTERN.exec(trimmed);
-    if (m) {
-      messages.push({ sender: '', text: m[1].trim(), type: 'time' });
-      continue;
-    }
-
-    m = MSG_PATTERN.exec(trimmed);
-    if (m) {
-      const sender = m[1].trim();
-      const content = m[2].trim();
-      const msg: ChatMessage = { sender };
-
-      if (content.startsWith('[图片]')) {
-        msg.type = 'image';
-        const rest = content.slice(4).trim();
-        if (rest) msg.image_path = rest;
-      } else if (content.startsWith('[红包]')) {
-        msg.type = 'redpacket';
-        msg.text = content.slice(4).trim() || '恭喜发财，大吉大利';
-      } else if (content.startsWith('[转账]')) {
-        msg.type = 'transfer';
-        const rest = content.slice(4).trim();
-        if (rest.includes(':')) {
-          const [amt, ...noteParts] = rest.split(':');
-          msg.amount = amt.trim();
-          msg.text = noteParts.join(':').trim();
-        } else {
-          msg.amount = rest;
-          msg.text = '';
-        }
-      } else if (content.startsWith('[语音]')) {
-        msg.type = 'voice';
-        const dur = parseInt(content.slice(4).trim(), 10);
-        msg.duration = isNaN(dur) ? 1 : dur;
-      } else {
-        msg.type = 'text';
-        msg.text = content;
-      }
-      messages.push(msg);
-    }
-  }
-  return messages;
-}
-
-function messagesToMarkdown(messages: ChatMessage[]): string {
-  return messages.map(m => {
-    const t = m.type;
-    if (t === 'time') return `**【${m.text || ''}】**`;
-    if (t === 'system') return `**【系统】${m.text || ''}**`;
-    const sender = m.sender || '';
-    if (t === 'text') return `**${sender}**：${m.text || ''}`;
-    if (t === 'image') return `**${sender}**：[图片]${m.image_path || ''}`;
-    if (t === 'redpacket') return `**${sender}**：[红包]${m.text || ''}`;
-    if (t === 'transfer') return `**${sender}**：[转账]${m.amount || ''}${m.text ? ':' + m.text : ''}`;
-    if (t === 'voice') return `**${sender}**：[语音]${m.duration || 1}`;
-    return `**${sender}**：${m.text || ''}`;
-  }).join('\n');
-}
-
-// ============================================================
-// 时间格式化（仿真实微信）
-// ============================================================
-function parseTimeStr(timeStr: string): Date | null {
-  if (!timeStr) return null;
-  const s = timeStr.trim();
-  const now = new Date();
-
-  // HH:MM
-  let m = /^(\d{1,2}):(\d{2})$/.exec(s);
+function parseSpecialContent(content: string): { type: MessageType; content: string; params: ChatMessage['params'] } | null {
+  let m = content.match(IMG_REG);
+  if (m) return { type: 'image', content: m[1] || '', params: {} };
+  m = content.match(IMG_MD_REG);
+  if (m) return { type: 'image', content: m[1], params: {} };
+  m = content.match(RP_REG);
+  if (m) return { type: 'redpacket', content: '', params: { remark: m[1] || '恭喜发财，大吉大利' } };
+  m = content.match(TRANSFER_REG);
   if (m) {
-    const d = new Date(now);
-    d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
-    return d;
+    const parts = (m[1] || '0').split(/[:：]/);
+    return { type: 'transfer', content: '', params: { amount: parts[0] || '0', remark: parts[1] || '转账' } };
   }
-
-  // 昨天 HH:MM
-  m = /^昨天\s*(\d{1,2}):(\d{2})$/.exec(s);
-  if (m) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 1);
-    d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
-    return d;
-  }
-
-  // M月D日 HH:MM
-  m = /^(\d{1,2})月(\d{1,2})日\s*(\d{1,2}):(\d{2})$/.exec(s);
-  if (m) {
-    const d = new Date(now);
-    d.setMonth(parseInt(m[1], 10) - 1, parseInt(m[2], 10));
-    d.setHours(parseInt(m[3], 10), parseInt(m[4], 10), 0, 0);
-    return d;
-  }
-
+  m = content.match(VOICE_REG);
+  if (m) return { type: 'voice', content: '', params: { duration: parseInt(m[1] || '3', 10) } };
   return null;
 }
 
-function formatTimeForDisplay(dt: Date): string {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const target = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-  const diffDays = Math.floor((today.getTime() - target.getTime()) / (24 * 60 * 60 * 1000));
+function parseChatRecord(text: string): { users: ChatUser[]; messages: ChatMessage[] } {
+  const lines = text.split('\n');
+  const orderedNames: string[] = [];
+  const seenNames = new Set<string>();
 
-  const hour = dt.getHours();
-  const minute = dt.getMinutes();
-  let period: string;
-  let hour12: number;
+  // 第一遍: 收集所有发送者名称（按出现顺序）
+  lines.forEach(rawLine => {
+    let line = rawLine.trim();
+    if (!line) return;
+    if (/^#+\s/.test(line) || /^>/.test(line) || /^[-=*]{3,}$/.test(line)) return;
+    line = line.replace(/^[-*]\s+/, '');
+    if (MD_TIME_REG.test(line)) return;
+    const stripped = line.replace(/\*\*/g, '').trim();
+    if (TIME_REG.test(stripped) || TIME_REG2.test(stripped) || TIME_REG3.test(stripped) || TIME_REG4.test(stripped)) return;
+    const mdMatch = line.match(MD_MSG_REG);
+    if (mdMatch) {
+      const name = mdMatch[1].replace(/\s+/g, '').trim();
+      if (!seenNames.has(name) && !SELF_ALIASES.has(name)) {
+        seenNames.add(name);
+        orderedNames.push(name);
+      }
+      return;
+    }
+    const colonIdx = line.search(/[：:]/);
+    if (colonIdx > 0) {
+      const name = line.slice(0, colonIdx).trim().replace(/\*\*/g, '');
+      if (!seenNames.has(name) && !SELF_ALIASES.has(name)) {
+        seenNames.add(name);
+        orderedNames.push(name);
+      }
+    }
+  });
 
-  if (hour < 6) { period = '凌晨'; hour12 = hour; }
-  else if (hour < 12) { period = '上午'; hour12 = hour; }
-  else if (hour < 18) { period = '下午'; hour12 = hour === 12 ? 12 : hour - 12; }
-  else { period = '晚上'; hour12 = hour === 12 ? 12 : hour - 12; }
-
-  const timeStr = `${period} ${hour12}:${minute.toString().padStart(2, '0')}`;
-
-  if (diffDays === 0) return timeStr;
-  if (diffDays === 1) return `昨天 ${timeStr}`;
-  if (diffDays < 7) {
-    const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-    return `${weekdays[dt.getDay()]} ${timeStr}`;
+  // 构建用户列表: 第一个名字是"自己"
+  const users: ChatUser[] = [];
+  let nextId = 1;
+  if (orderedNames.length > 0) {
+    users.push({ id: nextId++, name: orderedNames[0], avatar: null });
+    for (let i = 1; i < orderedNames.length; i++) {
+      users.push({ id: nextId++, name: orderedNames[i], avatar: null });
+    }
   }
-  return `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日 ${timeStr}`;
-}
-
-function shouldShowTimeNode(prev: Date | null, curr: Date | null): boolean {
-  if (!prev || !curr) return true;
-  return Math.abs(curr.getTime() - prev.getTime()) / 1000 > 5 * 60;
-}
-
-// ============================================================
-// 主组件
-// ============================================================
-function WechatChatPage(): JSX.Element {
-  const { colors } = useTheme();
-
-  // === 输入模式 ===
-  const [inputMode, setInputMode] = useState<'markdown' | 'json'>('markdown');
-  const [markdownText, setMarkdownText] = useState(DEFAULT_MARKDOWN);
-  const [jsonText, setJsonText] = useState('');
-  const [jsonError, setJsonError] = useState<string | null>(null);
-
-  // === 消息列表（核心状态）===
-  const [messages, setMessages] = useState<ChatMessage[]>(() => parseMarkdownToMessages(DEFAULT_MARKDOWN));
-
-  // === 用户配置（每个 sender 的头像 + isMe 标记）===
-  const [userConfigs, setUserConfigs] = useState<Record<string, UserConfig>>({});
-
-  // === 当前编辑的气泡 ===
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editText, setEditText] = useState('');
-  const [editSender, setEditSender] = useState('');
-  const [editTime, setEditTime] = useState('');
-  const [editAmount, setEditAmount] = useState('');
-  const [editDuration, setEditDuration] = useState(1);
-  const [editImagePath, setEditImagePath] = useState('');
-
-  // === 外观设置 ===
-  const [theme, setTheme] = useState<string>('ios_classic');
-  const [canvasWidth, setCanvasWidth] = useState(420);
-  const [fontSize, setFontSize] = useState(15);
-  const [title, setTitle] = useState('张三');
-  const [statusBarTime, setStatusBarTime] = useState('14:32');
-  const [batteryLevel, setBatteryLevel] = useState(70);
-  const [showAvatar, setShowAvatar] = useState(true);
-  const [showTime, setShowTime] = useState(true);
-  const [overrides, setOverrides] = useState<Partial<WechatTheme>>({});
-  const [outputFormat, setOutputFormat] = useState('png');
-
-  // === 输出 ===
-  const [imageData, setImageData] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const startTimeRef = useRef<number>(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 1800);
-  };
-
-  // 合并主题
-  const effectiveTheme: WechatTheme = useMemo(() => {
-    return { ...THEME_PRESETS[theme], ...overrides };
-  }, [theme, overrides]);
-
-  // 自动从 messages 提取用户列表
-  const knownUsers = useMemo(() => {
-    const set = new Set<string>();
-    messages.forEach(m => { if (m.sender) set.add(m.sender); });
-    return Array.from(set);
-  }, [messages]);
-
-  // 用户配置的兜底（messages 中出现但未配置的用户）
-  const effectiveUserConfigs = useMemo(() => {
-    const result: Record<string, UserConfig> = {};
-    knownUsers.forEach(name => {
-      result[name] = userConfigs[name] || { name, isMe: name === '我' };
-    });
-    return result;
-  }, [knownUsers, userConfigs]);
-
-  // "我"的用户名
-  const meName = useMemo(() => {
-    const meEntry = Object.values(effectiveUserConfigs).find(u => u.isMe);
-    return meEntry?.name || '我';
-  }, [effectiveUserConfigs]);
-
-  // ============================================================
-  // Markdown ↔ messages 双向同步
-  // ============================================================
-  const handleMarkdownChange = (newText: string) => {
-    setMarkdownText(newText);
-    const parsed = parseMarkdownToMessages(newText);
-    setMessages(parsed);
-  };
-
-  const handleJsonChange = (newText: string) => {
-    setJsonText(newText);
-    try {
-      const parsed = JSON.parse(newText);
-      if (!Array.isArray(parsed)) {
-        setJsonError('JSON 必须是数组');
-        return;
-      }
-      const normalized: ChatMessage[] = parsed.map((m: any) => ({
-        sender: typeof m.sender === 'string' ? m.sender : '',
-        text: typeof m.text === 'string' ? m.text : undefined,
-        time: typeof m.time === 'string' ? m.time : undefined,
-        type: ['text', 'image', 'redpacket', 'transfer', 'voice', 'time', 'system'].includes(m.type) ? m.type : 'text',
-        image_path: typeof m.image_path === 'string' ? m.image_path : undefined,
-        amount: typeof m.amount === 'string' ? m.amount : undefined,
-        duration: typeof m.duration === 'number' ? m.duration : undefined,
-      }));
-      setMessages(normalized);
-      setJsonError(null);
-    } catch (e) {
-      setJsonError((e as Error).message);
+  const nameMap: Record<string, number> = {};
+  const selfUser = users[0];
+  if (selfUser) {
+    SELF_ALIASES.forEach(a => (nameMap[a.toLowerCase()] = selfUser.id));
+    nameMap[selfUser.name.toLowerCase()] = selfUser.id;
+    for (let i = 1; i < users.length; i++) {
+      nameMap[users[i].name.toLowerCase()] = users[i].id;
     }
-  };
+  }
 
-  const syncMessagesToMarkdown = useCallback((newMsgs: ChatMessage[]) => {
-    setMarkdownText(messagesToMarkdown(newMsgs));
-  }, []);
-
-  const switchToInputMode = (mode: 'markdown' | 'json') => {
-    if (mode === 'json' && !jsonText) {
-      // 首次切到 JSON 模式：把当前 messages 序列化进去
-      setJsonText(JSON.stringify(messages, null, 2));
-    }
-    setInputMode(mode);
-  };
-
-  // ============================================================
-  // 消息操作（点击气泡编辑、添加、删除、移动）
-  // ============================================================
-  const handleBubbleClick = (idx: number) => {
-    if (editingIndex === idx) {
-      setEditingIndex(null);
+  // 第二遍: 解析消息
+  const messages: ChatMessage[] = [];
+  let msgId = 1;
+  lines.forEach(rawLine => {
+    let line = rawLine.trim();
+    if (!line) return;
+    if (/^#+\s/.test(line)) return;
+    if (/^>/.test(line)) return;
+    if (/^[-=*]{3,}$/.test(line)) return;
+    line = line.replace(/^[-*]\s+/, '');
+    const mdTimeMatch = line.match(MD_TIME_REG);
+    if (mdTimeMatch) {
+      messages.push({ id: msgId++, type: 'time', senderId: selfUser?.id ?? 1, content: mdTimeMatch[1], params: {} });
       return;
     }
-    const m = messages[idx];
-    setEditingIndex(idx);
-    setEditText(m.text || '');
-    setEditSender(m.sender);
-    setEditTime(m.time || '');
-    setEditAmount(m.amount || '');
-    setEditDuration(m.duration || 1);
-    setEditImagePath(m.image_path || '');
-  };
+    const stripped = line.replace(/\*\*/g, '').trim();
+    if (TIME_REG.test(stripped) || TIME_REG2.test(stripped) || TIME_REG3.test(stripped) || TIME_REG4.test(stripped)) {
+      messages.push({ id: msgId++, type: 'time', senderId: selfUser?.id ?? 1, content: stripped, params: {} });
+      return;
+    }
+    const mdMsgMatch = line.match(MD_MSG_REG);
+    if (mdMsgMatch) {
+      const rawName = mdMsgMatch[1].replace(/\s+/g, '').trim();
+      let content = mdMsgMatch[2].trim();
+      content = content.replace(/@\S+/g, '').trim();
+      if (!content) return;
+      const nameLower = rawName.toLowerCase();
+      let senderId: number;
+      if (SELF_ALIASES.has(rawName) || SELF_ALIASES.has(nameLower) || nameLower === selfUser?.name.toLowerCase()) {
+        senderId = selfUser?.id ?? 1;
+      } else if (nameMap[nameLower] !== undefined) {
+        senderId = nameMap[nameLower];
+      } else {
+        const newUser: ChatUser = { id: nextId++, name: rawName, avatar: null };
+        users.push(newUser);
+        nameMap[nameLower] = newUser.id;
+        senderId = newUser.id;
+      }
+      const special = parseSpecialContent(content);
+      if (special) {
+        messages.push({ id: msgId++, type: special.type, senderId, content: special.content, params: special.params });
+      } else {
+        messages.push({ id: msgId++, type: 'text', senderId, content, params: {} });
+      }
+      return;
+    }
+    const colonIdx = line.search(/[：:]/);
+    if (colonIdx > 0) {
+      const rawName = line.slice(0, colonIdx).trim().replace(/\*\*/g, '');
+      const content = line.slice(colonIdx + 1).trim();
+      if (!content) return;
+      const nameLower = rawName.toLowerCase();
+      let senderId: number;
+      if (SELF_ALIASES.has(rawName) || SELF_ALIASES.has(nameLower) || nameLower === selfUser?.name.toLowerCase()) {
+        senderId = selfUser?.id ?? 1;
+      } else if (nameMap[nameLower] !== undefined) {
+        senderId = nameMap[nameLower];
+      } else {
+        const newUser: ChatUser = { id: nextId++, name: rawName, avatar: null };
+        users.push(newUser);
+        nameMap[nameLower] = newUser.id;
+        senderId = newUser.id;
+      }
+      const special2 = parseSpecialContent(content);
+      if (special2) {
+        messages.push({ id: msgId++, type: special2.type, senderId, content: special2.content, params: special2.params });
+      } else {
+        messages.push({ id: msgId++, type: 'text', senderId, content, params: {} });
+      }
+    }
+  });
 
-  const handleSaveEdit = () => {
-    if (editingIndex === null) return;
-    const newMsgs = [...messages];
-    const old = newMsgs[editingIndex];
-    const t = old.type;
-    newMsgs[editingIndex] = {
-      ...old,
-      sender: t === 'time' || t === 'system' ? '' : editSender,
-      text: (t === 'text' || t === 'redpacket' || t === 'transfer' || t === 'system' || t === 'time') ? editText : old.text,
-      time: editTime || undefined,
-      amount: t === 'transfer' ? editAmount : old.amount,
-      duration: t === 'voice' ? editDuration : old.duration,
-      image_path: t === 'image' ? editImagePath : old.image_path,
+  return { users, messages };
+}
+
+const EXAMPLE_TEXT = `**【3月1日 14:32】**
+
+**张三**：你好，在忙不？有个事想请你帮个忙
+**李四**：不忙，怎么了？
+**张三**：有个项目需要你帮忙处理下数据
+**李四**：你说，尽管开口
+**【3月1日 20:18】**
+
+**张三**：资料都发你了，麻烦查收一下
+**张三**：[图片]
+**李四**：收到，我晚上看看
+**李四**：[红包]辛苦费
+**张三**：[转账]200:饭钱
+**李四**：[语音]5
+**张三**：太感谢了兄弟！`;
+
+// ==================== SVG 图标组件 ====================
+
+function SignalIcon({ bars }: { bars: number }) {
+  return (
+    <svg width="54" height="36" viewBox="0 0 54 36">
+      <rect x="0" y="27" width="9" height="9" rx="1.5" fill={bars >= 1 ? '#000' : '#ccc'} />
+      <rect x="13" y="20" width="9" height="16" rx="1.5" fill={bars >= 2 ? '#000' : '#ccc'} />
+      <rect x="26" y="12" width="9" height="24" rx="1.5" fill={bars >= 3 ? '#000' : '#ccc'} />
+      <rect x="39" y="3" width="9" height="33" rx="1.5" fill={bars >= 4 ? '#000' : '#ccc'} />
+    </svg>
+  );
+}
+
+function WifiIcon() {
+  return (
+    <svg width="48" height="36" viewBox="0 0 24 18" fill="#000">
+      <path d="M12 2C7.8 2 4 3.7 1.2 6.5l1.5 1.5C5 5.8 8.3 4.5 12 4.5s7 1.3 9.3 3.5l1.5-1.5C19.9 3.7 16.2 2 12 2z" />
+      <path d="M12 7C9.1 7 6.5 8.1 4.6 10l1.5 1.5C7.8 9.8 9.8 9 12 9s4.2.8 5.9 2.5L19.4 10C17.5 8.1 14.9 7 12 7z" />
+      <path d="M12 12c-1.7 0-3.2.7-4.3 1.8l1.5 1.5c.7-.8 1.7-1.3 2.8-1.3s2.1.5 2.8 1.3l1.5-1.5C15.2 12.7 13.7 12 12 12z" />
+      <circle cx="12" cy="17" r="1.5" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg width="27" height="52" viewBox="0 0 27 52" fill="none">
+      <path d="M25 2L3 26l22 24" stroke="#000" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ImageIcon() {
+  return (
+    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" fill="#999" stroke="none" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg className="wc-input-mic" viewBox="0 0 48 48" fill="none" stroke="#999" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 20v9a5 5 0 0 0 10 0v-9a5 5 0 0 0-10 0z" />
+      <path d="M14 28c0 5.5 4.5 10 10 10s10-4.5 10-10" />
+      <line x1="24" y1="38" x2="24" y2="42" />
+    </svg>
+  );
+}
+
+// 底部栏图标（语音/表情/加号）用 SVG 简化
+function BottomVoiceIcon() {
+  return (
+    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round">
+      <rect x="14" y="10" width="20" height="22" rx="10" />
+      <path d="M10 28c0 8 6 14 14 14s14-6 14-14" />
+      <line x1="24" y1="42" x2="24" y2="46" />
+    </svg>
+  );
+}
+function BottomEmojiIcon() {
+  return (
+    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="#333" strokeWidth="2">
+      <circle cx="24" cy="24" r="18" />
+      <circle cx="18" cy="20" r="1.5" fill="#333" />
+      <circle cx="30" cy="20" r="1.5" fill="#333" />
+      <path d="M16 28c2 4 5 6 8 6s6-2 8-6" strokeLinecap="round" />
+    </svg>
+  );
+}
+function BottomPlusIcon() {
+  return (
+    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round">
+      <circle cx="24" cy="24" r="18" />
+      <line x1="24" y1="16" x2="24" y2="32" />
+      <line x1="16" y1="24" x2="32" y2="24" />
+    </svg>
+  );
+}
+
+// 编辑面板用图标（内联 SVG，避免引入 lucide-react）
+const IconDownload = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>);
+const IconCopy = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>);
+const IconImage = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>);
+const IconPlus = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>);
+const IconTrash = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>);
+const IconUp = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>);
+const IconDown = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>);
+
+// ==================== 微信预览子组件 ====================
+
+function escHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function TimeNotice({ content }: { content: string }) {
+  return (
+    <div className="wc-notice">
+      <span className="wc-notice-bg">{content}</span>
+    </div>
+  );
+}
+
+function ChatBubble({
+  msg,
+  user,
+  userIndex,
+  isSelf,
+  isGroup,
+  selfColor,
+  otherColor,
+  defaultAvatarSrc,
+  onUpdateMessage,
+}: {
+  msg: ChatMessage;
+  user: ChatUser;
+  userIndex: number;
+  isSelf: boolean;
+  isGroup: boolean;
+  selfColor: string;
+  otherColor: string;
+  defaultAvatarSrc: string;
+  onUpdateMessage?: (msgId: number, content: string) => void;
+}) {
+  const avatarSrc = user.avatar || defaultAvatarSrc;
+  const bubbleColor = isSelf ? selfColor : otherColor;
+  const imgInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onUpdateMessage) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onUpdateMessage(msg.id, ev.target?.result as string);
     };
-    setMessages(newMsgs);
-    syncMessagesToMarkdown(newMsgs);
-    if (inputMode === 'json') setJsonText(JSON.stringify(newMsgs, null, 2));
-    setEditingIndex(null);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const handleCancelEdit = () => setEditingIndex(null);
-
-  const handleAddMessage = (type: MessageType) => {
-    let newMsg: ChatMessage;
-    if (type === 'system') {
-      newMsg = { sender: '', text: '系统消息', type: 'system' };
-    } else if (type === 'time') {
-      newMsg = { sender: '', text: '15:00', type: 'time' };
-    } else if (type === 'image') {
-      newMsg = { sender: meName, type: 'image' };
-    } else if (type === 'redpacket') {
-      newMsg = { sender: meName, text: '恭喜发财', type: 'redpacket' };
-    } else if (type === 'transfer') {
-      newMsg = { sender: meName, amount: '100', text: '', type: 'transfer' };
-    } else if (type === 'voice') {
-      newMsg = { sender: meName, duration: 3, type: 'voice' };
-    } else {
-      newMsg = { sender: meName, text: '新消息', type: 'text' };
+  const renderContent = () => {
+    switch (msg.type) {
+      case 'text':
+        return (
+          <div className="wc-bubble" style={{ background: bubbleColor }}>
+            <span className="wc-arrow" style={{ background: bubbleColor }} />
+            <span dangerouslySetInnerHTML={{ __html: escHtml(msg.content).replace(/\n/g, '<br/>') }} />
+          </div>
+        );
+      case 'image': {
+        const hasImage = msg.content && !msg.content.includes('placeholder');
+        return (
+          <div
+            className="wc-bubble wc-bubble-image"
+            onClick={() => imgInputRef.current?.click()}
+            style={{ cursor: 'pointer' }}
+          >
+            {hasImage ? (
+              <img src={msg.content} alt="" />
+            ) : (
+              <div className="wc-img-placeholder">
+                <ImageIcon />
+                <span>点击上传图片</span>
+              </div>
+            )}
+            <input ref={imgInputRef} type="file" accept="image/*" hidden onChange={handleImageUpload} />
+          </div>
+        );
+      }
+      case 'voice': {
+        const dur = msg.params.duration || 2;
+        const w = 180 + Math.min(dur * 30, 400);
+        const barCount = Math.min(Math.max(3, Math.floor(dur / 1.5)), 8);
+        const bars = Array.from({ length: barCount }, (_, i) => {
+          const h = 12 + Math.round((i / barCount) * 30);
+          return <span key={i} style={{ height: `${h}px` }} />;
+        });
+        return (
+          <div
+            className="wc-bubble wc-bubble-voice"
+            style={{
+              background: bubbleColor,
+              width: `${w}px`,
+              flexDirection: isSelf ? 'row-reverse' : 'row',
+            }}
+          >
+            <span className="wc-arrow" style={{ background: bubbleColor }} />
+            {isSelf ? (
+              <>
+                <span className="wc-voice-dur">{dur}"</span>
+                <div className="wc-voice-bars">{bars}</div>
+              </>
+            ) : (
+              <>
+                <div className="wc-voice-bars">{bars}</div>
+                <span className="wc-voice-dur">{dur}"</span>
+              </>
+            )}
+          </div>
+        );
+      }
+      case 'redpacket':
+        return (
+          <div className="wc-bubble wc-bubble-redpacket">
+            <span className="wc-arrow" style={{ background: '#f79c46' }} />
+            <div className="wc-rp-content">
+              <div className="wc-rp-icon">🧧</div>
+              <div className="wc-rp-info">
+                <span>{escHtml(msg.params.remark || '恭喜发财，大吉大利')}</span>
+              </div>
+            </div>
+            <div className="wc-rp-bottom">
+              <span>微信红包</span>
+            </div>
+          </div>
+        );
+      case 'transfer':
+        return (
+          <div className="wc-bubble wc-bubble-transfer">
+            <span className="wc-arrow" style={{ background: '#f79c46' }} />
+            <div className="wc-rp-content">
+              <div className="wc-rp-icon">💰</div>
+              <div className="wc-rp-info">
+                <span>¥{parseFloat(msg.params.amount || '0').toFixed(2)}</span>
+                <small>{escHtml(msg.params.remark || '转账')}</small>
+              </div>
+            </div>
+            <div className="wc-rp-bottom">
+              <span>微信转账</span>
+            </div>
+          </div>
+        );
+      default:
+        return null;
     }
-    const newMsgs = [...messages, newMsg];
-    setMessages(newMsgs);
-    syncMessagesToMarkdown(newMsgs);
-    if (inputMode === 'json') setJsonText(JSON.stringify(newMsgs, null, 2));
   };
 
-  const handleDeleteMessage = (idx: number) => {
-    const newMsgs = messages.filter((_, i) => i !== idx);
-    setMessages(newMsgs);
-    syncMessagesToMarkdown(newMsgs);
-    if (inputMode === 'json') setJsonText(JSON.stringify(newMsgs, null, 2));
-    if (editingIndex === idx) setEditingIndex(null);
+  return (
+    <div className={`wc-dialog ${isSelf ? 'wc-dialog-right' : ''}`}>
+      <div className="wc-face">
+        <img src={avatarSrc} alt={user.name} />
+      </div>
+      <div className="wc-body">
+        {!isSelf && isGroup && <div className="wc-nick">{user.name}</div>}
+        {renderContent()}
+      </div>
+    </div>
+  );
+}
+
+function PhonePreview({
+  users,
+  messages,
+  settings,
+  selfId,
+  phoneRef,
+  defaultAvatarSrc,
+  onUpdateMessage,
+}: {
+  users: ChatUser[];
+  messages: ChatMessage[];
+  settings: PhoneSettings;
+  selfId: number | null;
+  phoneRef: React.RefObject<HTMLDivElement | null>;
+  defaultAvatarSrc: string;
+  onUpdateMessage?: (msgId: number, content: string) => void;
+}) {
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  const isGroup = users.length > 2;
+  return (
+    <div className="wc-phone-scale-wrap">
+      <div className="wc-phone-wrap">
+        <div className="wc-phone-content">
+          <div className="wc-phone" ref={phoneRef}>
+            {/* 状态栏 */}
+            <div className="wc-phone-top">
+              <div className="wc-status-bar">
+                <div className="wc-time">{settings.time}</div>
+                <div className="wc-signal-group">
+                  <SignalIcon bars={settings.signal} />
+                  <WifiIcon />
+                </div>
+                <div className="wc-battery-wrap">
+                  <div className="wc-battery-outer">
+                    <div className="wc-battery-inner" style={{ width: `${settings.battery}%` }} />
+                  </div>
+                  <div className="wc-battery-tip" />
+                </div>
+              </div>
+              {/* 导航栏 */}
+              <div className="wc-nav">
+                <div className="wc-nav-left">
+                  <BackIcon />
+                  {settings.unreadCount > 0 && <span className="wc-nav-badge">{settings.unreadCount}</span>}
+                </div>
+                <div className="wc-nav-center">
+                  <span>{settings.contactName || '对方'}</span>
+                </div>
+                <div className="wc-nav-right">
+                  <div className="wc-nav-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* 聊天主体 */}
+            <div className="wc-chat-body" ref={bodyRef}>
+              <div className="wc-chat-content">
+                {messages.map(msg => {
+                  if (msg.type === 'time') {
+                    return <TimeNotice key={msg.id} content={msg.content} />;
+                  }
+                  const userIndex = users.findIndex(u => u.id === msg.senderId);
+                  const user = users[userIndex] || users[0];
+                  const isSelf = msg.senderId === selfId;
+                  return (
+                    <ChatBubble
+                      key={msg.id}
+                      msg={msg}
+                      user={user}
+                      userIndex={userIndex >= 0 ? userIndex : 0}
+                      isSelf={isSelf}
+                      isGroup={isGroup}
+                      selfColor={settings.selfBubbleColor}
+                      otherColor={settings.otherBubbleColor}
+                      defaultAvatarSrc={defaultAvatarSrc}
+                      onUpdateMessage={onUpdateMessage}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            {/* 底部输入栏 */}
+            <div className="wc-bottom">
+              <div className="wc-bottom-chat">
+                <div className="wc-bottom-inner">
+                  <div className="wc-bottom-icon">
+                    <BottomVoiceIcon />
+                  </div>
+                  <div className="wc-input-box">
+                    <MicIcon />
+                  </div>
+                  <div className="wc-bottom-icon">
+                    <BottomEmojiIcon />
+                  </div>
+                  <div className="wc-bottom-icon">
+                    <BottomPlusIcon />
+                  </div>
+                </div>
+              </div>
+              <div className="wc-home-indicator">
+                <i />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== 编辑面板子组件 ====================
+
+function ImportPanel({
+  text,
+  onTextChange,
+  onImport,
+}: {
+  text: string;
+  onTextChange: (t: string) => void;
+  onImport: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => onTextChange(ev.target?.result as string);
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
-  const handleMoveMessage = (idx: number, direction: -1 | 1) => {
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= messages.length) return;
-    const newMsgs = [...messages];
-    [newMsgs[idx], newMsgs[newIdx]] = [newMsgs[newIdx], newMsgs[idx]];
-    setMessages(newMsgs);
-    syncMessagesToMarkdown(newMsgs);
-    if (inputMode === 'json') setJsonText(JSON.stringify(newMsgs, null, 2));
+  return (
+    <div className="wc-card">
+      <div className="wc-card-header">
+        <IconImage /> 导入聊天记录
+      </div>
+      <div className="wc-card-body">
+        <div className="wc-format-tip">
+          <strong>支持的格式：</strong>
+          <br />
+          文字消息：<code>**用户名**：消息内容</code>
+          <br />
+          图片消息：<code>**用户名**：[图片]</code> 或 <code>**用户名**：[图片]URL</code>
+          <br />
+          红包消息：<code>**用户名**：[红包]备注</code>
+          <br />
+          转账消息：<code>**用户名**：[转账]金额:备注</code>
+          <br />
+          语音消息：<code>**用户名**：[语音]秒数</code>
+          <br />
+          时间节点：<code>**【3月1日 14:32】**</code>
+          <br />
+          <div style={{ marginTop: 6, color: '#9ca3af' }}>
+            标题行(#)、引用行(&gt;)、空行自动跳过。第一个出现的用户默认为"自己"。图片不带URL时可在预览中点击上传本地图片。
+          </div>
+        </div>
+        <div className="wc-btn-row">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.txt,.markdown"
+            hidden
+            onChange={handleFileLoad}
+          />
+          <button className="wc-btn wc-btn-sm" onClick={() => fileInputRef.current?.click()}>
+            <IconImage /> 导入文件
+          </button>
+          <button className="wc-btn wc-btn-sm" onClick={() => onTextChange(EXAMPLE_TEXT)}>
+            加载示例
+          </button>
+        </div>
+        <textarea
+          className="wc-textarea"
+          value={text}
+          onChange={e => onTextChange(e.target.value)}
+          placeholder="在此粘贴聊天记录文本，或点击上方按钮导入文件..."
+        />
+        <div className="wc-btn-row">
+          <button className="wc-btn wc-btn-primary" onClick={onImport} disabled={!text.trim()}>
+            <IconPlus /> 解析并导入
+          </button>
+          <button className="wc-btn wc-btn-sm" onClick={() => onTextChange('')} disabled={!text}>
+            <IconTrash /> 清空
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UserAvatarManager({
+  users,
+  selfId,
+  defaultAvatarSrc,
+  onUpdateAvatar,
+  onRemoveAvatar,
+  onSetSelf,
+}: {
+  users: ChatUser[];
+  selfId: number | null;
+  defaultAvatarSrc: string;
+  onUpdateAvatar: (userId: number, avatar: string) => void;
+  onRemoveAvatar: (userId: number) => void;
+  onSetSelf: (userId: number) => void;
+}) {
+  if (users.length === 0) return null;
+  return (
+    <div className="wc-card">
+      <div className="wc-card-header">
+        <IconImage /> 用户头像管理
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af' }}>{users.length} 个用户</span>
+      </div>
+      <div className="wc-card-body">
+        <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>鼠标悬停头像可上传自定义图片</p>
+        <div className="wc-avatar-grid">
+          {users.map((user, index) => (
+            <AvatarCard
+              key={user.id}
+              user={user}
+              isSelf={user.id === selfId}
+              defaultAvatarSrc={defaultAvatarSrc}
+              onUpdateAvatar={onUpdateAvatar}
+              onRemoveAvatar={onRemoveAvatar}
+              onSetSelf={onSetSelf}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AvatarCard({
+  user,
+  isSelf,
+  defaultAvatarSrc,
+  onUpdateAvatar,
+  onRemoveAvatar,
+  onSetSelf,
+}: {
+  user: ChatUser;
+  isSelf: boolean;
+  defaultAvatarSrc: string;
+  onUpdateAvatar: (userId: number, avatar: string) => void;
+  onRemoveAvatar: (userId: number) => void;
+  onSetSelf: (userId: number) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const avatarSrc = user.avatar || defaultAvatarSrc;
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => onUpdateAvatar(user.id, ev.target?.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  return (
+    <div className="wc-avatar-card">
+      <div className="wc-avatar-img-wrap">
+        <img src={avatarSrc} alt={user.name} />
+        <div className="wc-avatar-overlay" onClick={() => fileRef.current?.click()}>
+          <IconImage />
+        </div>
+        {user.avatar && (
+          <button
+            className="wc-avatar-remove"
+            onClick={() => onRemoveAvatar(user.id)}
+            style={{
+              position: 'absolute',
+              top: 2,
+              right: 2,
+              width: 18,
+              height: 18,
+              borderRadius: '50%',
+              background: 'rgba(0,0,0,0.6)',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 11,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleUpload} />
+      </div>
+      <span className="wc-avatar-name">{user.name}</span>
+      {isSelf ? (
+        <span className="wc-avatar-tag">自己</span>
+      ) : (
+        <button className="wc-avatar-set-self" onClick={() => onSetSelf(user.id)}>
+          设为自己
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MessageEditor({
+  users,
+  selfId,
+  onAddMessage,
+}: {
+  users: ChatUser[];
+  selfId: number | null;
+  onAddMessage: (msg: Omit<ChatMessage, 'id'>) => void;
+}) {
+  const [msgType, setMsgType] = useState<MessageType>('text');
+  const [senderId, setSenderId] = useState<number | ''>(selfId ?? '');
+  const [textContent, setTextContent] = useState('');
+  const [remark, setRemark] = useState('');
+  const [amount, setAmount] = useState('');
+  const [duration, setDuration] = useState('3');
+  const [timeContent, setTimeContent] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const imgRef = useRef<HTMLInputElement>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  // ============================================================
-  // 用户配置操作
-  // ============================================================
-  const handleSetMe = (name: string) => {
-    const newConfigs: Record<string, UserConfig> = {};
-    Object.entries(effectiveUserConfigs).forEach(([k, v]) => {
-      newConfigs[k] = { ...v, isMe: k === name ? !v.isMe : false };
-    });
-    setUserConfigs(newConfigs);
-  };
-
-  const handleSetUserAvatar = (name: string, avatarPath: string) => {
-    setUserConfigs(prev => ({
-      ...prev,
-      [name]: { ...(prev[name] || { name, isMe: name === '我' }), avatarPath: avatarPath || undefined },
-    }));
-  };
-
-  // ============================================================
-  // 生成图片（调用 Python IPC）
-  // ============================================================
-  const handleGenerate = async () => {
-    if (messages.length === 0) {
-      setError('消息列表不能为空');
+  const handleAdd = () => {
+    if (msgType === 'time') {
+      if (!timeContent.trim()) return;
+      onAddMessage({ type: 'time', senderId: selfId ?? 1, content: timeContent.trim(), params: {} });
+      setTimeContent('');
       return;
     }
-    setLoading(true);
-    setError(null);
-    setImageData(null);
-    setElapsedMs(0);
-    startTimeRef.current = Date.now();
-    timerRef.current = setInterval(() => setElapsedMs(Date.now() - startTimeRef.current), 50);
+    if (!senderId) return;
+    switch (msgType) {
+      case 'text':
+        if (!textContent.trim()) return;
+        onAddMessage({ type: 'text', senderId: senderId as number, content: textContent.trim(), params: {} });
+        setTextContent('');
+        break;
+      case 'image':
+        onAddMessage({ type: 'image', senderId: senderId as number, content: imagePreview || '', params: {} });
+        setImagePreview(null);
+        break;
+      case 'redpacket':
+        onAddMessage({
+          type: 'redpacket',
+          senderId: senderId as number,
+          content: '',
+          params: { remark: remark || '恭喜发财，大吉大利' },
+        });
+        setRemark('');
+        break;
+      case 'transfer':
+        onAddMessage({
+          type: 'transfer',
+          senderId: senderId as number,
+          content: '',
+          params: { amount: amount || '0', remark: remark || '转账' },
+        });
+        setAmount('');
+        setRemark('');
+        break;
+      case 'voice':
+        onAddMessage({
+          type: 'voice',
+          senderId: senderId as number,
+          content: '',
+          params: { duration: parseInt(duration || '3', 10) },
+        });
+        setDuration('3');
+        break;
+    }
+  };
 
-    try {
-      const fn = (window as any).electron?.generateWechat;
-      if (typeof fn !== 'function') {
-        setError('当前环境不支持微信聊天记录生成（缺少 generateWechat IPC 方法）');
-        return;
-      }
-      const payload = messages.map(m => {
-        const out: any = { sender: m.sender, type: m.type };
-        if (m.text !== undefined) out.text = m.text;
-        if (m.time) out.time = m.time;
-        if (m.image_path) out.image_path = m.image_path;
-        if (m.amount !== undefined) out.amount = m.amount;
-        if (m.duration !== undefined) out.duration = m.duration;
-        return out;
-      });
-      const messagesJson = JSON.stringify(payload);
+  const MSG_TYPES: { type: MessageType; label: string }[] = [
+    { type: 'text', label: '文字' },
+    { type: 'image', label: '图片' },
+    { type: 'redpacket', label: '红包' },
+    { type: 'transfer', label: '转账' },
+    { type: 'voice', label: '语音' },
+    { type: 'time', label: '时间' },
+  ];
 
-      // 构造 avatar_map（只有自定义过的才传）
-      const avatarMap: Record<string, string> = {};
-      Object.entries(effectiveUserConfigs).forEach(([name, cfg]) => {
-        if (cfg.avatarPath) avatarMap[name] = cfg.avatarPath;
-      });
-      const avatarMapJson = Object.keys(avatarMap).length > 0 ? JSON.stringify(avatarMap) : '';
-      const overridesJson = Object.keys(overrides).length > 0 ? JSON.stringify(overrides) : '';
-
-      const res = await fn(
-        messagesJson,
-        theme,
-        canvasWidth,
-        fontSize,
-        '',
-        overridesJson,
-        showAvatar,
-        showTime,
-        title,
-        statusBarTime,
-        batteryLevel,
-        avatarMapJson,
-        meName,
-        outputFormat,
+  const renderFields = () => {
+    if (msgType === 'time') {
+      return (
+        <input
+          className="wc-me-input"
+          type="text"
+          placeholder="如：3月15日 下午14:00"
+          value={timeContent}
+          onChange={e => setTimeContent(e.target.value)}
+        />
       );
-      if (!res || res.success === false) {
-        setError(res?.error || '生成失败');
-        return;
-      }
-      if (!res.data) {
-        setError('生成失败：未返回图片数据');
-        return;
-      }
-      setImageData(res.data);
-      showToast('生成成功');
-    } catch (err) {
-      setError((err as Error).message || '生成失败');
-    } finally {
-      if (timerRef.current) clearInterval(timerRef.current);
-      setLoading(false);
     }
-  };
-
-  const handleCopyImage = async () => {
-    if (!imageData) return;
-    try {
-      const base64 = imageData.replace(/^data:image\/\w+;base64,/, '');
-      const byteChars = atob(base64);
-      const byteNumbers = new Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: `image/${outputFormat}` });
-      await navigator.clipboard.write([
-        new ClipboardItem({ [`${outputFormat === 'jpeg' ? 'jpeg' : 'png'}`]: blob }),
-      ]);
-      showToast('图片已复制');
-    } catch {
-      showToast('复制失败');
-    }
-  };
-
-  const handleDownload = () => {
-    if (!imageData) return;
-    const base64 = imageData.startsWith('data:image') ? imageData : `data:image/${outputFormat};base64,${imageData}`;
-    const a = document.createElement('a');
-    a.href = base64;
-    a.download = `wechat_chat_${Date.now()}.${outputFormat}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast('已下载');
-  };
-
-  const handleOpenInNewWindow = () => {
-    if (!imageData) return;
-    const base64 = imageData.startsWith('data:image') ? imageData : `data:image/${outputFormat};base64,${imageData}`;
-    const raw = base64.replace(/^data:image\/\w+;base64,/, '');
-    const byteChars = atob(raw);
-    const byteNumbers = new Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: `image/${outputFormat}` });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    showToast('已在新窗口打开');
-  };
-
-  const previewSrc = imageData
-    ? (imageData.startsWith('data:image') ? imageData : `data:image/${outputFormat};base64,${imageData}`)
-    : null;
-
-  // ============================================================
-  // 计算渲染项（含自动时间节点插入）
-  // ============================================================
-  const renderItems = useMemo(() => {
-    type Item = { kind: 'msg'; msg: ChatMessage; dt: Date | null } | { kind: 'time'; text: string } | { kind: 'system'; msg: ChatMessage };
-    const items: Item[] = [];
-    let prevDt: Date | null = null;
-    for (const m of messages) {
-      if (m.type === 'time') {
-        items.push({ kind: 'time', text: m.text || '' });
-        continue;
-      }
-      if (m.type === 'system') {
-        items.push({ kind: 'system', msg: m });
-        continue;
-      }
-      const currDt = parseTimeStr(m.time || '');
-      if (showTime && shouldShowTimeNode(prevDt, currDt)) {
-        const timeText = currDt ? formatTimeForDisplay(currDt) : (prevDt === null ? statusBarTime : '');
-        if (timeText) items.push({ kind: 'time', text: timeText });
-      }
-      items.push({ kind: 'msg', msg: m, dt: currDt });
-      if (currDt) prevDt = currDt;
-    }
-    return items;
-  }, [messages, showTime, statusBarTime]);
-
-  // ============================================================
-  // 渲染：实时预览（React DOM 模拟微信 UI，与 PIL 输出尽量一致）
-  // ============================================================
-  const renderPreview = () => {
-    const t = effectiveTheme;
     return (
-      <div
-        style={{
-          width: canvasWidth,
-          maxWidth: '100%',
-          margin: '0 auto',
-          background: t.background_color,
-          borderRadius: 8,
-          overflow: 'hidden',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-        }}
-      >
-        {/* 顶部状态栏 */}
-        <div
-          style={{
-            background: t.status_bar_color,
-            color: t.status_bar_text_color,
-            height: t.status_bar_height,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 12px',
-            fontSize: 13,
-            fontWeight: 500,
-          }}
+      <>
+        <select
+          className="wc-me-select"
+          value={senderId}
+          onChange={e => setSenderId(e.target.value ? Number(e.target.value) : '')}
         >
-          <span>{statusBarTime}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {/* 信号 */}
-            <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 1, height: 12 }}>
-              {[3, 5, 7, 9].map((h, i) => (
-                <span key={i} style={{ width: 2, height: h, background: t.status_bar_text_color, display: 'inline-block' }} />
-              ))}
-            </span>
-            {/* WiFi（用字符） */}
-            <span style={{ fontSize: 12 }}>◉</span>
-            {/* 电池 */}
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
-              <span style={{
-                width: 22, height: 10, border: `1px solid ${t.status_bar_text_color}`,
-                borderRadius: 2, display: 'inline-block', position: 'relative',
-              }}>
-                <span style={{
-                  position: 'absolute', left: 1, top: 1, bottom: 1,
-                  width: `${Math.max(2, (batteryLevel / 100) * 18)}px`,
-                  background: t.status_bar_text_color,
-                }} />
-              </span>
-              <span style={{ width: 1.5, height: 4, background: t.status_bar_text_color, display: 'inline-block' }} />
-            </span>
-          </span>
+          <option value="">选择发送人</option>
+          {users.map(u => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+              {u.id === selfId ? '（自己）' : ''}
+            </option>
+          ))}
+        </select>
+        {msgType === 'text' && (
+          <textarea
+            className="wc-me-input wc-me-textarea"
+            placeholder="输入消息内容..."
+            value={textContent}
+            onChange={e => setTextContent(e.target.value)}
+            rows={2}
+          />
+        )}
+        {msgType === 'image' && (
+          <div>
+            {imagePreview ? (
+              <div className="wc-me-img-preview">
+                <img src={imagePreview} alt="" />
+                <button className="wc-me-img-remove" onClick={() => setImagePreview(null)}>×</button>
+              </div>
+            ) : (
+              <button className="wc-me-img-upload" onClick={() => imgRef.current?.click()}>
+                <IconImage />
+                <span>选择图片</span>
+              </button>
+            )}
+            <input ref={imgRef} type="file" accept="image/*" hidden onChange={handleImageChange} />
+          </div>
+        )}
+        {msgType === 'redpacket' && (
+          <input
+            className="wc-me-input"
+            type="text"
+            placeholder="红包备注（默认：恭喜发财，大吉大利）"
+            value={remark}
+            onChange={e => setRemark(e.target.value)}
+          />
+        )}
+        {msgType === 'transfer' && (
+          <div className="wc-me-row">
+            <input
+              className="wc-me-input"
+              type="text"
+              placeholder="金额"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <input
+              className="wc-me-input"
+              type="text"
+              placeholder="备注（默认：转账）"
+              value={remark}
+              onChange={e => setRemark(e.target.value)}
+              style={{ flex: 2 }}
+            />
+          </div>
+        )}
+        {msgType === 'voice' && (
+          <div className="wc-me-row">
+            <input
+              className="wc-me-input"
+              type="number"
+              min={1}
+              max={60}
+              placeholder="语音秒数"
+              value={duration}
+              onChange={e => setDuration(e.target.value)}
+              style={{ width: 100 }}
+            />
+            <span style={{ fontSize: 12, color: '#6b7280', alignSelf: 'center' }}>秒</span>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  return (
+    <div className="wc-card">
+      <div className="wc-card-header">
+        <IconPlus /> 添加消息
+      </div>
+      <div className="wc-card-body">
+        <div className="wc-me-type-tabs">
+          {MSG_TYPES.map(t => (
+            <button
+              key={t.type}
+              className={`wc-me-type-tab ${msgType === t.type ? 'active' : ''}`}
+              onClick={() => setMsgType(t.type)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
+        {renderFields()}
+        <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleAdd}>
+          <IconPlus /> 添加
+        </button>
+      </div>
+    </div>
+  );
+}
 
-        {/* 标题栏 */}
-        <div
-          style={{
-            background: t.header_color,
-            color: t.header_text_color,
-            height: t.header_height,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 12px',
-            borderBottom: `1px solid ${t.header_border_color}`,
-          }}
-        >
-          <span style={{ fontSize: 22, fontWeight: 300, lineHeight: 1 }}>&lt;</span>
-          <span style={{ fontSize: 17, fontWeight: 500 }}>{title}</span>
-          <span style={{ fontSize: 18, letterSpacing: 1 }}>⋯</span>
+function SettingsPanel({
+  settings,
+  onSettingsChange,
+}: {
+  settings: PhoneSettings;
+  onSettingsChange: (s: PhoneSettings) => void;
+}) {
+  const update = (patch: Partial<PhoneSettings>) => onSettingsChange({ ...settings, ...patch });
+  return (
+    <div className="wc-card">
+      <div className="wc-card-header">
+        <IconImage /> 外观设置
+      </div>
+      <div className="wc-card-body">
+        <div className="wc-form-grid">
+          <div className="wc-form-item">
+            <label className="wc-form-label">手机时间</label>
+            <input
+              type="time"
+              className="wc-form-input"
+              value={settings.time}
+              onChange={e => update({ time: e.target.value })}
+            />
+          </div>
+          <div className="wc-form-item">
+            <label className="wc-form-label">聊天标题</label>
+            <input
+              type="text"
+              className="wc-form-input"
+              value={settings.contactName}
+              onChange={e => update({ contactName: e.target.value })}
+            />
+          </div>
+          <div className="wc-form-item">
+            <label className="wc-form-label">信号格数</label>
+            <select
+              className="wc-form-input"
+              value={settings.signal}
+              onChange={e => update({ signal: parseInt(e.target.value) })}
+            >
+              <option value={1}>1格</option>
+              <option value={2}>2格</option>
+              <option value={3}>3格</option>
+              <option value={4}>4格</option>
+            </select>
+          </div>
+          <div className="wc-form-item">
+            <label className="wc-form-label">未读消息</label>
+            <input
+              type="number"
+              className="wc-form-input"
+              min={0}
+              max={99}
+              value={settings.unreadCount}
+              onChange={e => update({ unreadCount: parseInt(e.target.value) || 0 })}
+            />
+          </div>
+          <div className="wc-form-item">
+            <label className="wc-form-label">电量 {settings.battery}%</label>
+            <input
+              type="range"
+              className="wc-form-range"
+              min={0}
+              max={100}
+              value={settings.battery}
+              onChange={e => update({ battery: parseInt(e.target.value) })}
+            />
+          </div>
+          <div className="wc-form-item">
+            <label className="wc-form-label">自己气泡色</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="color"
+                className="wc-form-color"
+                value={settings.selfBubbleColor}
+                onChange={e => update({ selfBubbleColor: e.target.value })}
+              />
+              <span style={{ fontSize: 12, color: '#6b7280' }}>{settings.selfBubbleColor}</span>
+            </div>
+          </div>
+          <div className="wc-form-item">
+            <label className="wc-form-label">他人气泡色</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="color"
+                className="wc-form-color"
+                value={settings.otherBubbleColor}
+                onChange={e => update({ otherBubbleColor: e.target.value })}
+              />
+              <span style={{ fontSize: 12, color: '#6b7280' }}>{settings.otherBubbleColor}</span>
+            </div>
+          </div>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* 消息区 */}
-        <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {renderItems.map((item, idx) => {
-            if (item.kind === 'time') {
-              return (
-                <div key={`t-${idx}`} style={{ textAlign: 'center', padding: '4px 0' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '2px 8px',
-                      background: t.time_bg_color,
-                      color: t.time_text_color,
-                      borderRadius: 4,
-                      fontSize: fontSize - 2,
-                    }}
-                  >
-                    {item.text}
-                  </span>
-                </div>
-              );
-            }
-            if (item.kind === 'system') {
-              return (
-                <div key={`s-${idx}`} style={{ textAlign: 'center', padding: '4px 0' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '2px 8px',
-                      background: t.system_bg_color,
-                      color: t.system_text_color,
-                      borderRadius: 4,
-                      fontSize: fontSize - 1,
-                    }}
-                  >
-                    {item.msg.text}
-                  </span>
-                </div>
-              );
-            }
-
-            // 普通消息
-            const m = item.msg;
-            const userCfg = effectiveUserConfigs[m.sender] || { name: m.sender };
-            const isMe = !!userCfg.isMe || m.sender === '我';
-            const bubbleColor = isMe ? t.my_bubble_color : t.other_bubble_color;
-            const textColor = isMe ? t.my_text_color : t.other_text_color;
-            const avatarSrc = userCfg.avatarPath || defaultAvatar;
-
-            // 渲染气泡内容（根据类型）
-            let bubbleContent: React.ReactNode = null;
-            if (m.type === 'text') {
-              bubbleContent = <span style={{ color: textColor, fontSize, lineHeight: 1.4, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{m.text}</span>;
-            } else if (m.type === 'image') {
-              bubbleContent = m.image_path ? (
-                <img src={m.image_path} alt="图片" style={{ maxWidth: 180, maxHeight: 180, borderRadius: t.bubble_radius, display: 'block' }} />
-              ) : (
-                <div style={{ width: 180, height: 180, background: '#CCCCCC', borderRadius: t.bubble_radius, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999999', fontSize: 14 }}>
-                  图片
-                </div>
-              );
-            } else if (m.type === 'redpacket') {
-              bubbleContent = (
-                <div style={{ background: t.redpacket_color, color: t.redpacket_text_color, borderRadius: t.bubble_radius, padding: '6px 10px', minWidth: 180 }}>
-                  <div style={{ fontSize: 16, marginBottom: 4 }}>￥ {m.text || '恭喜发财'}</div>
-                  <div style={{ fontSize: fontSize - 3, opacity: 0.8 }}>微信红包</div>
-                </div>
-              );
-            } else if (m.type === 'transfer') {
-              bubbleContent = (
-                <div style={{ background: t.transfer_color, color: t.transfer_text_color, borderRadius: t.bubble_radius, padding: '6px 10px', minWidth: 180, textAlign: 'center' }}>
-                  <div style={{ fontSize: fontSize + 4, fontWeight: 600 }}>￥{m.amount || '0'}</div>
-                  <div style={{ fontSize: fontSize - 3, opacity: 0.8, marginTop: 2 }}>{m.text || '转账'}</div>
-                </div>
-              );
-            } else if (m.type === 'voice') {
-              const dur = m.duration || 1;
-              const w = Math.max(60, Math.min(180, 50 + dur * 8));
-              bubbleContent = (
-                <div style={{ background: isMe ? t.my_bubble_color : t.voice_color, color: textColor, borderRadius: t.bubble_radius, padding: '6px 10px', width: w, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
-                    {[4, 7, 10].map((h, i) => (
-                      <span key={i} style={{ width: 2, height: h, background: textColor, display: 'inline-block' }} />
-                    ))}
-                  </span>
-                  <span style={{ fontSize, marginLeft: 'auto' }}>{dur}''</span>
-                </div>
-              );
-            }
-
-            // 编辑态
-            const isEditing = editingIndex === messages.indexOf(m);
-            const realIdx = messages.indexOf(m);
-
+function MessageList({
+  messages,
+  users,
+  selfId,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+}: {
+  messages: ChatMessage[];
+  users: ChatUser[];
+  selfId: number | null;
+  onDelete: (id: number) => void;
+  onMoveUp: (id: number) => void;
+  onMoveDown: (id: number) => void;
+}) {
+  if (messages.length === 0) return null;
+  const typeLabel: Record<MessageType, string> = {
+    text: '文字',
+    image: '图片',
+    voice: '语音',
+    redpacket: '红包',
+    transfer: '转账',
+    time: '时间',
+  };
+  const previewText = (msg: ChatMessage): string => {
+    switch (msg.type) {
+      case 'text':
+        return msg.content;
+      case 'image':
+        return msg.content ? '[已上传图片]' : '[占位图片]';
+      case 'voice':
+        return `[语音] ${msg.params.duration || 3}"`;
+      case 'redpacket':
+        return `[红包] ${msg.params.remark || ''}`;
+      case 'transfer':
+        return `[转账] ¥${msg.params.amount || 0} ${msg.params.remark || ''}`;
+      case 'time':
+        return msg.content;
+      default:
+        return '';
+    }
+  };
+  return (
+    <div className="wc-card">
+      <div className="wc-card-header">
+        <IconImage /> 消息列表
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af' }}>{messages.length} 条</span>
+      </div>
+      <div className="wc-card-body">
+        <div className="wc-msg-list">
+          {messages.map((msg, idx) => {
+            const user = users.find(u => u.id === msg.senderId) || users[0];
+            const isSelf = msg.senderId === selfId;
             return (
-              <div
-                key={`m-${idx}`}
-                style={{
-                  display: 'flex',
-                  flexDirection: isMe ? 'row-reverse' : 'row',
-                  alignItems: 'flex-start',
-                  gap: 8,
-                }}
-              >
-                {/* 头像 */}
-                {showAvatar && (
-                  <img
-                    src={avatarSrc}
-                    alt={m.sender}
-                    style={{
-                      width: t.avatar_size,
-                      height: t.avatar_size,
-                      borderRadius: t.avatar_radius,
-                      objectFit: 'cover',
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '70%', gap: 2 }}>
-                  {isEditing ? (
-                    <EditBubble
-                      type={m.type}
-                      editText={editText}
-                      editSender={editSender}
-                      editTime={editTime}
-                      editAmount={editAmount}
-                      editDuration={editDuration}
-                      editImagePath={editImagePath}
-                      setEditText={setEditText}
-                      setEditSender={setEditSender}
-                      setEditTime={setEditTime}
-                      setEditAmount={setEditAmount}
-                      setEditDuration={setEditDuration}
-                      setEditImagePath={setEditImagePath}
-                      onSave={handleSaveEdit}
-                      onCancel={handleCancelEdit}
-                      colors={colors}
-                    />
-                  ) : (
-                    <div
-                      onClick={() => handleBubbleClick(realIdx)}
-                      title="点击编辑"
-                      style={{
-                        cursor: 'pointer',
-                        border: '1px dashed transparent',
-                        transition: 'border-color 0.15s',
-                        padding: 0,
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(35, 134, 54, 0.5)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'transparent'; }}
-                    >
-                      {/* 文本气泡用 bubbleColor 背景；其他类型气泡内部自带背景 */}
-                      {m.type === 'text' ? (
-                        <div style={{
-                          background: bubbleColor,
-                          padding: '8px 10px',
-                          borderRadius: t.bubble_radius,
-                        }}>
-                          {bubbleContent}
-                        </div>
-                      ) : bubbleContent}
-                    </div>
-                  )}
-
-                  {/* 操作按钮 */}
-                  {!isEditing && (
-                    <MessageActions
-                      idx={realIdx}
-                      total={messages.length}
-                      onMove={handleMoveMessage}
-                      onDelete={handleDeleteMessage}
-                      color={t.system_text_color}
-                      align={isMe ? 'right' : 'left'}
-                    />
-                  )}
+              <div key={msg.id} className="wc-msg-item">
+                <div className="wc-msg-meta">
+                  <span className="wc-msg-sender">
+                    [{typeLabel[msg.type]}] {user?.name || '?'}
+                    {isSelf ? '（自己）' : ''}
+                  </span>
+                  <span className="wc-msg-preview">{previewText(msg)}</span>
+                </div>
+                <div className="wc-msg-actions">
+                  <button
+                    className="wc-msg-action-btn up"
+                    onClick={() => onMoveUp(msg.id)}
+                    disabled={idx === 0}
+                    style={{ opacity: idx === 0 ? 0.4 : 1 }}
+                    title="上移"
+                  >
+                    <IconUp />
+                  </button>
+                  <button
+                    className="wc-msg-action-btn up"
+                    onClick={() => onMoveDown(msg.id)}
+                    disabled={idx === messages.length - 1}
+                    style={{ opacity: idx === messages.length - 1 ? 0.4 : 1 }}
+                    title="下移"
+                  >
+                    <IconDown />
+                  </button>
+                  <button
+                    className="wc-msg-action-btn"
+                    onClick={() => onDelete(msg.id)}
+                    title="删除"
+                  >
+                    <IconTrash />
+                  </button>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+}
 
-  // ============================================================
-  // 主渲染
-  // ============================================================
+// ==================== 主组件 ====================
+
+export default function WechatChat() {
+  const [importText, setImportText] = useState('');
+  const [users, setUsers] = useState<ChatUser[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [settings, setSettings] = useState<PhoneSettings>({
+    time: '12:02',
+    signal: 4,
+    battery: 60,
+    contactName: '',
+    unreadCount: 1,
+    selfBubbleColor: '#95ec69',
+    otherBubbleColor: '#ffffff',
+  });
+  const [selfId, setSelfId] = useState<number | null>(null);
+  const [toast, setToast] = useState('');
+  const phoneRef = useRef<HTMLDivElement | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2500);
+  }, []);
+
+  const handleImport = useCallback(() => {
+    if (!importText.trim()) {
+      showToast('请先输入聊天记录文本');
+      return;
+    }
+    const result = parseChatRecord(importText);
+    if (result.messages.length === 0) {
+      showToast('未解析到任何消息');
+      return;
+    }
+    setUsers(result.users);
+    setMessages(result.messages);
+    setSelfId(result.users[0]?.id ?? null);
+    if (result.users.length >= 3) {
+      const otherNames = result.users.slice(1).map(u => u.name);
+      const nameStr = result.users.length <= 4
+        ? otherNames.join('、')
+        : otherNames.slice(0, 2).join('、') + '等';
+      setSettings(s => ({ ...s, contactName: nameStr + '(' + result.users.length + ')' }));
+    } else if (result.users.length === 2) {
+      setSettings(s => ({ ...s, contactName: result.users[1].name }));
+    } else if (result.users.length === 1) {
+      setSettings(s => ({ ...s, contactName: result.users[0].name }));
+    }
+    showToast(`成功导入 ${result.messages.length} 条消息（${result.users.length} 个用户）`);
+  }, [importText, showToast]);
+
+  const handleUpdateAvatar = useCallback((userId: number, avatar: string) => {
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, avatar } : u)));
+  }, []);
+  const handleRemoveAvatar = useCallback((userId: number) => {
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, avatar: null } : u)));
+  }, []);
+  const handleUpdateMessage = useCallback((msgId: number, content: string) => {
+    setMessages(prev => prev.map(m => (m.id === msgId ? { ...m, content } : m)));
+  }, []);
+  const handleAddMessage = useCallback((msg: Omit<ChatMessage, 'id'>) => {
+    setMessages(prev => {
+      const maxId = prev.reduce((max, m) => Math.max(max, m.id), 0);
+      return [...prev, { ...msg, id: maxId + 1 }];
+    });
+  }, []);
+  const handleDeleteMessage = useCallback((id: number) => {
+    setMessages(prev => prev.filter(m => m.id !== id));
+  }, []);
+  const handleMoveUp = useCallback((id: number) => {
+    setMessages(prev => {
+      const idx = prev.findIndex(m => m.id === id);
+      if (idx <= 0) return prev;
+      const next = [...prev];
+      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+      return next;
+    });
+  }, []);
+  const handleMoveDown = useCallback((id: number) => {
+    setMessages(prev => {
+      const idx = prev.findIndex(m => m.id === id);
+      if (idx < 0 || idx >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+      return next;
+    });
+  }, []);
+
+  // html-to-image 截图（基于浏览器自身渲染，无文字偏移问题）
+  const capturePhone = useCallback(async (longshot = false): Promise<HTMLCanvasElement | null> => {
+    const phone = phoneRef.current;
+    if (!phone) return null;
+    const content = phone.closest('.wc-phone-content') as HTMLElement | null;
+    const wrap = phone.closest('.wc-phone-wrap') as HTMLElement | null;
+    const scaleWrap = phone.closest('.wc-phone-scale-wrap') as HTMLElement | null;
+    if (!content || !wrap) return null;
+    // 保存原始样式
+    const saved = {
+      ct: content.style.transform,
+      co: content.style.transformOrigin,
+      ww: wrap.style.width,
+      wh: wrap.style.height,
+      wo: wrap.style.overflow,
+      wr: wrap.style.borderRadius,
+      ws: wrap.style.boxShadow,
+      sp: scaleWrap?.style.position ?? '',
+      st: scaleWrap?.style.top ?? '',
+      sl: scaleWrap?.style.left ?? '',
+      sw: scaleWrap?.style.width ?? '',
+      sh: scaleWrap?.style.height ?? '',
+    };
+    const chatBody = phone.querySelector('.wc-chat-body') as HTMLElement | null;
+    const chatContent = phone.querySelector('.wc-chat-content') as HTMLElement | null;
+    const scrollTop = chatBody?.scrollTop ?? 0;
+    const savedContentMargin = chatContent?.style.marginTop ?? '';
+    // 移除缩放，展开至原始尺寸
+    content.style.transform = 'none';
+    wrap.style.width = '1125px';
+    wrap.style.height = '2436px';
+    wrap.style.overflow = 'hidden';
+    wrap.style.borderRadius = '0';
+    wrap.style.boxShadow = 'none';
+    if (scaleWrap) {
+      scaleWrap.style.position = 'fixed';
+      scaleWrap.style.top = '0';
+      scaleWrap.style.left = '-9999px';
+      scaleWrap.style.width = '1125px';
+      scaleWrap.style.height = '2436px';
+    }
+    // 普通截图: 用 margin-top 偏移模拟滚动
+    if (!longshot && chatContent && scrollTop > 0) {
+      chatContent.style.marginTop = `-${scrollTop}px`;
+    }
+    // 长截图: 释放 chat body 滚动
+    let longOrig: Record<string, string> | null = null;
+    if (longshot) {
+      const bottom = phone.querySelector('.wc-bottom') as HTMLElement;
+      if (chatBody && bottom) {
+        longOrig = {
+          ph: phone.style.height,
+          po: phone.style.overflow,
+          bp: chatBody.style.position,
+          bt: chatBody.style.top,
+          bb: chatBody.style.bottom,
+          bo: chatBody.style.overflowY,
+          bh: chatBody.style.height,
+          dp: bottom.style.position,
+          db: bottom.style.bottom,
+        };
+        phone.style.height = 'auto';
+        phone.style.overflow = 'visible';
+        wrap.style.height = 'auto';
+        chatBody.style.position = 'relative';
+        chatBody.style.top = 'auto';
+        chatBody.style.bottom = 'auto';
+        chatBody.style.overflowY = 'visible';
+        chatBody.style.height = 'auto';
+        bottom.style.position = 'relative';
+        bottom.style.bottom = 'auto';
+      }
+    }
+    await new Promise(r => setTimeout(r, 50));
+    const totalH = longshot ? phone.scrollHeight : 2436;
+    let canvas: HTMLCanvasElement | null = null;
+    try {
+      canvas = await toCanvas(phone, {
+        width: 1125,
+        height: totalH,
+        pixelRatio: 1,
+        backgroundColor: '#ededed',
+      });
+    } finally {
+      // 还原所有样式
+      content.style.transform = saved.ct;
+      content.style.transformOrigin = saved.co;
+      wrap.style.width = saved.ww;
+      wrap.style.height = saved.wh;
+      wrap.style.overflow = saved.wo;
+      wrap.style.borderRadius = saved.wr;
+      wrap.style.boxShadow = saved.ws;
+      if (scaleWrap) {
+        scaleWrap.style.position = saved.sp;
+        scaleWrap.style.top = saved.st;
+        scaleWrap.style.left = saved.sl;
+        scaleWrap.style.width = saved.sw;
+        scaleWrap.style.height = saved.sh;
+      }
+      if (chatContent) chatContent.style.marginTop = savedContentMargin;
+      if (chatBody && scrollTop > 0) {
+        requestAnimationFrame(() => {
+          if (chatBody) chatBody.scrollTop = scrollTop;
+        });
+      }
+      if (longshot && longOrig) {
+        const cb = phone.querySelector('.wc-chat-body') as HTMLElement;
+        const bt = phone.querySelector('.wc-bottom') as HTMLElement;
+        if (cb && bt) {
+          phone.style.height = longOrig.ph;
+          phone.style.overflow = longOrig.po;
+          cb.style.position = longOrig.bp;
+          cb.style.top = longOrig.bt;
+          cb.style.bottom = longOrig.bb;
+          cb.style.overflowY = longOrig.bo;
+          cb.style.height = longOrig.bh;
+          bt.style.position = longOrig.dp;
+          bt.style.bottom = longOrig.db;
+        }
+      }
+    }
+    return canvas;
+  }, []);
+
+  const handleGenerateImage = useCallback(async () => {
+    if (!phoneRef.current) return;
+    showToast('正在生成图片...');
+    try {
+      const canvas = await capturePhone(false);
+      if (!canvas) return;
+      const link = document.createElement('a');
+      link.download = '微信聊天记录_' + Date.now() + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('图片已生成并下载！');
+    } catch (e: unknown) {
+      showToast('生成失败：' + (e instanceof Error ? e.message : String(e)));
+    }
+  }, [showToast, capturePhone]);
+
+  const handleCopyImage = useCallback(async () => {
+    if (!phoneRef.current) return;
+    showToast('正在生成图片...');
+    try {
+      const canvas = await capturePhone(false);
+      if (!canvas) return;
+      canvas.toBlob(async blob => {
+        if (!blob) return;
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          showToast('图片已复制到剪贴板！');
+        } catch {
+          showToast('复制失败，请使用下载功能');
+        }
+      });
+    } catch {
+      showToast('操作失败');
+    }
+  }, [showToast, capturePhone]);
+
+  const handleGenerateLongImage = useCallback(async () => {
+    if (!phoneRef.current) return;
+    showToast('正在生成长截图...');
+    try {
+      const canvas = await capturePhone(true);
+      if (!canvas) return;
+      const link = document.createElement('a');
+      link.download = '微信聊天记录_长截图_' + Date.now() + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('长截图已生成并下载！');
+    } catch (e: unknown) {
+      showToast('生成失败：' + (e instanceof Error ? e.message : String(e)));
+    }
+  }, [showToast, capturePhone]);
+
+  const hasMessages = messages.length > 0;
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: colors.pageBg,
-      color: colors.textPrimary,
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-    }}>
-      <div style={{
-        padding: '16px 20px',
-        borderBottom: '1px solid var(--arco-color-border)',
-        display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, flexWrap: 'wrap',
-      }}>
-        <span style={{ fontSize: 20 }}>💬</span>
-        <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>微信聊天记录生成器</h1>
-        <span style={{
-          backgroundColor: '#FF8000', borderRadius: 5, padding: '2px 8px',
-          fontSize: '0.85em', color: '#fff', fontWeight: 600,
-        }}>python</span>
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: colors.textSecondary }}>
-          参考开源项目 gaopengbin/wechat-dialog-generator
+    <div className="wc-page">
+      <div className="wc-header">
+        <h1>微信聊天记录生成</h1>
+        <span style={{ fontSize: 12, color: '#9ca3af' }}>
+          · HTML/CSS 渲染 + html-to-image 截图（参考 bairihai/wechat-dialog-generator）
         </span>
-      </div>
-
-      <div style={{ padding: '16px 24px 32px', display: 'flex', flexDirection: 'column', gap: 16, flex: 1 }}>
-        {/* 主题与外观设置 */}
-        <div style={{
-          background: colors.cardBg, border: `1px solid ${colors.border}`,
-          borderRadius: 6, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-            主题与外观
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>风格预设</div>
-              <select
-                value={theme}
-                onChange={(e) => { setTheme(e.target.value); setOverrides({}); }}
-                style={{ width: '100%', padding: '5px 8px', fontSize: 14, background: colors.inputBg, color: colors.textPrimary, border: `1px solid ${colors.border}`, borderRadius: 6 }}
-              >
-                <option value="ios_classic">iOS 经典绿</option>
-                <option value="ios_dark">iOS 暗黑模式</option>
-                <option value="android">Android 风格</option>
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>画布宽度</div>
-              <input
-                type="number" min={300} max={800} value={canvasWidth}
-                onChange={(e) => setCanvasWidth(parseInt(e.target.value) || 420)}
-                style={{ width: '100%', padding: '5px 12px', fontSize: 14, background: colors.inputBg, color: colors.textPrimary, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>字号</div>
-              <input
-                type="number" min={10} max={28} value={fontSize}
-                onChange={(e) => setFontSize(parseInt(e.target.value) || 15)}
-                style={{ width: '100%', padding: '5px 12px', fontSize: 14, background: colors.inputBg, color: colors.textPrimary, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>输出格式</div>
-              <select
-                value={outputFormat}
-                onChange={(e) => setOutputFormat(e.target.value)}
-                style={{ width: '100%', padding: '5px 8px', fontSize: 14, background: colors.inputBg, color: colors.textPrimary, border: `1px solid ${colors.border}`, borderRadius: 6 }}
-              >
-                <option value="png">PNG</option>
-                <option value="jpeg">JPEG</option>
-                <option value="webp">WEBP</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>标题栏（联系人名称）</div>
-              <input
-                type="text" value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                style={{ width: '100%', padding: '5px 12px', fontSize: 14, background: colors.inputBg, color: colors.textPrimary, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>状态栏时间</div>
-              <input
-                type="text" value={statusBarTime}
-                onChange={(e) => setStatusBarTime(e.target.value)}
-                placeholder="如 14:32"
-                style={{ width: '100%', padding: '5px 12px', fontSize: 14, background: colors.inputBg, color: colors.textPrimary, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>电量（%）</div>
-              <input
-                type="number" min={0} max={100} value={batteryLevel}
-                onChange={(e) => setBatteryLevel(parseInt(e.target.value) || 70)}
-                style={{ width: '100%', padding: '5px 12px', fontSize: 14, background: colors.inputBg, color: colors.textPrimary, border: `1px solid ${colors.border}`, borderRadius: 6, boxSizing: 'border-box' }}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingTop: 18 }}>
-              <label style={{ fontSize: 13, cursor: 'pointer' }}>
-                <input type="checkbox" checked={showAvatar} onChange={(e) => setShowAvatar(e.target.checked)} style={{ marginRight: 6 }} />
-                头像
-              </label>
-              <label style={{ fontSize: 13, cursor: 'pointer' }}>
-                <input type="checkbox" checked={showTime} onChange={(e) => setShowTime(e.target.checked)} style={{ marginRight: 6 }} />
-                时间节点
-              </label>
-            </div>
-          </div>
-
-          {/* 颜色微调 */}
-          <details>
-            <summary style={{ cursor: 'pointer', fontSize: 12, color: colors.textSecondary }}>
-              颜色微调（覆盖预设）
-            </summary>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 8 }}>
-              {([
-                ['my_bubble_color', '我方气泡'],
-                ['other_bubble_color', '对方气泡'],
-                ['background_color', '背景色'],
-                ['header_color', '标题栏背景'],
-              ] as const).map(([key, label]) => (
-                <div key={key}>
-                  <div style={{ fontSize: 12, marginBottom: 4 }}>{label}</div>
-                  <input
-                    type="color"
-                    value={(overrides[key] as string) || (effectiveTheme[key] as string)}
-                    onChange={(e) => setOverrides({ ...overrides, [key]: e.target.value })}
-                    style={{ width: '100%', height: 30, padding: 0, border: `1px solid ${colors.border}`, borderRadius: 4, cursor: 'pointer' }}
-                  />
-                </div>
-              ))}
-            </div>
-            {Object.keys(overrides).length > 0 && (
-              <button
-                onClick={() => setOverrides({})}
-                style={{ marginTop: 8, padding: '3px 10px', fontSize: 12, cursor: 'pointer', background: 'transparent', color: colors.textSecondary, border: `1px solid ${colors.border}`, borderRadius: 6 }}
-              >
-                重置为预设
-              </button>
-            )}
-          </details>
-        </div>
-
-        {/* 双栏：左输入区 + 右实时预览 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 16, flex: 1 }}>
-          {/* 左：输入区 + 用户列表 */}
-          <div style={{
-            background: colors.cardBg, border: `1px solid ${colors.border}`,
-            borderRadius: 6, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
-          }}>
-            {/* 输入模式切换 */}
-            <div style={{ display: 'flex', gap: 6, borderBottom: `1px solid ${colors.border}`, paddingBottom: 8 }}>
-              <button
-                onClick={() => switchToInputMode('markdown')}
-                style={{
-                  padding: '4px 12px', fontSize: 13, cursor: 'pointer',
-                  background: inputMode === 'markdown' ? '#238636' : 'transparent',
-                  color: inputMode === 'markdown' ? '#fff' : colors.textSecondary,
-                  border: `1px solid ${inputMode === 'markdown' ? '#238636' : colors.border}`,
-                  borderRadius: 4,
-                }}
-              >Markdown 文本</button>
-              <button
-                onClick={() => switchToInputMode('json')}
-                style={{
-                  padding: '4px 12px', fontSize: 13, cursor: 'pointer',
-                  background: inputMode === 'json' ? '#238636' : 'transparent',
-                  color: inputMode === 'json' ? '#fff' : colors.textSecondary,
-                  border: `1px solid ${inputMode === 'json' ? '#238636' : colors.border}`,
-                  borderRadius: 4,
-                }}
-              >JSON 高级</button>
-            </div>
-
-            {inputMode === 'markdown' ? (
-              <>
-                <div style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 1.5 }}>
-                  格式：<code>**用户名**：内容</code> / <code>**【时间】**</code> / <code>[图片]</code> / <code>[红包]备注</code> / <code>[转账]金额:备注</code> / <code>[语音]秒数</code>
-                </div>
-                <textarea
-                  style={{
-                    width: '100%', minHeight: 320, resize: 'vertical',
-                    padding: '8px 12px', fontSize: 13, lineHeight: 1.6,
-                    background: colors.inputBg, color: colors.textPrimary,
-                    border: `1px solid ${colors.border}`, borderRadius: 6,
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                    boxSizing: 'border-box',
-                  }}
-                  value={markdownText}
-                  onChange={(e) => handleMarkdownChange(e.target.value)}
-                  spellCheck={false}
-                />
-                <div style={{ fontSize: 12, color: colors.textSecondary }}>
-                  共 {messages.length} 条消息
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: 12, color: colors.textSecondary }}>
-                  JSON 数组格式（修改后自动同步预览）
-                </div>
-                <textarea
-                  style={{
-                    width: '100%', minHeight: 320, resize: 'vertical',
-                    padding: '8px 12px', fontSize: 12, lineHeight: 1.5,
-                    background: colors.inputBg, color: colors.textPrimary,
-                    border: `1px solid ${colors.border}`, borderRadius: 6,
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                    boxSizing: 'border-box',
-                  }}
-                  value={jsonText}
-                  onChange={(e) => handleJsonChange(e.target.value)}
-                  spellCheck={false}
-                />
-                {jsonError ? (
-                  <div style={{ color: '#f53f3f', fontSize: 12 }}>JSON 错误：{jsonError}</div>
-                ) : (
-                  <div style={{ fontSize: 12, color: colors.textSecondary }}>
-                    共 {messages.length} 条消息
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* 添加消息按钮 */}
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', borderTop: `1px solid ${colors.border}`, paddingTop: 8 }}>
-              <span style={{ fontSize: 12, color: colors.textSecondary, marginRight: 4, alignSelf: 'center' }}>添加：</span>
-              {(['text', 'image', 'redpacket', 'transfer', 'voice', 'time', 'system'] as MessageType[]).map(t => (
-                <button
-                  key={t}
-                  onClick={() => handleAddMessage(t)}
-                  style={{
-                    padding: '2px 8px', fontSize: 11, cursor: 'pointer',
-                    background: 'transparent', color: colors.textPrimary,
-                    border: `1px solid ${colors.border}`, borderRadius: 4,
-                  }}
-                >
-                  + {t}
-                </button>
-              ))}
-            </div>
-
-            {/* 用户列表 */}
-            {knownUsers.length > 0 && (
-              <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 8 }}>
-                <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
-                  用户列表（{knownUsers.length}）—— 点击"我"切换消息左右方向
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {knownUsers.map(name => {
-                    const cfg = effectiveUserConfigs[name] || { name, isMe: name === '我' };
-                    return (
-                      <div key={name} style={{
-                        display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
-                        fontSize: 12,
-                      }}>
-                        <img
-                          src={cfg.avatarPath || defaultAvatar}
-                          alt={name}
-                          style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover' }}
-                        />
-                        <span style={{ fontWeight: 500, minWidth: 50 }}>{name}</span>
-                        <button
-                          onClick={() => handleSetMe(name)}
-                          style={{
-                            padding: '2px 8px', fontSize: 11, cursor: 'pointer',
-                            background: cfg.isMe ? '#95EC69' : 'transparent',
-                            color: cfg.isMe ? '#000' : colors.textSecondary,
-                            border: `1px solid ${cfg.isMe ? '#95EC69' : colors.border}`,
-                            borderRadius: 4,
-                          }}
-                        >
-                          {cfg.isMe ? '✓ 我' : '设为我'}
-                        </button>
-                        <input
-                          type="text"
-                          placeholder="自定义头像路径（可选）"
-                          value={cfg.avatarPath || ''}
-                          onChange={(e) => handleSetUserAvatar(name, e.target.value)}
-                          style={{
-                            flex: 1, padding: '2px 6px', fontSize: 11,
-                            background: colors.inputBg, color: colors.textPrimary,
-                            border: `1px solid ${colors.border}`, borderRadius: 4,
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 右：实时预览 */}
-          <div style={{
-            background: colors.cardBg, border: `1px solid ${colors.border}`,
-            borderRadius: 6, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-              实时预览（点击气泡可编辑）
-            </div>
-            <div
-              style={{
-                padding: 16,
-                border: '1px dashed var(--arco-color-border-2)',
-                borderRadius: 6,
-                background: 'var(--arco-color-fill-1)',
-                overflow: 'auto',
-                minHeight: 400,
-                maxHeight: '70vh',
-              }}
-            >
-              {renderPreview()}
-            </div>
-          </div>
-        </div>
-
-        {/* 生成按钮 */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            style={loading
-              ? { background: 'rgba(35, 134, 54, 0.5)', color: '#fff', border: '1px solid rgba(240,246,252,0.1)', borderRadius: 6, padding: '5px 16px', fontSize: 14, fontWeight: 500, cursor: 'not-allowed' }
-              : { background: '#238636', color: '#fff', border: '1px solid rgba(240,246,252,0.1)', borderRadius: 6, padding: '5px 16px', fontSize: 14, fontWeight: 500, cursor: 'pointer' }
-            }
-          >
-            {loading ? `生成中... ${(elapsedMs / 1000).toFixed(1)}s` : '生成图片'}
-          </button>
-          {imageData && (
-            <>
-              <button onClick={handleCopyImage} style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', background: 'transparent', border: '1px solid var(--arco-color-border)', borderRadius: 6 }}>复制图片</button>
-              <button onClick={handleDownload} style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', background: 'transparent', border: '1px solid var(--arco-color-border)', borderRadius: 6 }}>下载</button>
-              <button onClick={handleOpenInNewWindow} style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', background: 'transparent', border: '1px solid var(--arco-color-border)', borderRadius: 6 }}>新窗口打开</button>
-            </>
-          )}
-          {error && <span style={{ color: '#f53f3f', fontSize: 13 }}>{error}</span>}
-          {toast && (
-            <div style={{
-              position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)',
-              background: 'rgba(0,0,0,0.8)', color: '#fff', padding: '6px 14px',
-              borderRadius: 4, fontSize: 13, zIndex: 9999, pointerEvents: 'none',
-            }}>{toast}</div>
-          )}
-        </div>
-
-        {/* 生成的图片 */}
-        {imageData && (
-          <div style={{
-            background: colors.cardBg, border: `1px solid ${colors.border}`,
-            borderRadius: 6, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-              生成结果
-            </div>
-            <div
-              style={{
-                padding: 16,
-                border: '1px dashed var(--arco-color-border-2)',
-                borderRadius: 6,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 200,
-                background: 'var(--arco-color-fill-1)',
-              }}
-            >
-              <img src={previewSrc!} alt="微信聊天记录" style={{ maxWidth: '100%', maxHeight: 600 }} />
-            </div>
+        {hasMessages && (
+          <div className="wc-header-actions">
+            <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleGenerateImage}>
+              <IconDownload /> 生成图片
+            </button>
+            <button className="wc-btn wc-btn-sm" onClick={handleCopyImage}>
+              <IconCopy /> 复制
+            </button>
+            <button className="wc-btn wc-btn-sm" onClick={handleGenerateLongImage}>
+              <IconImage /> 长截图
+            </button>
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ============================================================
-// 编辑气泡子组件
-// ============================================================
-function EditBubble({
-  type, editText, editSender, editTime, editAmount, editDuration, editImagePath,
-  setEditText, setEditSender, setEditTime, setEditAmount, setEditDuration, setEditImagePath,
-  onSave, onCancel, colors,
-}: {
-  type: MessageType;
-  editText: string;
-  editSender: string;
-  editTime: string;
-  editAmount: string;
-  editDuration: number;
-  editImagePath: string;
-  setEditText: (v: string) => void;
-  setEditSender: (v: string) => void;
-  setEditTime: (v: string) => void;
-  setEditAmount: (v: string) => void;
-  setEditDuration: (v: number) => void;
-  setEditImagePath: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
-  const inputStyle: React.CSSProperties = {
-    padding: '3px 6px', fontSize: 12,
-    border: `1px solid ${colors.border}`, borderRadius: 4,
-    background: colors.inputBg, color: colors.textPrimary,
-    width: '100%', boxSizing: 'border-box',
-  };
-  return (
-    <div style={{
-      background: colors.cardBg,
-      border: '2px solid #238636',
-      borderRadius: 8,
-      padding: 8,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 6,
-      minWidth: 240,
-    }}>
-      {type !== 'time' && type !== 'system' && (
-        <input type="text" value={editSender} onChange={(e) => setEditSender(e.target.value)} placeholder="发送者" style={inputStyle} />
-      )}
-      {(type === 'text' || type === 'redpacket' || type === 'transfer' || type === 'system' || type === 'time') && (
-        <textarea
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          placeholder={type === 'time' ? '时间字符串，如 14:30 或 3月1日 14:30' : '消息内容'}
-          rows={type === 'text' ? 3 : 1}
-          style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-        />
-      )}
-      {type === 'transfer' && (
-        <input type="text" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} placeholder="金额，如 200" style={inputStyle} />
-      )}
-      {type === 'voice' && (
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          时长（秒）：
-          <input type="number" min={1} value={editDuration} onChange={(e) => setEditDuration(parseInt(e.target.value) || 1)} style={{ ...inputStyle, width: 80 }} />
-        </label>
-      )}
-      {type === 'image' && (
-        <input type="text" value={editImagePath} onChange={(e) => setEditImagePath(e.target.value)} placeholder="图片路径（可选，留空用占位图）" style={inputStyle} />
-      )}
-      {type !== 'time' && type !== 'system' && (
-        <input type="text" value={editTime} onChange={(e) => setEditTime(e.target.value)} placeholder="时间（可选，如 14:30）" style={inputStyle} />
-      )}
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button
-          onClick={onSave}
-          style={{
-            padding: '3px 10px', fontSize: 12, cursor: 'pointer',
-            background: '#238636', color: '#fff', border: 'none', borderRadius: 4,
-          }}
-        >保存</button>
-        <button
-          onClick={onCancel}
-          style={{
-            padding: '3px 10px', fontSize: 12, cursor: 'pointer',
-            background: 'transparent', color: colors.textSecondary,
-            border: `1px solid ${colors.border}`, borderRadius: 4,
-          }}
-        >取消</button>
+      <div className="wc-main">
+        <div className="wc-left">
+          <ImportPanel text={importText} onTextChange={setImportText} onImport={handleImport} />
+          {users.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <UserAvatarManager
+                users={users}
+                selfId={selfId}
+                defaultAvatarSrc={defaultAvatar}
+                onUpdateAvatar={handleUpdateAvatar}
+                onRemoveAvatar={handleRemoveAvatar}
+                onSetSelf={setSelfId}
+              />
+            </div>
+          )}
+          {users.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <MessageEditor users={users} selfId={selfId} onAddMessage={handleAddMessage} />
+            </div>
+          )}
+          {hasMessages && (
+            <div style={{ marginTop: 16 }}>
+              <MessageList
+                messages={messages}
+                users={users}
+                selfId={selfId}
+                onDelete={handleDeleteMessage}
+                onMoveUp={handleMoveUp}
+                onMoveDown={handleMoveDown}
+              />
+            </div>
+          )}
+          {hasMessages && (
+            <div style={{ marginTop: 16 }}>
+              <SettingsPanel settings={settings} onSettingsChange={setSettings} />
+            </div>
+          )}
+        </div>
+        {hasMessages && (
+          <PhonePreview
+            users={users}
+            messages={messages}
+            settings={settings}
+            selfId={selfId}
+            phoneRef={phoneRef}
+            defaultAvatarSrc={defaultAvatar}
+            onUpdateMessage={handleUpdateMessage}
+          />
+        )}
       </div>
+      {toast && <div className="wc-toast">{toast}</div>}
     </div>
   );
 }
-
-// ============================================================
-// 消息操作按钮（上移/下移/删除）
-// ============================================================
-function MessageActions({
-  idx, total, onMove, onDelete, color, align = 'left',
-}: {
-  idx: number;
-  total: number;
-  onMove: (idx: number, dir: -1 | 1) => void;
-  onDelete: (idx: number) => void;
-  color: string;
-  align?: 'left' | 'right';
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex', gap: 4, fontSize: 11,
-        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-        opacity: 0.6,
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        disabled={idx === 0}
-        onClick={() => onMove(idx, -1)}
-        style={{
-          padding: '1px 6px', fontSize: 10, cursor: idx === 0 ? 'not-allowed' : 'pointer',
-          background: 'transparent', color, border: `1px solid ${color}`, borderRadius: 3,
-          opacity: idx === 0 ? 0.4 : 1,
-        }}
-      >↑</button>
-      <button
-        disabled={idx === total - 1}
-        onClick={() => onMove(idx, 1)}
-        style={{
-          padding: '1px 6px', fontSize: 10, cursor: idx === total - 1 ? 'not-allowed' : 'pointer',
-          background: 'transparent', color, border: `1px solid ${color}`, borderRadius: 3,
-          opacity: idx === total - 1 ? 0.4 : 1,
-        }}
-      >↓</button>
-      <button
-        onClick={() => onDelete(idx)}
-        style={{
-          padding: '1px 6px', fontSize: 10, cursor: 'pointer',
-          background: 'transparent', color: '#f53f3f', border: '1px solid #f53f3f', borderRadius: 3,
-        }}
-      >✕</button>
-    </div>
-  );
-}
-
-export default WechatChatPage;
