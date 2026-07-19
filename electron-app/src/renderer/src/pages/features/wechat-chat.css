@@ -2,6 +2,53 @@
    参考: https://github.com/bairihai/wechat-dialog-generator
    显示时用 transform: scale(0.3333) 缩小到 375×812 */
 
+/* ============ 主题变量（默认 iOS 经典） ============ */
+.wc-theme-ios-classic {
+  --wc-phone-bg: #ededed;
+  --wc-nav-bg: #ededed;
+  --wc-bottom-bg: #f6f6f6;
+  --wc-text-color: #000000;
+  --wc-text-secondary: #999999;
+  --wc-nick-color: #999999;
+  --wc-time-color: #b0b0b0;
+  --wc-border-color: #d5d5d5;
+  --wc-input-bg: #ffffff;
+  --wc-icon-color: #333333;
+  --wc-battery-color: #000000;
+  --wc-signal-color: #000000;
+  --wc-placeholder-bg: #f5f5f5;
+}
+.wc-theme-ios-dark {
+  --wc-phone-bg: #1a1a1a;
+  --wc-nav-bg: #1a1a1a;
+  --wc-bottom-bg: #2c2c2e;
+  --wc-text-color: #ffffff;
+  --wc-text-secondary: #8e8e93;
+  --wc-nick-color: #8e8e93;
+  --wc-time-color: #636366;
+  --wc-border-color: #38383a;
+  --wc-input-bg: #2c2c2e;
+  --wc-icon-color: #d1d1d6;
+  --wc-battery-color: #ffffff;
+  --wc-signal-color: #ffffff;
+  --wc-placeholder-bg: #2c2c2e;
+}
+.wc-theme-android {
+  --wc-phone-bg: #ffffff;
+  --wc-nav-bg: #ffffff;
+  --wc-bottom-bg: #f5f5f5;
+  --wc-text-color: #000000;
+  --wc-text-secondary: #757575;
+  --wc-nick-color: #757575;
+  --wc-time-color: #bdbdbd;
+  --wc-border-color: #e0e0e0;
+  --wc-input-bg: #ffffff;
+  --wc-icon-color: #424242;
+  --wc-battery-color: #000000;
+  --wc-signal-color: #000000;
+  --wc-placeholder-bg: #f5f5f5;
+}
+
 /* ============ 外层容器 ============ */
 .wc-phone-scale-wrap {
   position: sticky;
@@ -28,7 +75,8 @@
 .wc-phone {
   width: 1125px;
   height: 2436px;
-  background: #ededed;
+  background: var(--wc-phone-bg, #ededed);
+  color: var(--wc-text-color, #000);
   position: relative;
   font-size: 36px;
   overflow: hidden;
@@ -44,14 +92,14 @@
 .wc-phone-top {
   position: relative;
   z-index: 99;
-  background: #ededed;
+  background: var(--wc-nav-bg, #ededed);
 }
 .wc-phone-top::after {
   content: '';
   position: absolute;
   width: 100%;
   height: 1px;
-  background: #d5d5d5;
+  background: var(--wc-border-color, #d5d5d5);
   left: 0;
   bottom: 2px;
 }
@@ -83,7 +131,7 @@
 .wc-battery-outer {
   width: 60px;
   height: 24px;
-  border: 2.5px solid #000;
+  border: 2.5px solid var(--wc-battery-color, #000);
   border-radius: 5px;
   display: flex;
   align-items: center;
@@ -91,14 +139,14 @@
 }
 .wc-battery-inner {
   height: 100%;
-  background: #000;
+  background: var(--wc-battery-color, #000);
   border-radius: 2px;
   transition: width 0.3s;
 }
 .wc-battery-tip {
   width: 4px;
   height: 10px;
-  background: #000;
+  background: var(--wc-battery-color, #000);
   border-radius: 0 2px 2px 0;
   margin-left: 2px;
 }
@@ -120,7 +168,8 @@
   font-size: 36px;
   height: 72px;
   line-height: 72px;
-  background: #d5d5d5;
+  background: var(--wc-border-color, #d5d5d5);
+  color: var(--wc-text-color, #000);
   min-width: 72px;
   border-radius: 36px;
   text-align: center;
@@ -152,7 +201,7 @@
 .wc-nav-dots i {
   width: 12px;
   height: 12px;
-  background: #000;
+  background: var(--wc-text-color, #000);
   border-radius: 50%;
   display: block;
   font-style: normal;
@@ -220,7 +269,7 @@
 }
 .wc-nick {
   font-size: 33px;
-  color: #999;
+  color: var(--wc-nick-color, #999);
   margin-bottom: 10px;
   line-height: 1;
   padding-left: 6px;
@@ -233,7 +282,8 @@
 
 /* ============ 气泡 ============ */
 .wc-bubble {
-  background: #fff;
+  background: var(--wc-other-bubble, #fff);
+  color: var(--wc-text-color, #000);
   padding: 28px 38px;
   font-size: 48px;
   border-radius: 15px;
@@ -242,10 +292,11 @@
   position: relative;
   line-height: 1.4;
   min-height: 80px;
+  cursor: text;
 }
 .wc-arrow {
   content: '';
-  background: #fff;
+  background: var(--wc-other-bubble, #fff);
   width: 24px;
   height: 24px;
   border-bottom-left-radius: 4px;
@@ -264,10 +315,11 @@
 
 /* ============ 图片消息 ============ */
 .wc-bubble-image {
-  border: 1px #d5d5d5 solid;
+  border: 1px var(--wc-border-color, #d5d5d5) solid;
   padding: 0;
   background: none !important;
   overflow: hidden;
+  cursor: pointer;
 }
 .wc-bubble-image .wc-arrow {
   display: none;
@@ -285,12 +337,12 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: #f5f5f5;
+  background: var(--wc-placeholder-bg, #f5f5f5);
   border-radius: 8px;
 }
 .wc-img-placeholder span {
   font-size: 32px;
-  color: #999;
+  color: var(--wc-text-secondary, #999);
 }
 
 /* ============ 语音消息 ============ */
@@ -306,7 +358,7 @@
 .wc-voice-bars span {
   display: block;
   width: 6px;
-  background: #333;
+  background: var(--wc-icon-color, #333);
   border-radius: 3px;
 }
 .wc-voice-dur {
@@ -383,7 +435,7 @@
 /* ============ 时间节点 ============ */
 .wc-notice {
   font-size: 36px;
-  color: #b0b0b0;
+  color: var(--wc-time-color, #b0b0b0);
   display: flex;
   justify-content: center;
   flex: 1;
@@ -391,20 +443,20 @@
 }
 .wc-notice-bg {
   background: none;
-  color: #b0b0b0;
+  color: var(--wc-time-color, #b0b0b0);
   padding: 10px 17px;
 }
 
 /* ============ 底部输入栏 ============ */
 .wc-bottom {
-  background: #f6f6f6;
+  background: var(--wc-bottom-bg, #f6f6f6);
   position: absolute;
   bottom: 0;
   width: 100%;
 }
 .wc-bottom-chat {
   height: 170px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--wc-border-color, #e0e0e0);
 }
 .wc-bottom-inner {
   display: flex;
@@ -429,7 +481,7 @@
 }
 .wc-input-box {
   height: 108px;
-  background: #fff;
+  background: var(--wc-input-bg, #fff);
   border-radius: 16px;
   flex: 1;
   position: relative;
@@ -453,7 +505,7 @@
   display: block;
   width: 402px;
   height: 15px;
-  background: #000;
+  background: var(--wc-text-color, #000);
   border-radius: 10px;
   margin-top: 63px;
   font-style: normal;
@@ -865,4 +917,115 @@
 .wc-msg-action-btn.up:hover {
   border-color: #2f81f7;
   color: #2f81f7;
+}
+
+/* ============ 气泡内联编辑 ============ */
+.wc-bubble-editing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+}
+.wc-bubble-edit-input {
+  width: 100%;
+  min-width: 300px;
+  padding: 6px 10px;
+  font-size: 16px;
+  border: 1px solid #2f81f7;
+  border-radius: 6px;
+  background: #fff;
+  color: #000;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: inherit;
+}
+.wc-bubble-edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.wc-bubble-edit-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--arco-color-border-2, #e5e5e5);
+  background: var(--arco-color-bg-1, #fff);
+  color: var(--arco-color-text-1, #000);
+  cursor: pointer;
+}
+.wc-bubble-edit-btn.save {
+  background: #238636;
+  color: #fff;
+  border-color: #238636;
+}
+.wc-bubble-edit-btn:hover {
+  opacity: 0.85;
+}
+
+/* ============ 主题选择器 ============ */
+.wc-theme-selector {
+  display: flex;
+  gap: 6px;
+}
+.wc-theme-option {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--arco-color-border-2, #e5e5e5);
+  border-radius: 6px;
+  background: var(--arco-color-bg-1, #fff);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+.wc-theme-option:hover {
+  border-color: #2f81f7;
+}
+.wc-theme-option.active {
+  border-color: #2f81f7;
+  background: rgba(47, 129, 247, 0.08);
+  color: #2f81f7;
+}
+.wc-theme-swatch {
+  width: 100%;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  overflow: hidden;
+}
+.wc-theme-swatch span {
+  flex: 1;
+  display: block;
+}
+
+/* ============ JSON 导入导出 ============ */
+.wc-json-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wc-input-mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.wc-input-mode-tab {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--arco-color-border-2, #e5e5e5);
+  background: transparent;
+  cursor: pointer;
+  color: var(--arco-color-text-2, #6b7280);
+}
+.wc-input-mode-tab.active {
+  border-color: #2f81f7;
+  background: rgba(47, 129, 247, 0.1);
+  color: #2f81f7;
+  font-weight: 600;
 }

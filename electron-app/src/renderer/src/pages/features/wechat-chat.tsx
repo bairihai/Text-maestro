@@ -41,7 +41,46 @@ interface PhoneSettings {
   unreadCount: number;
   selfBubbleColor: string;
   otherBubbleColor: string;
+  theme: string;
 }
+
+// ==================== 主题预设 ====================
+
+interface ThemePreset {
+  name: string;
+  className: string;
+  selfBubble: string;
+  otherBubble: string;
+  phoneBg: string;
+  swatch: [string, string, string];
+}
+
+const THEME_PRESETS: Record<string, ThemePreset> = {
+  ios_classic: {
+    name: 'iOS 经典',
+    className: 'wc-theme-ios-classic',
+    selfBubble: '#95ec69',
+    otherBubble: '#ffffff',
+    phoneBg: '#ededed',
+    swatch: ['#ededed', '#95ec69', '#ffffff'],
+  },
+  ios_dark: {
+    name: 'iOS 深色',
+    className: 'wc-theme-ios-dark',
+    selfBubble: '#2e5a2e',
+    otherBubble: '#2c2c2e',
+    phoneBg: '#1a1a1a',
+    swatch: ['#1a1a1a', '#2e5a2e', '#2c2c2e'],
+  },
+  android: {
+    name: 'Android',
+    className: 'wc-theme-android',
+    selfBubble: '#b2dfdb',
+    otherBubble: '#ffffff',
+    phoneBg: '#ffffff',
+    swatch: ['#ffffff', '#b2dfdb', '#ffffff'],
+  },
+};
 
 // ==================== 解析器（参考开源 parser.ts） ====================
 
@@ -218,22 +257,86 @@ const EXAMPLE_TEXT = `**【3月1日 14:32】**
 **李四**：[语音]5
 **张三**：太感谢了兄弟！`;
 
+// ==================== JSON 数据格式（约定） ====================
+
+interface WechatChatJson {
+  version: 1;
+  settings: PhoneSettings;
+  users: ChatUser[];
+  selfId: number | null;
+  messages: ChatMessage[];
+}
+
+function exportToJson(
+  users: ChatUser[],
+  messages: ChatMessage[],
+  settings: PhoneSettings,
+  selfId: number | null,
+): WechatChatJson {
+  return {
+    version: 1,
+    settings: { ...settings },
+    users: users.map(u => ({ ...u, avatar: null })),
+    selfId,
+    messages: messages.map(m => ({
+      ...m,
+      content: m.type === 'image' && m.content.startsWith('data:') ? '' : m.content,
+    })),
+  };
+}
+
+function importFromJson(json: WechatChatJson): {
+  users: ChatUser[];
+  messages: ChatMessage[];
+  settings: PhoneSettings;
+  selfId: number | null;
+} {
+  if (!json || typeof json !== 'object') throw new Error('JSON 格式错误');
+  if (!Array.isArray(json.users) || !Array.isArray(json.messages)) {
+    throw new Error('JSON 缺少 users 或 messages 字段');
+  }
+  let nextId = 1;
+  const users: ChatUser[] = json.users.map(u => ({
+    id: u.id ?? nextId++,
+    name: String(u.name || '未命名'),
+    avatar: null,
+  }));
+  const messages: ChatMessage[] = json.messages.map(m => ({
+    id: m.id ?? nextId++,
+    type: m.type || 'text',
+    senderId: m.senderId ?? 1,
+    content: String(m.content || ''),
+    params: m.params || {},
+  }));
+  const settings: PhoneSettings = {
+    time: json.settings?.time || '12:02',
+    signal: json.settings?.signal ?? 4,
+    battery: json.settings?.battery ?? 60,
+    contactName: json.settings?.contactName || '',
+    unreadCount: json.settings?.unreadCount ?? 1,
+    selfBubbleColor: json.settings?.selfBubbleColor || '#95ec69',
+    otherBubbleColor: json.settings?.otherBubbleColor || '#ffffff',
+    theme: json.settings?.theme || 'ios_classic',
+  };
+  return { users, messages, settings, selfId: json.selfId ?? users[0]?.id ?? null };
+}
+
 // ==================== SVG 图标组件 ====================
 
 function SignalIcon({ bars }: { bars: number }) {
   return (
-    <svg width="54" height="36" viewBox="0 0 54 36">
-      <rect x="0" y="27" width="9" height="9" rx="1.5" fill={bars >= 1 ? '#000' : '#ccc'} />
-      <rect x="13" y="20" width="9" height="16" rx="1.5" fill={bars >= 2 ? '#000' : '#ccc'} />
-      <rect x="26" y="12" width="9" height="24" rx="1.5" fill={bars >= 3 ? '#000' : '#ccc'} />
-      <rect x="39" y="3" width="9" height="33" rx="1.5" fill={bars >= 4 ? '#000' : '#ccc'} />
+    <svg width="54" height="36" viewBox="0 0 54 36" style={{ color: 'var(--wc-signal-color, #000)' }}>
+      <rect x="0" y="27" width="9" height="9" rx="1.5" fill={bars >= 1 ? 'currentColor' : '#ccc'} />
+      <rect x="13" y="20" width="9" height="16" rx="1.5" fill={bars >= 2 ? 'currentColor' : '#ccc'} />
+      <rect x="26" y="12" width="9" height="24" rx="1.5" fill={bars >= 3 ? 'currentColor' : '#ccc'} />
+      <rect x="39" y="3" width="9" height="33" rx="1.5" fill={bars >= 4 ? 'currentColor' : '#ccc'} />
     </svg>
   );
 }
 
 function WifiIcon() {
   return (
-    <svg width="48" height="36" viewBox="0 0 24 18" fill="#000">
+    <svg width="48" height="36" viewBox="0 0 24 18" fill="currentColor" style={{ color: 'var(--wc-signal-color, #000)' }}>
       <path d="M12 2C7.8 2 4 3.7 1.2 6.5l1.5 1.5C5 5.8 8.3 4.5 12 4.5s7 1.3 9.3 3.5l1.5-1.5C19.9 3.7 16.2 2 12 2z" />
       <path d="M12 7C9.1 7 6.5 8.1 4.6 10l1.5 1.5C7.8 9.8 9.8 9 12 9s4.2.8 5.9 2.5L19.4 10C17.5 8.1 14.9 7 12 7z" />
       <path d="M12 12c-1.7 0-3.2.7-4.3 1.8l1.5 1.5c.7-.8 1.7-1.3 2.8-1.3s2.1.5 2.8 1.3l1.5-1.5C15.2 12.7 13.7 12 12 12z" />
@@ -245,7 +348,7 @@ function WifiIcon() {
 function BackIcon() {
   return (
     <svg width="27" height="52" viewBox="0 0 27 52" fill="none">
-      <path d="M25 2L3 26l22 24" stroke="#000" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M25 2L3 26l22 24" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--wc-text-color, #000)' }} />
     </svg>
   );
 }
@@ -273,7 +376,7 @@ function MicIcon() {
 // 底部栏图标（语音/表情/加号）用 SVG 简化
 function BottomVoiceIcon() {
   return (
-    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round">
+    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--wc-icon-color, #333)' }}>
       <rect x="14" y="10" width="20" height="22" rx="10" />
       <path d="M10 28c0 8 6 14 14 14s14-6 14-14" />
       <line x1="24" y1="42" x2="24" y2="46" />
@@ -282,17 +385,17 @@ function BottomVoiceIcon() {
 }
 function BottomEmojiIcon() {
   return (
-    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="#333" strokeWidth="2">
+    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--wc-icon-color, #333)' }}>
       <circle cx="24" cy="24" r="18" />
-      <circle cx="18" cy="20" r="1.5" fill="#333" />
-      <circle cx="30" cy="20" r="1.5" fill="#333" />
+      <circle cx="18" cy="20" r="1.5" fill="currentColor" />
+      <circle cx="30" cy="20" r="1.5" fill="currentColor" />
       <path d="M16 28c2 4 5 6 8 6s6-2 8-6" strokeLinecap="round" />
     </svg>
   );
 }
 function BottomPlusIcon() {
   return (
-    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round">
+    <svg width="72" height="72" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ color: 'var(--wc-icon-color, #333)' }}>
       <circle cx="24" cy="24" r="18" />
       <line x1="24" y1="16" x2="24" y2="32" />
       <line x1="16" y1="24" x2="32" y2="24" />
@@ -346,28 +449,98 @@ function ChatBubble({
   selfColor: string;
   otherColor: string;
   defaultAvatarSrc: string;
-  onUpdateMessage?: (msgId: number, content: string) => void;
+  onUpdateMessage?: (msgId: number, patch: Partial<Pick<ChatMessage, 'content' | 'params'>>) => void;
 }) {
   const avatarSrc = user.avatar || defaultAvatarSrc;
   const bubbleColor = isSelf ? selfColor : otherColor;
   const imgInputRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const [editField, setEditField] = useState<'content' | 'remark' | 'amount' | 'duration'>('content');
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onUpdateMessage) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      onUpdateMessage(msg.id, ev.target?.result as string);
+      onUpdateMessage(msg.id, { content: ev.target?.result as string });
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
+  const startEdit = (field: 'content' | 'remark' | 'amount' | 'duration') => {
+    if (!onUpdateMessage) return;
+    setEditField(field);
+    if (field === 'content') setEditValue(msg.content);
+    else if (field === 'remark') setEditValue(msg.params.remark || '');
+    else if (field === 'amount') setEditValue(msg.params.amount || '');
+    else if (field === 'duration') setEditValue(String(msg.params.duration || 3));
+    setEditing(true);
+  };
+
+  const saveEdit = () => {
+    if (!onUpdateMessage) {
+      setEditing(false);
+      return;
+    }
+    if (editField === 'content') {
+      onUpdateMessage(msg.id, { content: editValue });
+    } else if (editField === 'remark') {
+      onUpdateMessage(msg.id, { params: { ...msg.params, remark: editValue } });
+    } else if (editField === 'amount') {
+      onUpdateMessage(msg.id, { params: { ...msg.params, amount: editValue } });
+    } else if (editField === 'duration') {
+      const d = parseInt(editValue, 10);
+      if (!isNaN(d) && d > 0) {
+        onUpdateMessage(msg.id, { params: { ...msg.params, duration: d } });
+      }
+    }
+    setEditing(false);
+  };
+
+  const cancelEdit = () => setEditing(false);
+
+  const renderEditor = (placeholder: string, isNumber = false) => (
+    <div className="wc-bubble-editing" onClick={e => e.stopPropagation()}>
+      <input
+        className="wc-bubble-edit-input"
+        type={isNumber ? 'number' : 'text'}
+        value={editValue}
+        onChange={e => setEditValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            saveEdit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+          }
+        }}
+        autoFocus
+        placeholder={placeholder}
+      />
+      <div className="wc-bubble-edit-actions">
+        <button className="wc-bubble-edit-btn" onClick={cancelEdit}>取消</button>
+        <button className="wc-bubble-edit-btn save" onClick={saveEdit}>保存</button>
+      </div>
+    </div>
+  );
+
   const renderContent = () => {
+    if (editing) {
+      const placeholders: Record<typeof editField, string> = {
+        content: '消息内容',
+        remark: msg.type === 'redpacket' ? '红包备注' : '转账备注',
+        amount: '转账金额',
+        duration: '语音秒数',
+      };
+      return renderEditor(placeholders[editField], editField === 'duration');
+    }
     switch (msg.type) {
       case 'text':
         return (
-          <div className="wc-bubble" style={{ background: bubbleColor }}>
+          <div className="wc-bubble" style={{ background: bubbleColor }} onClick={() => startEdit('content')}>
             <span className="wc-arrow" style={{ background: bubbleColor }} />
             <span dangerouslySetInnerHTML={{ __html: escHtml(msg.content).replace(/\n/g, '<br/>') }} />
           </div>
@@ -378,7 +551,6 @@ function ChatBubble({
           <div
             className="wc-bubble wc-bubble-image"
             onClick={() => imgInputRef.current?.click()}
-            style={{ cursor: 'pointer' }}
           >
             {hasImage ? (
               <img src={msg.content} alt="" />
@@ -408,6 +580,7 @@ function ChatBubble({
               width: `${w}px`,
               flexDirection: isSelf ? 'row-reverse' : 'row',
             }}
+            onClick={() => startEdit('duration')}
           >
             <span className="wc-arrow" style={{ background: bubbleColor }} />
             {isSelf ? (
@@ -430,7 +603,7 @@ function ChatBubble({
             <span className="wc-arrow" style={{ background: '#f79c46' }} />
             <div className="wc-rp-content">
               <div className="wc-rp-icon">🧧</div>
-              <div className="wc-rp-info">
+              <div className="wc-rp-info" onClick={() => startEdit('remark')} style={{ cursor: 'text' }}>
                 <span>{escHtml(msg.params.remark || '恭喜发财，大吉大利')}</span>
               </div>
             </div>
@@ -446,8 +619,8 @@ function ChatBubble({
             <div className="wc-rp-content">
               <div className="wc-rp-icon">💰</div>
               <div className="wc-rp-info">
-                <span>¥{parseFloat(msg.params.amount || '0').toFixed(2)}</span>
-                <small>{escHtml(msg.params.remark || '转账')}</small>
+                <span onClick={() => startEdit('amount')} style={{ cursor: 'text' }}>¥{parseFloat(msg.params.amount || '0').toFixed(2)}</span>
+                <small onClick={() => startEdit('remark')} style={{ cursor: 'text' }}>{escHtml(msg.params.remark || '转账')}</small>
               </div>
             </div>
             <div className="wc-rp-bottom">
@@ -488,7 +661,7 @@ function PhonePreview({
   selfId: number | null;
   phoneRef: React.RefObject<HTMLDivElement | null>;
   defaultAvatarSrc: string;
-  onUpdateMessage?: (msgId: number, content: string) => void;
+  onUpdateMessage?: (msgId: number, patch: Partial<Pick<ChatMessage, 'content' | 'params'>>) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -497,7 +670,7 @@ function PhonePreview({
     <div className="wc-phone-scale-wrap">
       <div className="wc-phone-wrap">
         <div className="wc-phone-content">
-          <div className="wc-phone" ref={phoneRef}>
+          <div className={`wc-phone ${THEME_PRESETS[settings.theme]?.className || 'wc-theme-ios-classic'}`} ref={phoneRef} style={{ '--wc-self-bubble': settings.selfBubbleColor, '--wc-other-bubble': settings.otherBubbleColor } as React.CSSProperties}>
             {/* 状态栏 */}
             <div className="wc-phone-top">
               <div className="wc-status-bar">
@@ -998,12 +1171,43 @@ function SettingsPanel({
   onSettingsChange: (s: PhoneSettings) => void;
 }) {
   const update = (patch: Partial<PhoneSettings>) => onSettingsChange({ ...settings, ...patch });
+
+  const applyTheme = (themeKey: string) => {
+    const preset = THEME_PRESETS[themeKey];
+    if (!preset) return;
+    onSettingsChange({
+      ...settings,
+      theme: themeKey,
+      selfBubbleColor: preset.selfBubble,
+      otherBubbleColor: preset.otherBubble,
+    });
+  };
+
   return (
     <div className="wc-card">
       <div className="wc-card-header">
         <IconImage /> 外观设置
       </div>
       <div className="wc-card-body">
+        <div className="wc-form-item" style={{ marginBottom: 12 }}>
+          <label className="wc-form-label">主题预设</label>
+          <div className="wc-theme-selector">
+            {Object.entries(THEME_PRESETS).map(([key, preset]) => (
+              <div
+                key={key}
+                className={`wc-theme-option ${settings.theme === key ? 'active' : ''}`}
+                onClick={() => applyTheme(key)}
+              >
+                <div className="wc-theme-swatch">
+                  <span style={{ background: preset.swatch[0] }} />
+                  <span style={{ background: preset.swatch[1] }} />
+                  <span style={{ background: preset.swatch[2] }} />
+                </div>
+                <span>{preset.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="wc-form-grid">
           <div className="wc-form-item">
             <label className="wc-form-label">手机时间</label>
@@ -1200,6 +1404,7 @@ export default function WechatChat() {
     unreadCount: 1,
     selfBubbleColor: '#95ec69',
     otherBubbleColor: '#ffffff',
+    theme: 'ios_classic',
   });
   const [selfId, setSelfId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
@@ -1245,8 +1450,15 @@ export default function WechatChat() {
   const handleRemoveAvatar = useCallback((userId: number) => {
     setUsers(prev => prev.map(u => (u.id === userId ? { ...u, avatar: null } : u)));
   }, []);
-  const handleUpdateMessage = useCallback((msgId: number, content: string) => {
-    setMessages(prev => prev.map(m => (m.id === msgId ? { ...m, content } : m)));
+  const handleUpdateMessage = useCallback((msgId: number, patch: Partial<Pick<ChatMessage, 'content' | 'params'>>) => {
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      return {
+        ...m,
+        content: patch.content !== undefined ? patch.content : m.content,
+        params: patch.params !== undefined ? { ...m.params, ...patch.params } : m.params,
+      };
+    }));
   }, []);
   const handleAddMessage = useCallback((msg: Omit<ChatMessage, 'id'>) => {
     setMessages(prev => {
@@ -1452,6 +1664,48 @@ export default function WechatChat() {
     }
   }, [showToast, capturePhone]);
 
+  const handleExportJson = useCallback(() => {
+    if (messages.length === 0) {
+      showToast('没有消息可导出');
+      return;
+    }
+    const data = exportToJson(users, messages, settings, selfId);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = '微信聊天记录_' + Date.now() + '.json';
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('JSON 已导出');
+  }, [users, messages, settings, selfId, showToast]);
+
+  const jsonImportRef = useRef<HTMLInputElement>(null);
+  const handleImportJson = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        const result = importFromJson(json);
+        if (result.messages.length === 0) {
+          showToast('JSON 中没有消息');
+          return;
+        }
+        setUsers(result.users);
+        setMessages(result.messages);
+        setSettings(result.settings);
+        setSelfId(result.selfId);
+        showToast(`成功导入 ${result.messages.length} 条消息`);
+      } catch (err) {
+        showToast('JSON 解析失败：' + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }, [showToast]);
+
   const hasMessages = messages.length > 0;
 
   return (
@@ -1472,6 +1726,19 @@ export default function WechatChat() {
             <button className="wc-btn wc-btn-sm" onClick={handleGenerateLongImage}>
               <IconImage /> 长截图
             </button>
+            <button className="wc-btn wc-btn-sm" onClick={handleExportJson}>
+              <IconDownload /> 导出JSON
+            </button>
+            <button className="wc-btn wc-btn-sm" onClick={() => jsonImportRef.current?.click()}>
+              <IconPlus /> 导入JSON
+            </button>
+            <input
+              ref={jsonImportRef}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              onChange={handleImportJson}
+            />
           </div>
         )}
       </div>
