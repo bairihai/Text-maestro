@@ -3,3 +3,11 @@
 
 # 测试产物（md-to-web 等功能生成的站点/文件）
 /test_data/output/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 临时测试图片
+/test_*.png
+/test_*.jpg

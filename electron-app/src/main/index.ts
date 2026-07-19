@@ -588,42 +588,65 @@ app.whenReady().then(() => {
     }
   });
 
-  // 微信聊天记录图片生成（Python Pillow 加速）
-  // 输入 JSON 消息数组，输出微信风格聊天截图
+  // 微信聊天记录图片生成（Python Pillow 加速，v2 对齐真实微信视觉）
+  // 输入 JSON 消息数组，输出微信风格聊天截图（顶部状态栏+标题栏+多消息类型）
   ipcMain.handle('generate-wechat', async (
     _,
     messagesJson: string,
     theme: string = 'ios_classic',
     canvasWidth: number = 420,
-    fontSize: number = 16,
+    fontSize: number = 15,
     fontPath: string = '',
     overridesJson: string = '',
     showAvatar: boolean = true,
     showTime: boolean = true,
     title: string = '微信',
+    statusBarTime: string = '14:32',
+    batteryLevel: number = 70,
+    avatarMapJson: string = '',
+    meName: string = '我',
     outputFormat: string = 'png',
   ) => {
     try {
       const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
       const scriptPath = path.join(__dirname, 'py', 'generate_wechat.py');
-      log.info(`[WeChat] 调用 Python 脚本: ${scriptPath} (theme=${theme}, 消息数=${messagesJson.length} 字节)`);
+      log.info(`[WeChat] 调用 Python 脚本: ${scriptPath} (theme=${theme}, title=${title}, me=${meName})`);
 
       // 将消息 JSON 写入临时文件
       const tempFile = path.join(app.getPath('temp'), `wechat_messages_${Date.now()}.json`);
       await fs.writeFile(tempFile, messagesJson, 'utf-8');
 
-      // overridesJson 可能含特殊字符，写入临时文件再传路径（更稳妥）；
-      // 这里直接作为命令行参数（已是 JSON 字符串，shell 引号包裹），短字符串可接受。
+      // overridesJson 和 avatarMapJson 都通过临时文件传，避免命令行引号转义地狱
+      const overridesFile = overridesJson ? path.join(app.getPath('temp'), `wechat_overrides_${Date.now()}.json`) : '';
+      if (overridesFile) {
+        await fs.writeFile(overridesFile, overridesJson, 'utf-8');
+      }
+      const avatarMapFile = avatarMapJson ? path.join(app.getPath('temp'), `wechat_avatars_${Date.now()}.json`) : '';
+      if (avatarMapFile) {
+        await fs.writeFile(avatarMapFile, avatarMapJson, 'utf-8');
+      }
+
+      // 读取临时文件内容作为命令行参数（仍是字符串，但内容是 JSON 文本）
+      const overridesArg = overridesFile ? await fs.readFile(overridesFile, 'utf-8') : '';
+      const avatarMapArg = avatarMapFile ? await fs.readFile(avatarMapFile, 'utf-8') : '';
+
+      // shell 引号包裹（内部双引号转义）
+      const shellEscape = (s: string) => `"${s.replace(/"/g, '\\"')}"`;
+
       const args = [
         `"${tempFile}"`,
         `${theme}`,
         `${canvasWidth}`,
         `${fontSize}`,
         fontPath ? `"${fontPath}"` : '""',
-        overridesJson ? `"${overridesJson.replace(/"/g, '\\"')}"` : '""',
+        overridesArg ? shellEscape(overridesArg) : '""',
         showAvatar ? '1' : '0',
         showTime ? '1' : '0',
-        `"${title}"`,
+        shellEscape(title),
+        shellEscape(statusBarTime),
+        `${batteryLevel}`,
+        avatarMapArg ? shellEscape(avatarMapArg) : '""',
+        shellEscape(meName),
         `${outputFormat}`,
       ].join(' ');
 
@@ -643,7 +666,11 @@ app.whenReady().then(() => {
         setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, 60000);
       });
 
+      // 清理临时文件
       await fs.unlink(tempFile).catch(() => {});
+      if (overridesFile) await fs.unlink(overridesFile).catch(() => {});
+      if (avatarMapFile) await fs.unlink(avatarMapFile).catch(() => {});
+
       return JSON.parse(output);
     } catch (err) {
       log.error('[WeChat] 失败:', err);

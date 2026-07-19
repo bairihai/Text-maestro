@@ -772,17 +772,24 @@ def cmd_qrcode(args):
 
 
 def cmd_wechat(args):
-    """微信聊天记录图片生成命令"""
-    # 输入：消息 JSON
+    """微信聊天记录图片生成命令（v2，对齐真实微信视觉）"""
+    # 输入：Markdown 或 JSON
     messages_text = read_input(args.input, args.file)
     if not messages_text:
-        print_error('请提供 --file 或 --input（消息 JSON）')
+        print_error('请提供 --file 或 --input（Markdown 或 JSON 文本）')
         sys.exit(1)
 
-    try:
-        messages = utils_wechat.parse_messages_from_json(messages_text)
-    except ValueError as e:
-        print_error(f'JSON 解析失败: {e}')
+    # 解析消息
+    if args.mode == 'markdown':
+        messages = utils_wechat.parse_markdown_to_messages(messages_text)
+    else:
+        try:
+            messages = utils_wechat.parse_messages_from_json(messages_text)
+        except ValueError as e:
+            print_error(f'JSON 解析失败: {e}')
+            sys.exit(1)
+    if not messages:
+        print_error('没有可生成的消息')
         sys.exit(1)
 
     # 解析 overrides JSON
@@ -793,6 +800,19 @@ def cmd_wechat(args):
         except json.JSONDecodeError as e:
             print_error(f'--overrides JSON 解析失败: {e}')
             sys.exit(1)
+
+    # 解析 avatar_map（"sender|path" 每行一条）
+    avatar_map = None
+    if args.avatar_map:
+        avatar_map = {}
+        for line in args.avatar_map.splitlines():
+            line = line.strip()
+            if not line or '|' not in line:
+                continue
+            sender, _, p = line.partition('|')
+            sender, p = sender.strip(), p.strip()
+            if sender and p:
+                avatar_map[sender] = p
 
     spinner = Spinner('生成微信聊天记录中...')
     spinner.start()
@@ -807,6 +827,10 @@ def cmd_wechat(args):
             show_avatar=args.show_avatar,
             show_time=args.show_time,
             title=args.title,
+            status_bar_time=args.status_bar_time or '14:32',
+            battery_level=int(args.battery),
+            avatar_map=avatar_map,
+            me_name=args.me_name or '我',
         )
         img.save(args.output, format=args.format.upper())
     finally:
@@ -851,23 +875,34 @@ def setup_text_image_parser(subparsers):
     p_qr.set_defaults(func=cmd_qrcode)
 
     # ---- wechat ----
-    p_wc = ti_sub.add_parser('wechat', help='生成微信聊天记录图片',
+    p_wc = ti_sub.add_parser('wechat', help='生成微信聊天记录图片（v2 对齐真实微信视觉）',
         epilog='''
 示例:
-  python cli/main.py text-image wechat --file messages.json -o chat.png
-  python cli/main.py text-image wechat --file messages.json --theme ios_dark -o chat.png
-  python cli/main.py text-image wechat --file messages.json --no-avatar --no-time -o chat.png
+  # Markdown 输入（推荐）
+  python cli/main.py text-image wechat --file chat.md -o chat.png
+  python cli/main.py text-image wechat --mode markdown --input "**张三**：你好" -o chat.png
+  # JSON 输入
+  python cli/main.py text-image wechat --mode json --file messages.json -o chat.png
+  # 暗色主题 + 自定义电量/状态栏时间
+  python cli/main.py text-image wechat --file chat.md --theme ios_dark --battery 35 --status-bar-time "09:15" -o chat.png
+  # 自定义头像映射
+  python cli/main.py text-image wechat --file chat.md --avatar-map "张三|C:/zs.jpg" --me-name 我 -o chat.png
 ''', formatter_class=argparse.RawDescriptionHelpFormatter)
-    p_wc.add_argument('--file', help='输入 JSON 文件路径（消息数组）')
-    p_wc.add_argument('--input', help='直接输入消息 JSON 文本')
+    p_wc.add_argument('--file', help='输入文件路径（Markdown 或 JSON）')
+    p_wc.add_argument('--input', help='直接输入文本（Markdown 或 JSON）')
+    p_wc.add_argument('--mode', choices=['markdown', 'json'], default='markdown', help='输入模式（默认 markdown）')
     p_wc.add_argument('--theme', choices=['ios_classic', 'ios_dark', 'android'], default='ios_classic', help='风格预设（默认 ios_classic）')
     p_wc.add_argument('--width', type=int, default=420, help='画布宽度（默认 420）')
-    p_wc.add_argument('--font-size', type=int, default=16, help='字号（默认 16）')
+    p_wc.add_argument('--font-size', type=int, default=15, help='字号（默认 15）')
     p_wc.add_argument('--font', default='', help='字体文件路径（空=自动找系统字体）')
     p_wc.add_argument('--overrides', default='', help='主题颜色覆盖 JSON 字符串')
-    p_wc.add_argument('--title', default='微信', help='标题文字（默认 微信）')
+    p_wc.add_argument('--title', default='微信', help='标题（联系人名称，默认 微信）')
+    p_wc.add_argument('--me-name', default='我', help='「我」的发送者名称（默认 我）')
+    p_wc.add_argument('--status-bar-time', default='14:32', help='顶部状态栏时间（默认 14:32）')
+    p_wc.add_argument('--battery', type=int, default=70, help='电量百分比 0-100（默认 70）')
+    p_wc.add_argument('--avatar-map', default='', help='头像映射，每行 `发送者|头像路径`')
     p_wc.add_argument('--no-avatar', action='store_false', dest='show_avatar', help='不显示头像')
-    p_wc.add_argument('--no-time', action='store_false', dest='show_time', help='不显示时间')
+    p_wc.add_argument('--no-time', action='store_false', dest='show_time', help='不显示时间节点')
     p_wc.add_argument('--format', choices=['png', 'jpeg', 'webp'], default='png', help='输出格式（默认 png）')
     p_wc.add_argument('-o', '--output', default='wechat_chat.png', help='输出图片路径（默认 wechat_chat.png）')
     p_wc.set_defaults(func=cmd_wechat)
@@ -1133,7 +1168,7 @@ _COMMAND_TREE = {
     'text-image': {
         'subcommands': {
             'qrcode': {'options': ['--file', '--input', '--box-size', '--border', '--error-correct', '--fill-color', '--back-color', '--logo', '--logo-ratio', '--output-width', '--output-height', '--format', '-o', '--output']},
-            'wechat': {'options': ['--file', '--input', '--theme', '--width', '--font-size', '--font', '--overrides', '--title', '--no-avatar', '--no-time', '--format', '-o', '--output']},
+            'wechat': {'options': ['--file', '--input', '--mode', '--theme', '--width', '--font-size', '--font', '--overrides', '--title', '--me-name', '--status-bar-time', '--battery', '--avatar-map', '--no-avatar', '--no-time', '--format', '-o', '--output']},
         },
         'options': [],
     },

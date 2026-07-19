@@ -1,5 +1,6 @@
 import os
 import shutil
+import json
 import gradio as gr
 from difflib import Differ
 import re
@@ -693,17 +694,44 @@ C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.
                 outputs=qr_output_image,
             )
 
-        # ===== 文与图：微信聊天记录生成 =====
+        # ===== 文与图：微信聊天记录生成（v2 对齐真实微信视觉） =====
+        # 参考: https://github.com/bairihai/wechat-dialog-generator
         with gr.Tab("生成微信聊天记录"):
             gr.Markdown(
-                "JSON 消息序列 → 微信风格聊天截图。\n\n"
-                "消息格式：`[{\"sender\": \"我\", \"text\": \"你好\", \"time\": \"14:30\", \"type\": \"text\"}]`\n\n"
-                "type 取值：`text` / `system`（系统消息居中灰色）/ `time`（时间分隔符）\n\n"
-                "sender 为 `\"我\"` 时气泡靠右，其他靠左。"
+                "### 微信聊天记录生成（v2，对齐真实微信视觉）\n\n"
+                "支持 **Markdown 文本** 和 **JSON** 两种输入方式。\n\n"
+                "**Markdown 格式**（推荐，便于编辑）：\n"
+                "```\n"
+                "**【3月1日 14:32】**        # 时间节点\n"
+                "**张三**：你好              # 文字消息\n"
+                "**张三**：[图片]            # 图片消息（默认占位）\n"
+                "**张三**：[图片]/path/x.jpg # 图片消息（指定路径）\n"
+                "**张三**：[红包]恭喜发财    # 红包\n"
+                "**张三**：[转账]200:饭钱    # 转账\n"
+                "**张三**：[语音]5           # 语音 5 秒\n"
+                "```\n\n"
+                "sender 为 `我` 时气泡靠右（绿底），其他用户靠左（白底）。"
             )
-            wc_messages_json = gr.Textbox(
+
+            # 输入模式切换
+            wc_input_mode = gr.Radio(
+                label="输入模式",
+                choices=["markdown", "json"],
+                value="markdown",
+            )
+
+            # Markdown 输入
+            wc_md_input = gr.Textbox(
+                label="Markdown 对话文本",
+                lines=14,
+                value=utils_wechat.EXAMPLE_MARKDOWN,
+                placeholder="**用户名**：消息内容",
+                visible=True,
+            )
+            # JSON 输入
+            wc_json_input = gr.Textbox(
                 label="消息 JSON",
-                lines=12,
+                lines=14,
                 value="""[
   {"sender": "我", "text": "你好，在吗？", "time": "14:30", "type": "text"},
   {"sender": "对方", "text": "在的，怎么了？", "time": "14:30", "type": "text"},
@@ -712,7 +740,14 @@ C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.
   {"sender": "我", "text": "收到，谢谢！", "time": "14:32", "type": "text"}
 ]""",
                 placeholder="消息 JSON 数组",
+                visible=False,
             )
+
+            # 切换可见性
+            def _toggle_wc_input(mode):
+                return gr.update(visible=(mode == 'markdown')), gr.update(visible=(mode == 'json'))
+            wc_input_mode.change(_toggle_wc_input, inputs=wc_input_mode, outputs=[wc_md_input, wc_json_input])
+
             with gr.Row():
                 wc_theme = gr.Radio(
                     label="风格预设",
@@ -720,19 +755,79 @@ C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.
                     value="ios_classic",
                 )
                 wc_canvas_width = gr.Number(label="画布宽度", value=420)
-                wc_font_size = gr.Number(label="字号", value=16)
+                wc_font_size = gr.Number(label="字号", value=15)
             with gr.Row():
-                wc_title = gr.Textbox(label="标题文字", value="微信")
+                wc_title = gr.Textbox(label="标题（联系人名称）", value="微信")
+                wc_me_name = gr.Textbox(label="「我」的发送者名称", value="我")
+                wc_status_bar_time = gr.Textbox(label="状态栏时间", value="14:32")
+            with gr.Row():
+                wc_battery = gr.Slider(label="电量百分比", minimum=0, maximum=100, step=5, value=70)
                 wc_show_avatar = gr.Checkbox(label="显示头像", value=True)
-                wc_show_time = gr.Checkbox(label="显示时间", value=True)
+                wc_show_time = gr.Checkbox(label="自动时间节点（间隔>5min）", value=True)
                 wc_format = gr.Radio(label="输出格式", choices=["png", "jpeg", "webp"], value="png")
+
+            # 头像映射：每行 sender|avatar_path
+            wc_avatar_map = gr.Textbox(
+                label="自定义头像映射（可选，每行 `发送者|头像路径`）",
+                lines=3,
+                placeholder="张三|C:/path/zhangsan.jpg\n李四|D:/photos/lisi.png",
+                value="",
+            )
+
+            # 主题颜色覆盖
+            wc_overrides = gr.Textbox(
+                label="主题颜色覆盖（可选 JSON，如 {\"my_bubble_color\": \"#95EC69\"}）",
+                lines=2,
+                placeholder="留空使用预设主题",
+                value="",
+            )
+
             wc_output_image = gr.Image(label="微信聊天记录预览", format="png")
 
-            def _gen_wechat(messages_json, theme, canvas_w, font_sz, title, show_avatar, show_time, fmt):
+            def _parse_avatar_map(text):
+                """解析 'sender|path' 每行一条"""
+                m = {}
+                if not text:
+                    return m
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line or '|' not in line:
+                        continue
+                    sender, _, p = line.partition('|')
+                    sender = sender.strip()
+                    p = p.strip()
+                    if sender and p:
+                        m[sender] = p
+                return m
+
+            def _parse_overrides(text):
+                if not text or not text.strip():
+                    return None
                 try:
-                    messages = utils_wechat.parse_messages_from_json(messages_json)
-                except ValueError as e:
-                    raise gr.Error(str(e))
+                    return json.loads(text)
+                except Exception:
+                    return None
+
+            def _gen_wechat(input_mode, md_text, json_text, theme, canvas_w, font_sz,
+                            title, me_name, status_bar_time, battery, show_avatar,
+                            show_time, fmt, avatar_map_text, overrides_text):
+                # 解析消息
+                if input_mode == 'markdown':
+                    messages = utils_wechat.parse_markdown_to_messages(md_text or '')
+                else:
+                    try:
+                        messages = utils_wechat.parse_messages_from_json(json_text)
+                    except ValueError as e:
+                        raise gr.Error(str(e))
+                if not messages:
+                    raise gr.Error('没有可生成的消息')
+
+                # 解析头像映射
+                avatar_map = _parse_avatar_map(avatar_map_text)
+
+                # 解析主题覆盖
+                overrides = _parse_overrides(overrides_text)
+
                 img = utils_wechat.generate_wechat_chat(
                     messages=messages,
                     theme=theme,
@@ -740,14 +835,20 @@ C:\\Users\\阿白\\Nutstore\\1\\Obsidian\\归一与杂文集\\日记-随笔\\01.
                     font_size=int(font_sz),
                     show_avatar=bool(show_avatar),
                     show_time=bool(show_time),
-                    title=title or "微信",
+                    title=title or '微信',
+                    status_bar_time=status_bar_time or '14:32',
+                    battery_level=int(battery),
+                    avatar_map=avatar_map,
+                    me_name=me_name or '我',
+                    overrides=overrides,
                 )
                 return img
 
             gr.Button("生成微信聊天记录").click(
                 _gen_wechat,
-                inputs=[wc_messages_json, wc_theme, wc_canvas_width, wc_font_size,
-                        wc_title, wc_show_avatar, wc_show_time, wc_format],
+                inputs=[wc_input_mode, wc_md_input, wc_json_input, wc_theme, wc_canvas_width, wc_font_size,
+                        wc_title, wc_me_name, wc_status_bar_time, wc_battery,
+                        wc_show_avatar, wc_show_time, wc_format, wc_avatar_map, wc_overrides],
                 outputs=wc_output_image,
             )
 

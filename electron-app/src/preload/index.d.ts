@@ -154,9 +154,13 @@ interface CustomElectronAPI extends ElectronAPI {
     fontPath?: string,
     overridesJson?: string,   // 主题颜色覆盖 JSON
     showAvatar?: boolean,
-    showTime?: boolean,
-    title?: string,
-    outputFormat?: string,
+    showTime?: boolean,       // 自动插入时间节点（间隔 >5min）
+    title?: string,           // 标题栏文字（联系人名称）
+    statusBarTime?: string,   // 顶部状态栏时间，如 "14:32"
+    batteryLevel?: number,    // 电量百分比 0-100
+    avatarMapJson?: string,   // {sender: avatar_path} 字典 JSON
+    meName?: string,          // "我"的发送者名称（默认 '我'）
+    outputFormat?: string,    // png / jpeg / webp
   ) => Promise<ImageGenerationResult>;
   weeklyFolder: (fileList: string, timeFormat: string, targetFolder: string, year: number, autoCreate: boolean) => Promise<WeeklyFolderResult>;
   discordTimeSlot: (text: string) => Promise<DiscordAnalysisResult>;
