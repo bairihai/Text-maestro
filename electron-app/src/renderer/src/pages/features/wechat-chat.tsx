@@ -6,7 +6,7 @@
  * 不再使用 Python PIL 加速，所有视觉细节由 CSS 矢量渲染保证真实性
  */
 
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { toCanvas } from 'html-to-image';
 import defaultAvatar from '@renderer/assets/wechat_default_avatar.jpg';
 import './wechat-chat.css';
@@ -321,6 +321,47 @@ function importFromJson(json: WechatChatJson): {
   return { users, messages, settings, selfId: json.selfId ?? users[0]?.id ?? null };
 }
 
+// ==================== 反向序列化：当前数据 → Markdown ====================
+
+function messagesToMarkdown(
+  users: ChatUser[],
+  messages: ChatMessage[],
+  selfId: number | null,
+): string {
+  const lines: string[] = [];
+  for (const msg of messages) {
+    if (msg.type === 'time') {
+      lines.push(`**【${msg.content}】**`);
+      lines.push('');
+      continue;
+    }
+    const user = users.find(u => u.id === msg.senderId);
+    const name = user?.name || '?';
+    const isSelf = msg.senderId === selfId;
+    const displayName = isSelf ? '我' : name;
+    let content = '';
+    switch (msg.type) {
+      case 'text':
+        content = msg.content;
+        break;
+      case 'image':
+        content = msg.content && !msg.content.startsWith('data:') ? `[图片]${msg.content}` : '[图片]';
+        break;
+      case 'redpacket':
+        content = `[红包]${msg.params.remark || '恭喜发财，大吉大利'}`;
+        break;
+      case 'transfer':
+        content = `[转账]${msg.params.amount || '0'}:${msg.params.remark || '转账'}`;
+        break;
+      case 'voice':
+        content = `[语音]${msg.params.duration || 3}`;
+        break;
+    }
+    lines.push(`**${displayName}**：${content}`);
+  }
+  return lines.join('\n');
+}
+
 // ==================== SVG 图标组件 ====================
 
 function SignalIcon({ bars }: { bars: number }) {
@@ -433,7 +474,6 @@ function TimeNotice({ content }: { content: string }) {
 function ChatBubble({
   msg,
   user,
-  userIndex,
   isSelf,
   isGroup,
   selfColor,
@@ -443,7 +483,6 @@ function ChatBubble({
 }: {
   msg: ChatMessage;
   user: ChatUser;
-  userIndex: number;
   isSelf: boolean;
   isGroup: boolean;
   selfColor: string;
@@ -670,7 +709,7 @@ function PhonePreview({
     <div className="wc-phone-scale-wrap">
       <div className="wc-phone-wrap">
         <div className="wc-phone-content">
-          <div className={`wc-phone ${THEME_PRESETS[settings.theme]?.className || 'wc-theme-ios-classic'}`} ref={phoneRef} style={{ '--wc-self-bubble': settings.selfBubbleColor, '--wc-other-bubble': settings.otherBubbleColor } as React.CSSProperties}>
+          <div className={`wc-phone ${THEME_PRESETS[settings.theme]?.className || 'wc-theme-ios-classic'}`} ref={phoneRef as React.RefObject<HTMLDivElement>} style={{ '--wc-self-bubble': settings.selfBubbleColor, '--wc-other-bubble': settings.otherBubbleColor } as React.CSSProperties}>
             {/* 状态栏 */}
             <div className="wc-phone-top">
               <div className="wc-status-bar">
@@ -719,7 +758,6 @@ function PhonePreview({
                       key={msg.id}
                       msg={msg}
                       user={user}
-                      userIndex={userIndex >= 0 ? userIndex : 0}
                       isSelf={isSelf}
                       isGroup={isGroup}
                       selfColor={settings.selfBubbleColor}
@@ -761,6 +799,176 @@ function PhonePreview({
 }
 
 // ==================== 编辑面板子组件 ====================
+
+// 「当前数据」面板：实时显示当前聊天记录的 Markdown / JSON 双视图，可切换、可编辑、可应用回主状态
+function CurrentDataPanel({
+  users,
+  messages,
+  settings,
+  selfId,
+  onApplyMarkdown,
+  onApplyJson,
+  showToast,
+}: {
+  users: ChatUser[];
+  messages: ChatMessage[];
+  settings: PhoneSettings;
+  selfId: number | null;
+  onApplyMarkdown: (text: string) => void;
+  onApplyJson: (jsonText: string) => void;
+  showToast: (msg: string) => void;
+}) {
+  const [view, setView] = useState<'markdown' | 'json'>('markdown');
+  const [editText, setEditText] = useState('');
+  const [editing, setEditing] = useState(false);
+
+  // 当前数据的 Markdown / JSON 字符串
+  const markdownText = React.useMemo(
+    () => messagesToMarkdown(users, messages, selfId),
+    [users, messages, selfId],
+  );
+  const jsonText = React.useMemo(
+    () => JSON.stringify(exportToJson(users, messages, settings, selfId), null, 2),
+    [users, messages, settings, selfId],
+  );
+
+  const displayText = view === 'markdown' ? markdownText : jsonText;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(displayText).then(
+      () => showToast('已复制到剪贴板'),
+      () => showToast('复制失败'),
+    );
+  };
+
+  const handleDownload = () => {
+    const blob = new Blob([displayText], { type: view === 'markdown' ? 'text/markdown' : 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = view === 'markdown'
+      ? '微信聊天记录_' + Date.now() + '.md'
+      : '微信聊天记录_' + Date.now() + '.json';
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('已下载');
+  };
+
+  const handleStartEdit = () => {
+    setEditText(displayText);
+    setEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditText('');
+  };
+
+  const handleApply = () => {
+    try {
+      if (view === 'markdown') {
+        onApplyMarkdown(editText);
+      } else {
+        onApplyJson(editText);
+      }
+      setEditing(false);
+      setEditText('');
+    } catch (e) {
+      showToast('应用失败：' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const handleSwapView = (newView: 'markdown' | 'json') => {
+    if (editing) {
+      // 切换视图前先取消编辑
+      setEditing(false);
+      setEditText('');
+    }
+    setView(newView);
+  };
+
+  return (
+    <div className="wc-card">
+      <div className="wc-card-header">
+        <IconImage /> 当前数据
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af' }}>
+          {messages.length} 条消息 · {users.length} 个用户
+        </span>
+      </div>
+      <div className="wc-card-body">
+        <div className="wc-input-mode-tabs">
+          <button
+            className={`wc-input-mode-tab ${view === 'markdown' ? 'active' : ''}`}
+            onClick={() => handleSwapView('markdown')}
+          >
+            Markdown 视图
+          </button>
+          <button
+            className={`wc-input-mode-tab ${view === 'json' ? 'active' : ''}`}
+            onClick={() => handleSwapView('json')}
+          >
+            JSON 视图
+          </button>
+        </div>
+        {!editing ? (
+          <pre
+            style={{
+              margin: 0,
+              padding: 12,
+              background: 'rgba(0,0,0,0.03)',
+              borderRadius: 6,
+              fontSize: 12,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              maxHeight: 320,
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              color: 'var(--arco-color-text-1, #000)',
+              border: '1px solid var(--arco-color-border-2, #e5e5e5)',
+            }}
+          >
+            {displayText || '(空)'}
+          </pre>
+        ) : (
+          <textarea
+            className="wc-textarea"
+            style={{ minHeight: 240, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}
+            value={editText}
+            onChange={e => setEditText(e.target.value)}
+            autoFocus
+          />
+        )}
+        <div className="wc-json-actions">
+          {!editing ? (
+            <>
+              <button className="wc-btn wc-btn-sm" onClick={handleCopy}>
+                <IconCopy /> 复制
+              </button>
+              <button className="wc-btn wc-btn-sm" onClick={handleDownload}>
+                <IconDownload /> 下载
+              </button>
+              <button className="wc-btn wc-btn-sm" onClick={handleStartEdit}>
+                <IconPlus /> 编辑并应用
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleApply}>
+                应用到预览
+              </button>
+              <button className="wc-btn wc-btn-sm" onClick={handleCancelEdit}>
+                取消
+              </button>
+              <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+                {view === 'markdown' ? '编辑后点击「应用到预览」会替换当前所有消息' : '编辑后点击「应用到预览」会替换当前所有数据（含设置/用户）'}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ImportPanel({
   text,
@@ -848,6 +1056,7 @@ function UserAvatarManager({
   onUpdateAvatar,
   onRemoveAvatar,
   onSetSelf,
+  onAddUser,
 }: {
   users: ChatUser[];
   selfId: number | null;
@@ -855,18 +1064,25 @@ function UserAvatarManager({
   onUpdateAvatar: (userId: number, avatar: string) => void;
   onRemoveAvatar: (userId: number) => void;
   onSetSelf: (userId: number) => void;
+  onAddUser?: (name: string) => void;
 }) {
-  if (users.length === 0) return null;
+  const [newUserName, setNewUserName] = useState('');
+  const handleAdd = () => {
+    const name = newUserName.trim();
+    if (!name) return;
+    onAddUser?.(name);
+    setNewUserName('');
+  };
   return (
     <div className="wc-card">
       <div className="wc-card-header">
-        <IconImage /> 用户头像管理
+        <IconImage /> 用户管理
         <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af' }}>{users.length} 个用户</span>
       </div>
       <div className="wc-card-body">
-        <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>鼠标悬停头像可上传自定义图片</p>
+        <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>鼠标悬停头像可上传自定义图片，点击「设为自己」切换左右方向</p>
         <div className="wc-avatar-grid">
-          {users.map((user, index) => (
+          {users.map((user) => (
             <AvatarCard
               key={user.id}
               user={user}
@@ -878,6 +1094,27 @@ function UserAvatarManager({
             />
           ))}
         </div>
+        {onAddUser && (
+          <div className="wc-me-row" style={{ marginTop: 8 }}>
+            <input
+              className="wc-me-input"
+              type="text"
+              placeholder="新用户昵称"
+              value={newUserName}
+              onChange={e => setNewUserName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAdd();
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+            <button className="wc-btn wc-btn-sm" onClick={handleAdd} disabled={!newUserName.trim()}>
+              <IconPlus /> 添加用户
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1394,7 +1631,11 @@ function MessageList({
 
 export default function WechatChat() {
   const [importText, setImportText] = useState('');
-  const [users, setUsers] = useState<ChatUser[]>([]);
+  // 默认提供「我」和「对方」两个用户，让用户一进来就能直接添加消息，不需要先导入
+  const [users, setUsers] = useState<ChatUser[]>(() => [
+    { id: 1, name: '我', avatar: null },
+    { id: 2, name: '对方', avatar: null },
+  ]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [settings, setSettings] = useState<PhoneSettings>({
     time: '12:02',
@@ -1406,7 +1647,7 @@ export default function WechatChat() {
     otherBubbleColor: '#ffffff',
     theme: 'ios_classic',
   });
-  const [selfId, setSelfId] = useState<number | null>(null);
+  const [selfId, setSelfId] = useState<number | null>(1);
   const [toast, setToast] = useState('');
   const phoneRef = useRef<HTMLDivElement | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -1706,6 +1947,58 @@ export default function WechatChat() {
     e.target.value = '';
   }, [showToast]);
 
+  // 「当前数据」面板 - 应用 Markdown：直接接收面板里编辑过的 Markdown 文本，覆盖当前状态
+  const applyMarkdownFromPanel = useCallback((text: string) => {
+    try {
+      const result = parseChatRecord(text);
+      if (result.messages.length === 0) {
+        showToast('未解析到任何消息');
+        return;
+      }
+      setUsers(result.users);
+      setMessages(result.messages);
+      setSelfId(result.users[0]?.id ?? null);
+      if (result.users.length >= 3) {
+        const otherNames = result.users.slice(1).map(u => u.name);
+        const nameStr = result.users.length <= 4
+          ? otherNames.join('、')
+          : otherNames.slice(0, 2).join('、') + '等';
+        setSettings(s => ({ ...s, contactName: nameStr + '(' + result.users.length + ')' }));
+      } else if (result.users.length === 2) {
+        setSettings(s => ({ ...s, contactName: result.users[1].name }));
+      } else if (result.users.length === 1) {
+        setSettings(s => ({ ...s, contactName: result.users[0].name }));
+      }
+      showToast(`已应用 Markdown（${result.messages.length} 条消息）`);
+    } catch (err) {
+      showToast('Markdown 解析失败：' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, [showToast]);
+
+  // 「当前数据」面板 - 应用 JSON：直接接收面板里编辑过的 JSON 文本，覆盖整个状态
+  const applyJsonFromPanel = useCallback((jsonText: string) => {
+    try {
+      const json = JSON.parse(jsonText);
+      const result = importFromJson(json);
+      setUsers(result.users);
+      setMessages(result.messages);
+      setSettings(result.settings);
+      setSelfId(result.selfId);
+      showToast(`已应用 JSON（${result.messages.length} 条消息）`);
+    } catch (err) {
+      showToast('JSON 解析失败：' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, [showToast]);
+
+  // 「用户管理」面板 - 添加新用户（空状态下也能直接添加，不必先导入）
+  const handleAddUser = useCallback((name: string) => {
+    setUsers(prev => {
+      const maxId = prev.reduce((max, u) => Math.max(max, u.id), 0);
+      return [...prev, { id: maxId + 1, name, avatar: null }];
+    });
+    showToast(`已添加用户「${name}」`);
+  }, [showToast]);
+
   const hasMessages = messages.length > 0;
 
   return (
@@ -1715,53 +2008,74 @@ export default function WechatChat() {
         <span style={{ fontSize: 12, color: '#9ca3af' }}>
           · HTML/CSS 渲染 + html-to-image 截图（参考 bairihai/wechat-dialog-generator）
         </span>
-        {hasMessages && (
-          <div className="wc-header-actions">
-            <button className="wc-btn wc-btn-primary wc-btn-sm" onClick={handleGenerateImage}>
-              <IconDownload /> 生成图片
-            </button>
-            <button className="wc-btn wc-btn-sm" onClick={handleCopyImage}>
-              <IconCopy /> 复制
-            </button>
-            <button className="wc-btn wc-btn-sm" onClick={handleGenerateLongImage}>
-              <IconImage /> 长截图
-            </button>
-            <button className="wc-btn wc-btn-sm" onClick={handleExportJson}>
-              <IconDownload /> 导出JSON
-            </button>
-            <button className="wc-btn wc-btn-sm" onClick={() => jsonImportRef.current?.click()}>
-              <IconPlus /> 导入JSON
-            </button>
-            <input
-              ref={jsonImportRef}
-              type="file"
-              accept=".json,application/json"
-              hidden
-              onChange={handleImportJson}
-            />
-          </div>
-        )}
+        <div className="wc-header-actions">
+          <button
+            className="wc-btn wc-btn-primary wc-btn-sm"
+            onClick={handleGenerateImage}
+            disabled={!hasMessages}
+            style={{ opacity: hasMessages ? 1 : 0.5 }}
+          >
+            <IconDownload /> 生成图片
+          </button>
+          <button
+            className="wc-btn wc-btn-sm"
+            onClick={handleCopyImage}
+            disabled={!hasMessages}
+            style={{ opacity: hasMessages ? 1 : 0.5 }}
+          >
+            <IconCopy /> 复制
+          </button>
+          <button
+            className="wc-btn wc-btn-sm"
+            onClick={handleGenerateLongImage}
+            disabled={!hasMessages}
+            style={{ opacity: hasMessages ? 1 : 0.5 }}
+          >
+            <IconImage /> 长截图
+          </button>
+          <button className="wc-btn wc-btn-sm" onClick={handleExportJson} disabled={!hasMessages} style={{ opacity: hasMessages ? 1 : 0.5 }}>
+            <IconDownload /> 导出JSON
+          </button>
+          <button className="wc-btn wc-btn-sm" onClick={() => jsonImportRef.current?.click()}>
+            <IconPlus /> 导入JSON
+          </button>
+          <input
+            ref={jsonImportRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={handleImportJson}
+          />
+        </div>
       </div>
       <div className="wc-main">
         <div className="wc-left">
-          <ImportPanel text={importText} onTextChange={setImportText} onImport={handleImport} />
-          {users.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <UserAvatarManager
-                users={users}
-                selfId={selfId}
-                defaultAvatarSrc={defaultAvatar}
-                onUpdateAvatar={handleUpdateAvatar}
-                onRemoveAvatar={handleRemoveAvatar}
-                onSetSelf={setSelfId}
-              />
-            </div>
-          )}
-          {users.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <MessageEditor users={users} selfId={selfId} onAddMessage={handleAddMessage} />
-            </div>
-          )}
+          <CurrentDataPanel
+            users={users}
+            messages={messages}
+            settings={settings}
+            selfId={selfId}
+            onApplyMarkdown={applyMarkdownFromPanel}
+            onApplyJson={applyJsonFromPanel}
+            showToast={showToast}
+          />
+          <div style={{ marginTop: 16 }}>
+            <ImportPanel text={importText} onTextChange={setImportText} onImport={handleImport} />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <UserAvatarManager
+              users={users}
+              selfId={selfId}
+              defaultAvatarSrc={defaultAvatar}
+              onUpdateAvatar={handleUpdateAvatar}
+              onRemoveAvatar={handleRemoveAvatar}
+              onSetSelf={setSelfId}
+              onAddUser={handleAddUser}
+            />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <MessageEditor users={users} selfId={selfId} onAddMessage={handleAddMessage} />
+          </div>
           {hasMessages && (
             <div style={{ marginTop: 16 }}>
               <MessageList
@@ -1774,11 +2088,9 @@ export default function WechatChat() {
               />
             </div>
           )}
-          {hasMessages && (
-            <div style={{ marginTop: 16 }}>
-              <SettingsPanel settings={settings} onSettingsChange={setSettings} />
-            </div>
-          )}
+          <div style={{ marginTop: 16 }}>
+            <SettingsPanel settings={settings} onSettingsChange={setSettings} />
+          </div>
         </div>
         {hasMessages && (
           <PhonePreview
