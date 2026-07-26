@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { IconRefresh, IconLoading } from '@arco-design/web-react/icon';
-import { useTheme } from '@renderer/context/ThemeContext';
 
 const GradioCheck: React.FC = () => {
-  const { colors } = useTheme();
   const [status, setStatus] = useState<{ available: boolean; version?: string; error?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

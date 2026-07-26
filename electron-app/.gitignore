@@ -1,5 +1,6 @@
 node_modules
 dist
 out
+.electron-cache
 .DS_Store
 *.log*

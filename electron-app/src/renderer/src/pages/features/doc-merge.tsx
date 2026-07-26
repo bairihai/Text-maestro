@@ -36,10 +36,6 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
 };
 
-const inputFocusStyle: React.CSSProperties = {
-  borderColor: '#2f81f7', boxShadow: '0 0 0 3px rgba(31, 111, 235, 0.4)',
-};
-
 const tabGroupStyle: React.CSSProperties = {
   display: 'flex', gap: 0, borderBottom: '1px solid var(--arco-color-border)',
 };

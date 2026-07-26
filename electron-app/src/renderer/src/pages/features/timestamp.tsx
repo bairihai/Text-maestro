@@ -260,6 +260,7 @@ const TimestampConverter: React.FC = () => {
       timerRef.current = setInterval(update, 1000);
       return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }
+    return undefined;
   }, [tab, curUnit, liveEnabled, tsFmt]);
 
   // 通用
