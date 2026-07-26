@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Text-maestro · 文本分析工具箱</title>
+<meta name="description" content="自动清洗必要的数据，文本分析可视化。更适合 obsidian 文档、微信留痕、discord 聊天记录等的文本分析工具。" />
+<style>
+  :root {
+    --bg: #0f1419;
+    --bg-soft: #1a2028;
+    --card: #1e2630;
+    --border: #2a3441;
+    --text: #e6e9ef;
+    --muted: #8b95a5;
+    --accent: #f5b942;
+    --accent-2: #4ec9b0;
+    --accent-3: #c678dd;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  .hero {
+    padding: 96px 0 64px;
+    text-align: center;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(245, 185, 66, 0.12), transparent 40%),
+      radial-gradient(circle at 80% 30%, rgba(78, 201, 176, 0.10), transparent 40%);
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    margin-bottom: 24px;
+    letter-spacing: 0.5px;
+  }
+  h1 {
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .tagline {
+    font-size: clamp(16px, 2.2vw, 20px);
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 auto 32px;
+  }
+  .cta-group { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #1a1206;
+  }
+  .btn-primary:hover {
+    text-decoration: none;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(245, 185, 66, 0.3);
+  }
+  .btn-secondary {
+    background: var(--bg-soft);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    text-decoration: none;
+    border-color: var(--accent-2);
+    color: var(--accent-2);
+  }
+
+  /* Sections */
+  section { padding: 72px 0; border-bottom: 1px solid var(--border); }
+  .section-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .section-subtitle {
+    text-align: center;
+    color: var(--muted);
+    margin-bottom: 48px;
+    font-size: 15px;
+  }
+
+  /* Ends grid */
+  .ends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+  .end-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .end-card:hover { border-color: var(--accent); transform: translateY(-4px); }
+  .end-card .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+  }
+  .tag-primary { background: rgba(245, 185, 66, 0.15); color: var(--accent); }
+  .tag-active { background: rgba(78, 201, 176, 0.15); color: var(--accent-2); }
+  .tag-planned { background: rgba(139, 149, 165, 0.15); color: var(--muted); }
+  .end-card h3 { font-size: 18px; margin-bottom: 6px; }
+  .end-card .stack { color: var(--muted); font-size: 13px; margin-bottom: 12px; font-family: ui-monospace, monospace; }
+  .end-card p { font-size: 14px; color: var(--muted); }
+
+  /* Modules */
+  .modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .module {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-2);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: border-left-color 0.2s ease;
+  }
+  .module:hover { border-left-color: var(--accent); }
+  .module .icon { font-size: 24px; margin-bottom: 8px; display: block; }
+  .module h4 { font-size: 16px; margin-bottom: 6px; }
+  .module p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .module .tags { margin-top: 10px; font-size: 12px; color: var(--accent-2); font-family: ui-monospace, monospace; }
+
+  /* Quick start */
+  .qs-grid { display: grid; gap: 16px; max-width: 820px; margin: 0 auto; }
+  .qs-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .qs-header {
+    padding: 12px 20px;
+    background: var(--bg-soft);
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .qs-header .dot { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
+  pre {
+    margin: 0;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+  }
+  pre .c { color: var(--muted); }
+  pre .k { color: var(--accent); }
+  pre .s { color: var(--accent-2); }
+
+  /* Footer */
+  footer {
+    padding: 40px 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  footer .links { margin-bottom: 16px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  footer .author { font-size: 13px; }
+  @media (max-width: 640px) {
+    .hero { padding: 64px 0 48px; }
+    section { padding: 48px 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <span class="badge">TEXT ANALYSIS TOOLKIT</span>
+    <h1>Text-maestro</h1>
+    <p class="tagline">自动清洗必要的数据，文本分析可视化。<br/>更适合 obsidian 文档、微信留痕、discord 聊天记录等的文本分析工具。</p>
+    <div class="cta-group">
+      <a class="btn btn-primary" href="../README.md">查看文档</a>
+      <a class="btn btn-secondary" href="#quickstart">快速上手</a>
+    </div>
+  </div>
+</header>
+
+<section id="ends">
+  <div class="container">
+    <h2 class="section-title">四端总览</h2>
+    <p class="section-subtitle">同一份功能逻辑，三种使用姿势，外加一个规划中的插件端</p>
+    <div class="ends-grid">
+      <div class="end-card">
+        <span class="tag tag-primary">主力</span>
+        <h3>Gradio-app</h3>
+        <div class="stack">Python + Gradio</div>
+        <p>浏览器 WebUI，原型验证与核心功能源头。所有 utils*.py 模块的事实源。</p>
+      </div>
+      <div class="end-card">
+        <span class="tag tag-active">活跃</span>
+        <h3>CLI</h3>
+        <div class="stack">Python argparse</div>
+        <p>命令行、自动化脚本、管道。支持 REPL 交互模式与 stdin 输入。</p>
+      </div>
+      <div class="end-card">
+        <span class="tag tag-active">17 功能页</span>
+        <h3>Electron-app</h3>
+        <div class="stack">Electron + React + TS</div>
+        <p>桌面应用，部分功能由 Python 加速。偏好持久化、状态检查、可拖拽侧边栏。</p>
+      </div>
+      <div class="end-card">
+        <span class="tag tag-planned">规划中</span>
+        <h3>Obsidian 插件</h3>
+        <div class="stack">—</div>
+        <p>预留位置。预计通过 Node 调用 CLI 或直接调 Python 模块。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="modules">
+  <div class="container">
+    <h2 class="section-title">功能矩阵</h2>
+    <p class="section-subtitle">8 大模块 · 三端复用 · 单一事实源</p>
+    <div class="modules-grid">
+      <div class="module">
+        <span class="icon">🔤</span>
+        <h4>文本工具</h4>
+        <p>Unicode ↔ 中文双向转换、文本比较、字数词数统计、简繁互转、正则筛选。</p>
+        <div class="tags">unicode · diff · count · s2t · regex</div>
+      </div>
+      <div class="module">
+        <span class="icon">🎨</span>
+        <h4>颜色与时间戳</h4>
+        <p>RGB ↔ Hex 颜色码转换、时间戳 ↔ 日期双向转换、获取当前时间戳。</p>
+        <div class="tags">color · timestamp</div>
+      </div>
+      <div class="module">
+        <span class="icon">📁</span>
+        <h4>文件操作</h4>
+        <p>目录树生成、目录大小与磁盘占用统计、文件读取（路径/上传）、多文档拼接、CSV 预览。</p>
+        <div class="tags">tree · read · merge · csv</div>
+      </div>
+      <div class="module">
+        <span class="icon">📝</span>
+        <h4>Markdown 工具</h4>
+        <p>提取文章大纲、两大纲合并、按新大纲重组文章，支持多文档大纲统一。</p>
+        <div class="tags">outline · merge · rebuild</div>
+      </div>
+      <div class="module">
+        <span class="icon">☁️</span>
+        <h4>词频与词云</h4>
+        <p>jieba 分词词频统计、词云生成（频率表 / 文本直输 / Mask 蒙版三模式）。</p>
+        <div class="tags">jieba · wordcloud · mask</div>
+      </div>
+      <div class="module">
+        <span class="icon">💬</span>
+        <h4>社交媒体分析</h4>
+        <p>Discord 个人提取 / 发言频率 / 频道时频 / 用户偏好度，Twitch 弹幕高阶分析。</p>
+        <div class="tags">discord · twitch</div>
+      </div>
+      <div class="module">
+        <span class="icon">🗂️</span>
+        <h4>周回文件夹管理</h4>
+        <p>整理文件到周回目录，生成 BAT 批处理脚本一键执行。</p>
+        <div class="tags">weekly · bat</div>
+      </div>
+      <div class="module">
+        <span class="icon">🔍</span>
+        <h4>文件搜索</h4>
+        <p>Everything SDK 集成，Windows 平台毫秒级文件检索（Gradio 独有）。</p>
+        <div class="tags">everything-sdk</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="container">
+    <h2 class="section-title">快速上手</h2>
+    <p class="section-subtitle">三端部署命令一览 · 三端共享 gradio-app 的 Python 模块</p>
+    <div class="qs-grid">
+      <div class="qs-item">
+        <div class="qs-header">
+          <span>Gradio-app（主力）</span>
+          <span class="dot">python 3.10+</span>
+        </div>
+<pre><span class="c"># 安装依赖并启动</span>
+<span class="k">cd</span> gradio-app
+pip install -r requirements.txt
+python app.py</pre>
+      </div>
+      <div class="qs-item">
+        <div class="qs-header">
+          <span>CLI</span>
+          <span class="dot">共用 gradio-app 依赖</span>
+        </div>
+<pre><span class="c"># 查看所有命令</span>
+python cli/main.py --help
+
+<span class="c"># 单次执行 / 管道输入 / REPL</span>
+python cli/main.py text count <span class="s">"你好世界"</span>
+echo <span class="s">"你好"</span> | python cli/main.py text count
+python cli/main.py -i</pre>
+      </div>
+      <div class="qs-item">
+        <div class="qs-header">
+          <span>Electron-app</span>
+          <span class="dot">node 18+ · 部分功能需 python</span>
+        </div>
+<pre><span class="c"># 安装并启动开发模式</span>
+<span class="k">cd</span> electron-app
+npm install
+npm run dev</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="links">
+      <a href="../README.md">项目文档</a>
+      <a href="../README-project.md">技术笔记</a>
+      <a href="https://gitee.com/bairihai/text-maestro">Gitee 仓库</a>
+    </div>
+    <div class="author">Text-maestro · 作者：chatgpt(poe)、cursor、白日海</div>
+  </div>
+</footer>
+
+</body>
+</html>

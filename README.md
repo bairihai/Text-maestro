@@ -1,10 +1,12 @@
 # Text-maestro 文本分析工具箱
 
+[![宣传网页](https://img.shields.io/badge/🌐_宣传网页-docs/index.html-f5b942?style=flat-square)](./docs/index.html) [![技术笔记](https://img.shields.io/badge/📖_技术笔记-README--project.md-4ec9b0?style=flat-square)](./README-project.md) [![Gitee](https://img.shields.io/badge/Gitee-text--maestro-c678dd?style=flat-square)](https://gitee.com/bairihai/text-maestro)
+
 自动清洗必要的数据，文本分析可视化。更适合 obsidian 文档、微信留痕、discord 聊天记录等的文本分析工具。
 
 作者：chatgpt(poe)、cursor、白日海
 
-> 技术笔记与开发细节见 [README-project.md](./README-project.md)
+> **[🌐 宣传网页](./docs/index.html)** — 单文件、零依赖的项目一页式介绍页（Hero + 四端总览 + 功能矩阵 + 快速上手），可直接用浏览器打开 `docs/index.html` 预览，也支持 Gitee/GitHub Pages 托管。本文档与宣传网页内容同源，详细部署/架构仍以本文为准；技术笔记与开发细节另见 [README-project.md](./README-project.md)。
 
 ## 四端总览
 
@@ -189,8 +191,10 @@ Text-maestro/
 │   ├── src/main/        # 主进程 + IPC + Python 脚本
 │   ├── src/renderer/    # React + Arco + Tailwind 前端
 │   └── package.json
+├── docs/                # 宣传网页（单文件，零依赖）
+│   └── index.html       # 项目一页式介绍页，README 内容的精简可视化版
 ├── example/             # 测试用例
-├── README.md            # 本文档
+├── README.md            # 本文档（与 docs/index.html 同源）
 └── README-project.md    # 技术笔记与开发细节
 ```
 
@@ -322,12 +326,38 @@ npm run build:linux   # Linux AppImage/snap/deb
 - [ ] `gradio-app/app.py` `__version__`
 - [ ] `electron-app/package.json` `version`
 - [ ] 测试三端核心功能正常
+- [ ] 核对 `docs/index.html` 与 README 功能矩阵一致（新增/移除功能时同步）
 - [ ] 打 git tag：`git tag v<x.y.z>` 并 `git push gitee-remote v<x.y.z>`
 - [ ] 构建 CLI exe（`python cli-app/build_exe.py --clean`）
 - [ ] 构建 Electron 安装包（`cd electron-app && npm run build:win`）
 - [ ] 在 Gitee Release 上传产物（exe、安装包、Release Notes）
 
 ## 附录
+
+### 宣传网页
+
+项目附带一个一页式宣传网页 [docs/index.html](./docs/index.html)，与本 README 内容同源但形式互补：
+
+- **README.md**：面向开发者的完整文档（部署、架构、版本管理、发布 checklist）
+- **docs/index.html**：面向访客的精简可视化版（Hero + 四端总览卡片 + 8 大功能模块 + 快速上手命令）
+- **README-project.md**：面向作者本人的技术笔记与开发细节
+
+宣传网页设计原则：**单文件、零依赖、无构建步骤**。修改时直接编辑 `docs/index.html`，无需任何打包工具。内容若与 README 出现偏差，以 README 为准。
+
+#### 本地预览
+
+直接用浏览器打开 `docs/index.html` 即可。或：
+
+```shell
+# Python 内置 HTTP 服务
+python -m http.server 8000 -d docs
+# 浏览器访问 http://localhost:8000/
+```
+
+#### 托管到 Gitee Pages（可选）
+
+1. Gitee 仓库 → 服务 → Gitee Pages → 部署目录填 `docs` → 启动
+2. 访问 `https://<user>.gitee.io/text-maestro/` 即获得公网入口
 
 ### 测试用例
 
