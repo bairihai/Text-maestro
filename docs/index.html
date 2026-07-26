@@ -94,6 +94,21 @@
     border-color: var(--accent-2);
     color: var(--accent-2);
   }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid transparent;
+  }
+  .btn-ghost:hover {
+    text-decoration: none;
+    color: var(--text);
+  }
+  .hero-doc {
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .hero-doc a { color: var(--accent-2); }
 
   /* Sections */
   section { padding: 72px 0; border-bottom: 1px solid var(--border); }
@@ -214,8 +229,12 @@
     <h1>Text-maestro</h1>
     <p class="tagline">自动清洗必要的数据，文本分析可视化。<br/>更适合 obsidian 文档、微信留痕、discord 聊天记录等的文本分析工具。</p>
     <div class="cta-group">
-      <a class="btn btn-primary" href="../README.md">查看文档</a>
-      <a class="btn btn-secondary" href="#quickstart">快速上手</a>
+      <a class="btn btn-primary" href="https://github.com/bairihai/Text-maestro" target="_blank" rel="noopener">GitHub 仓库</a>
+      <a class="btn btn-secondary" href="https://gitee.com/bairihai/text-maestro" target="_blank" rel="noopener">Gitee 镜像</a>
+      <a class="btn btn-ghost" href="#quickstart">快速上手</a>
+    </div>
+    <div class="hero-doc">
+      📄 完整文档见仓库 <a href="https://github.com/bairihai/Text-maestro/blob/main/README.md" target="_blank" rel="noopener">README.md</a>
     </div>
   </div>
 </header>
