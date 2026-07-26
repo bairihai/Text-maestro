@@ -56,7 +56,16 @@ const globals = {
       }
     }
   },
-  log: log
+  // electron-log 是带类实例（transports.file/console 等）的对象，contextBridge 无法克隆。
+  // 这里只暴露纯函数包装，渲染层调用 log.info() 等仍能转发到主进程日志。
+  log: {
+    info: (...args: unknown[]) => log.info(...args),
+    warn: (...args: unknown[]) => log.warn(...args),
+    error: (...args: unknown[]) => log.error(...args),
+    debug: (...args: unknown[]) => log.debug(...args),
+    verbose: (...args: unknown[]) => log.verbose(...args),
+    silly: (...args: unknown[]) => log.silly(...args)
+  }
 };
 
 // 自定义 API：封装 IPC 调用，供渲染层直接使用
