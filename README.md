@@ -1,12 +1,12 @@
 # Text-maestro 文本分析工具箱
 
-[![宣传网页](https://img.shields.io/badge/🌐_宣传网页-docs/index.html-f5b942?style=flat-square)](./docs/index.html) [![技术笔记](https://img.shields.io/badge/📖_技术笔记-README--project.md-4ec9b0?style=flat-square)](./README-project.md) [![Gitee](https://img.shields.io/badge/Gitee-text--maestro-c678dd?style=flat-square)](https://gitee.com/bairihai/text-maestro)
+[![宣传网页](https://img.shields.io/badge/🌐_宣传网页-docs/index.html-f5b942?style=flat-square)](./docs/index.html) [![技术笔记](https://img.shields.io/badge/📖_技术笔记-README--project.md-4ec9b0?style=flat-square)](./README-project.md) [![GitHub](https://img.shields.io/badge/GitHub-Text--maestro-c678dd?style=flat-square)](https://github.com/bairihai/Text-maestro) [![Gitee](https://img.shields.io/badge/Gitee-text--maestro-8b95a5?style=flat-square)](https://gitee.com/bairihai/text-maestro)
 
 自动清洗必要的数据，文本分析可视化。更适合 obsidian 文档、微信留痕、discord 聊天记录等的文本分析工具。
 
 作者：chatgpt(poe)、cursor、白日海
 
-> **[🌐 宣传网页](./docs/index.html)** — 单文件、零依赖的项目一页式介绍页（Hero + 四端总览 + 功能矩阵 + 快速上手），可直接用浏览器打开 `docs/index.html` 预览，也支持 Gitee/GitHub Pages 托管。本文档与宣传网页内容同源，详细部署/架构仍以本文为准；技术笔记与开发细节另见 [README-project.md](./README-project.md)。
+> **[🌐 宣传网页](./docs/index.html)** — 单文件、零依赖的项目一页式介绍页（Hero + 四端总览 + 功能矩阵 + 快速上手），可直接用浏览器打开 `docs/index.html` 预览，也支持 GitHub Pages / Gitee Pages 托管。本文档与宣传网页内容同源，详细部署/架构仍以本文为准；技术笔记与开发细节另见 [README-project.md](./README-project.md)。
 
 ## 四端总览
 
@@ -238,8 +238,8 @@ Text-maestro/
 Gradio 作为功能源头与开发主力端，不进行产物打包，仅以源码形式分发：
 
 ```shell
-git clone https://gitee.com/bairihai/text-maestro.git
-cd text-maestro/gradio-app
+git clone https://github.com/bairihai/Text-maestro.git
+cd Text-maestro/gradio-app
 pip install -r requirements.txt
 python app.py
 ```
@@ -327,10 +327,10 @@ npm run build:linux   # Linux AppImage/snap/deb
 - [ ] `electron-app/package.json` `version`
 - [ ] 测试三端核心功能正常
 - [ ] 核对 `docs/index.html` 与 README 功能矩阵一致（新增/移除功能时同步）
-- [ ] 打 git tag：`git tag v<x.y.z>` 并 `git push gitee-remote v<x.y.z>`
+- [ ] 打 git tag：`git tag v<x.y.z>` 并 `git push github v<x.y.z>`（同时 push 到 gitee-remote 镜像）
 - [ ] 构建 CLI exe（`python cli-app/build_exe.py --clean`）
 - [ ] 构建 Electron 安装包（`cd electron-app && npm run build:win`）
-- [ ] 在 Gitee Release 上传产物（exe、安装包、Release Notes）
+- [ ] 在 GitHub Release 上传产物（exe、安装包、Release Notes）；如需国内镜像再同步到 Gitee Release
 
 ## 附录
 
@@ -354,10 +354,17 @@ python -m http.server 8000 -d docs
 # 浏览器访问 http://localhost:8000/
 ```
 
-#### 托管到 Gitee Pages（可选）
+#### 托管到 GitHub Pages（推荐）/ Gitee Pages（备选）
+
+**GitHub Pages**：
+
+1. 仓库 Settings → Pages → Source 选 `main` 分支、目录填 `/docs` → Save
+2. 等待构建完成，访问 `https://bairihai.github.io/Text-maestro/`
+
+**Gitee Pages**（国内访问更快，但需实名认证）：
 
 1. Gitee 仓库 → 服务 → Gitee Pages → 部署目录填 `docs` → 启动
-2. 访问 `https://<user>.gitee.io/text-maestro/` 即获得公网入口
+2. 访问 `https://bairihai.gitee.io/text-maestro/`
 
 ### 测试用例
 
