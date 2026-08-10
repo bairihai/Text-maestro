@@ -19,6 +19,7 @@ import TimestampConverter from '@renderer/pages/features/timestamp'
 import WeeklyFolder from '@renderer/pages/features/weekly-folder'
 import QrcodePage from '@renderer/pages/features/qrcode'
 import WechatChatPage from '@renderer/pages/features/wechat-chat'
+import PdfContrastPage from '@renderer/pages/features/pdf-contrast'
 
 const routesCommon = [
     {
@@ -100,6 +101,10 @@ const routesCommon = [
     {
         path: "/text-image/wechat-chat",
         component: WechatChatPage
+    },
+    {
+        path: "/text-image/pdf-contrast",
+        component: PdfContrastPage
     }
 ]
 

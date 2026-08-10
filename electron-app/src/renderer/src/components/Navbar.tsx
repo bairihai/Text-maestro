@@ -114,7 +114,8 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
                 { key: '4_0', label: '二维码生成', to: '/text-image/qrcode', needPython: true },
                 { key: '4_1', label: '微信聊天记录', to: '/text-image/wechat-chat', needPython: true },
                 { key: '4_2', label: '手写信生成' },
-                { key: '4_3', label: '学信网学历截图（有造假水印）' }
+                { key: '4_3', label: '学信网学历截图（有造假水印）' },
+                { key: '4_4', label: 'PDF 对比度调整 / 水印抑制', to: '/text-image/pdf-contrast' }
             ]
         },
         {
