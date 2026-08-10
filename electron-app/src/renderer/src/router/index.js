@@ -2,6 +2,7 @@
 import About from '@renderer/pages/about'
 import Playground from '@renderer/pages/playground'
 import Setting from '@renderer/pages/setting'
+import RecentFiles from '@renderer/pages/recent-files'
 import routesCommon from './routesCommon'
 
 // import routesForum from './routesForum'
@@ -24,6 +25,10 @@ const routes = [
   {
     path: "/setting",
     component: Setting
+  },
+  {
+    path: "/recent-files",
+    component: RecentFiles
   },
   // ...routesForum
   ...routesCommon

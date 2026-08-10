@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerWorkflowIpc } from './ipc-workflow'
+import { registerRecentIpc, recordRecent } from './ipc-recent'
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -281,6 +282,9 @@ app.whenReady().then(() => {
         return { error: '指定路径不是目录' };
       }
 
+      // 记录到最近使用（目录）
+      recordRecent(fullPath, 'directory', 'folder-tree');
+
       // ============== Gradio/Python 加速模式 ==============
       if (useGradio) {
         const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
@@ -392,6 +396,8 @@ app.whenReady().then(() => {
     try {
       const fullPath = path.resolve(filePath);
       const data = await fs.readFile(fullPath, 'utf8');
+      // 记录到最近使用（文件）
+      recordRecent(fullPath, 'file', 'file-reader');
       return { success: true, data };
     } catch (err) {
       return { success: false, error: (err as Error).message };
@@ -406,6 +412,8 @@ app.whenReady().then(() => {
         const fullPath = path.resolve(fp);
         const data = await fs.readFile(fullPath, 'utf8');
         results.push({ path: fp, success: true, data });
+        // 记录到最近使用（文件）
+        recordRecent(fullPath, 'file', 'multi-file-reader');
       } catch (err) {
         results.push({ path: fp, success: false, error: (err as Error).message });
       }
@@ -518,6 +526,13 @@ app.whenReady().then(() => {
       // 清理临时文件
       await fs.unlink(tempFile).catch(() => {});
 
+      // 记录字体/蒙版文件到最近使用
+      if (fontPath) recordRecent(fontPath, 'file', 'wordcloud-font');
+      if (maskPath) recordRecent(maskPath, 'file', 'wordcloud-mask');
+      if (maskColorPath) recordRecent(maskColorPath, 'file', 'wordcloud-mask-color');
+      if (stopwords) recordRecent(stopwords, 'file', 'wordcloud-stopwords');
+      if (userdict) recordRecent(userdict, 'file', 'wordcloud-userdict');
+
       return JSON.parse(output);
     } catch (err) {
       log.error('[WordCloud] 失败:', err);
@@ -581,6 +596,10 @@ app.whenReady().then(() => {
       });
 
       await fs.unlink(tempFile).catch(() => {});
+
+      // 记录 Logo 文件到最近使用
+      if (logoPath) recordRecent(logoPath, 'file', 'qrcode-logo');
+
       return JSON.parse(output);
     } catch (err) {
       log.error('[QrCode] 失败:', err);
@@ -671,6 +690,9 @@ app.whenReady().then(() => {
       if (overridesFile) await fs.unlink(overridesFile).catch(() => {});
       if (avatarMapFile) await fs.unlink(avatarMapFile).catch(() => {});
 
+      // 记录字体文件到最近使用
+      if (fontPath) recordRecent(fontPath, 'file', 'wechat-font');
+
       return JSON.parse(output);
     } catch (err) {
       log.error('[WeChat] 失败:', err);
@@ -684,6 +706,9 @@ app.whenReady().then(() => {
       const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
       const scriptPath = path.join(__dirname, 'py', 'weekly_folder.py');
       log.info(`[WeeklyFolder] 调用 Python 脚本: ${scriptPath}`);
+
+      // 记录目标目录到最近使用
+      if (targetFolder) recordRecent(targetFolder, 'directory', 'weekly-folder');
 
       // 将文件列表写入临时文件（避免命令行长度限制）
       const tempFile = path.join(app.getPath('temp'), `weekly_folder_list_${Date.now()}.txt`);
@@ -794,6 +819,9 @@ app.whenReady().then(() => {
 
   // 注册工作流相关 IPC handler（dialog / list-files / write-directory）
   registerWorkflowIpc()
+
+  // 注册最近使用文件/目录追踪 IPC
+  registerRecentIpc()
 
   // === README 查看 / 打开 ===
   // 候选路径：

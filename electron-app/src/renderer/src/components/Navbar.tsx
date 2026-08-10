@@ -7,7 +7,7 @@
 // arco的样式在app.tsx里面被引入，这里无需重复引入。
 
 import { Menu } from "@arco-design/web-react";
-import { IconDriveFile, IconSafe, IconSettings, IconBranch } from "@arco-design/web-react/icon";
+import { IconDriveFile, IconSafe, IconSettings, IconBranch, IconHistory } from "@arco-design/web-react/icon";
 import React, { useState, useEffect, useRef } from 'react';
 
 const { SubMenu } = Menu;
@@ -128,6 +128,12 @@ export const LINKS: { // 自用数组，用于生成导航里的链接。
             to: '/playground',
             title: 'Workflow',
             icon: <IconBranch />
+        },
+        {
+            key: '6a',
+            to: '/recent-files',
+            title: '最近使用',
+            icon: <IconHistory />
         },
         {
             key: '7',

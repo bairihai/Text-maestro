@@ -12,6 +12,7 @@ import { ipcMain, dialog, BrowserWindow, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import log from 'electron-log';
+import { recordRecent } from './ipc-recent';
 
 /** 注册所有工作流相关 IPC handler */
 export function registerWorkflowIpc(): void {
@@ -22,7 +23,10 @@ export function registerWorkflowIpc(): void {
       properties: ['openDirectory'],
       title: '选择文件夹',
     });
-    return result.canceled ? null : result.filePaths[0];
+    if (result.canceled) return null;
+    const selected = result.filePaths[0];
+    recordRecent(selected, 'directory', 'workflow-select-folder');
+    return selected;
   });
 
   // === 2. 选择保存文件夹（可创建新目录） ===
@@ -32,7 +36,10 @@ export function registerWorkflowIpc(): void {
       properties: ['openDirectory', 'createDirectory'],
       title: '选择输出目录',
     });
-    return result.canceled ? null : result.filePaths[0];
+    if (result.canceled) return null;
+    const selected = result.filePaths[0];
+    recordRecent(selected, 'directory', 'workflow-save-folder');
+    return selected;
   });
 
   // === 3. 递归扫描目录下指定扩展名的文件 ===
@@ -54,6 +61,7 @@ export function registerWorkflowIpc(): void {
       walk(dir);
       out.sort();
       log.info(`[Workflow] 扫描目录 ${dir}，找到 ${out.length} 个文件（扩展名: ${exts.join(', ')}）`);
+      if (dir) recordRecent(dir, 'directory', 'workflow-list-files');
       return { success: true, files: out };
     } catch (err) {
       log.error('[Workflow] list-files-by-ext 失败:', err);
@@ -81,6 +89,7 @@ export function registerWorkflowIpc(): void {
           written++;
         }
         log.info(`[Workflow] 写入 ${written} 个文件到 ${targetDir}`);
+        if (targetDir) recordRecent(targetDir, 'directory', 'workflow-write-directory');
         return { success: true, count: written };
       } catch (err) {
         log.error('[Workflow] write-directory 失败:', err);

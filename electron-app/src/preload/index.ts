@@ -139,6 +139,12 @@ const customAPI = {
   wechatChatSave: (data: unknown) => ipcRenderer.invoke('wechat-chat:save', data),
   wechatChatSaveImage: (dataUrl: string, filename: string) =>
     ipcRenderer.invoke('wechat-chat:save-image', dataUrl, filename),
+  // 最近使用文件 / 目录追踪
+  recentList: () => ipcRenderer.invoke('recent:list'),
+  recentAdd: (entry: { path: string; type: 'file' | 'directory'; source?: string }) =>
+    ipcRenderer.invoke('recent:add', entry),
+  recentRemove: (path: string) => ipcRenderer.invoke('recent:remove', path),
+  recentClear: () => ipcRenderer.invoke('recent:clear'),
 };
 
 // 合并标准 electronAPI 和自定义 API

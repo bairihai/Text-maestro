@@ -109,6 +109,23 @@ interface ReadmeResult {
   error?: string;
 }
 
+// 最近使用文件 / 目录追踪
+type RecentType = 'file' | 'directory';
+
+interface RecentEntry {
+  path: string;
+  type: RecentType;
+  source?: string;
+  timestamp: number;
+  useCount: number;
+}
+
+interface RecentAddInput {
+  path: string;
+  type: RecentType;
+  source?: string;
+}
+
 // 扩展 ElectronAPI，添加自定义方法
 interface CustomElectronAPI extends ElectronAPI {
   readFileByPath: (filePath: string) => Promise<ReadFileResult>;
@@ -184,6 +201,11 @@ interface CustomElectronAPI extends ElectronAPI {
     dataUrl: string,
     filename: string,
   ) => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+  // 最近使用文件 / 目录追踪
+  recentList: () => Promise<RecentEntry[]>;
+  recentAdd: (entry: RecentAddInput) => Promise<RecentEntry[]>;
+  recentRemove: (path: string) => Promise<RecentEntry[]>;
+  recentClear: () => Promise<RecentEntry[]>;
 }
 
 declare global {
