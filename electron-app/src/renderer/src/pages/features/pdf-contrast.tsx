@@ -201,6 +201,7 @@ const PdfContrastPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [isDragging, setIsDragging] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -297,12 +298,13 @@ const PdfContrastPage: React.FC = () => {
     applyProcessingToCanvas();
   }, [applyProcessingToCanvas]);
 
-  // 文件导入
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // 文件导入（共用：file input 与拖拽均走这里）
+  const loadFile = async (file: File) => {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setError('请选择 PDF 文件');
+    // 类型校验：优先看 MIME，缺失时回退到扩展名
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setError('请拖入 PDF 文件（仅支持 .pdf）');
       return;
     }
     setError(null);
@@ -318,6 +320,45 @@ const PdfContrastPage: React.FC = () => {
     } catch (err) {
       setError((err as Error).message || 'PDF 解析失败');
     }
+  };
+
+  // file input 回调
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await loadFile(file);
+    // 清空 input 的值，方便重复选择同一文件
+    e.target.value = '';
+  };
+
+  // 拖拽相关
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // 仅当离开整个 drop zone（relatedTarget 为 null 或不在内部）时才取消高亮
+    if (e.relatedTarget === null) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) await loadFile(file);
   };
 
   // 翻页
@@ -412,7 +453,38 @@ const PdfContrastPage: React.FC = () => {
   }, []);
 
   return (
-    <div style={getPageStyle(colors)}>
+    <div
+      style={getPageStyle(colors)}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* 拖拽遮罩 */}
+      {isDragging && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9998,
+          background: 'rgba(47,129,247,0.12)',
+          border: '3px dashed #2f81f7',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: colors.cardBg, color: colors.textPrimary,
+            padding: '24px 36px', borderRadius: 8,
+            border: `1px solid ${colors.border}`,
+            fontSize: 18, fontWeight: 500,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <svg width="24" height="24" viewBox="0 0 16 16" fill="#2f81f7">
+              <path d="M8 1a.5.5 0 01.5.5v7.793l2.146-2.147a.5.5 0 01.708.708l-3 3a.5.5 0 01-.708 0l-3-3a.5.5 0 11.708-.708L7.5 9.293V1.5A.5.5 0 018 1zM3 13.5a.5.5 0 01.5-.5h9a.5.5 0 010 1h-9a.5.5 0 01-.5-.5z"/>
+            </svg>
+            松开以导入 PDF
+          </div>
+        </div>
+      )}
+
       <div style={headerStyle}>
         <svg width="22" height="22" viewBox="0 0 16 16" fill={colors.textPrimary}>
           <path d="M4 1.5A1.5 1.5 0 015.5 0h5A1.5 1.5 0 0112 1.5V3h.5A1.5 1.5 0 0114 4.5v9a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 13.5v-11zm1 1V13h6V2.5H5zm1 2h4v1H6V5zm0 2h4v1H6V7zm0 2h3v1H6V9z"/>
@@ -578,7 +650,7 @@ const PdfContrastPage: React.FC = () => {
         <div style={getCanvasWrapStyle(colors)}>
           {!pdfDoc && !error && (
             <div style={emptyStateStyle(colors)}>
-              # 点击「导入 PDF」选择文件，调整对比度 / 白点 / 黑点参数
+              # 点击「导入 PDF」按钮，或直接拖拽 PDF 文件到此处
               <br />
               # 主要场景：通过白点阈值压掉浅色水印，黑点阈值加深文字
             </div>
