@@ -4,6 +4,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerWorkflowIpc } from './ipc-workflow'
 import { registerRecentIpc, recordRecent } from './ipc-recent'
+import { registerPdfIpc } from './ipc-pdf'
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -836,6 +837,7 @@ app.whenReady().then(() => {
 
   // 注册最近使用文件/目录追踪 IPC
   registerRecentIpc()
+  registerPdfIpc()
 
   // === README 查看 / 打开 ===
   // 候选路径：

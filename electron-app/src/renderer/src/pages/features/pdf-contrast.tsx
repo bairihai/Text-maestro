@@ -1,14 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '@renderer/context/ThemeContext';
-// pdfjs-dist v6: Electron + electron-vite 环境下 Worker 各种方式都不可靠
-// （?worker/?url 后缀不工作，手动创建 module worker 也会卡住）
-// 最终方案：禁用 worker，用主线程模式（fake worker）直接解析
-// 对于 <100MB 的 PDF 完全够用，只是渲染时主线程会短暂阻塞
-import * as pdfjsLib from 'pdfjs-dist';
+// pdfjs-dist v6 在 Electron + electron-vite 下 Worker 各种方式均失败
+// 方案：改到主进程用 Node 环境渲染 PDF → PNG，前端通过 IPC 拿图片
+// 这里只保留前端 UI，PDF 解析渲染全走 IPC
 import { jsPDF } from 'jspdf';
-
-// 禁用 worker：workerSrc 设为空字符串，pdfjs 自动用主线程模式
-pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 // ------------- helpers -------------
 function clamp(v: number, min = 0, max = 255): number {
@@ -242,33 +237,38 @@ const PdfContrastPage: React.FC = () => {
     setActivePreset('custom');
   };
 
-  // 渲染指定页到 canvas，并把原始像素缓存到 ref
+  // 渲染指定页：通过 IPC 让主进程渲染 PDF 页为 PNG，前端画到 canvas
   const renderPage = useCallback(async (pageNum: number) => {
-    if (!pdfDoc || !canvasRef.current) return;
+    if (!pdfDoc || !pdfDoc.docId || !canvasRef.current) return;
     setLoading(true);
     setError(null);
     setLoadProgress(`正在渲染第 ${pageNum} 页...`);
     try {
-      const page = await pdfDoc.getPage(pageNum);
-      const viewport = page.getViewport({ scale });
+      setLoadProgress(`正在渲染第 ${pageNum} 页（scale=${scale}）...`);
+      const result = await window.electron.pdfRenderPage(pdfDoc.docId, pageNum, scale);
+      if (!result.success) throw new Error(result.error || '渲染失败');
+
       const canvas = canvasRef.current;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      canvas.width = result.width;
+      canvas.height = result.height;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) throw new Error('Canvas 2D context 不可用');
 
-      // 白底（PDF 默认透明，转图像会变黑）
+      // 把主进程返回的 base64 PNG 画到 canvas
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('图片加载失败'));
+        img.src = `data:image/png;base64,${result.imageData}`;
+      });
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      setLoadProgress(`正在渲染第 ${pageNum} 页（${Math.round(viewport.width)}×${Math.round(viewport.height)}）...`);
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      ctx.drawImage(img, 0, 0);
 
       // 缓存原始像素
       originalImageDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
       setLoadProgress('');
-      // 立即应用一次当前参数
       applyProcessingToCanvas();
     } catch (err) {
       setError((err as Error).message || '渲染失败');
@@ -317,10 +317,9 @@ const PdfContrastPage: React.FC = () => {
   }, [applyProcessingToCanvas]);
 
   // 文件导入（共用：file input 与拖拽均走这里）
-  // 不直接调 renderPage —— 渲染交给下面的 useEffect 监听 pdfDoc 变化触发，避免闭包陈旧
+  // 通过 IPC 把文件传给主进程，主进程用 Node 环境的 pdfjs 解析
   const loadFile = useCallback(async (file: File) => {
     if (!file) return;
-    // 类型校验：优先看 MIME，缺失时回退到扩展名
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if (!isPdf) {
       setError('请拖入 PDF 文件（仅支持 .pdf）');
@@ -333,21 +332,30 @@ const PdfContrastPage: React.FC = () => {
     try {
       const buf = await file.arrayBuffer();
       setLoadProgress(`正在解析 PDF（${(buf.byteLength / 1024 / 1024).toFixed(1)} MB）...`);
-      // 大 PDF 解析慢，超时放宽到 60 秒
-      const docPromise = pdfjsLib.getDocument({ data: buf }).promise;
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('PDF 解析超时（60秒），可能文件过大或 worker 加载失败，请重试')), 60000)
-      );
-      const doc = await Promise.race([docPromise, timeout]);
-      setPdfDoc(doc);
-      setTotalPages(doc.numPages);
+      // 转成 base64 传给主进程（IPC 不能直接传 ArrayBuffer）
+      const bytes = new Uint8Array(buf);
+      let binStr = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binStr += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)) as unknown as number[]);
+      }
+      const base64 = btoa(binStr);
+
+      // 获取文件路径用于 recent
+      const webUtils = (window as any).electron?.webUtils;
+      const filePath = webUtils?.pathForFile ? webUtils.pathForFile(file) : file.name;
+
+      // 主进程打开 PDF
+      const openResult = await window.electron.pdfOpen(base64, filePath);
+      if (!openResult.success) throw new Error(openResult.error || '打开 PDF 失败');
+
+      setPdfDoc({ docId: openResult.docId });  // 用对象占位，表示已加载
+      setTotalPages(openResult.numPages);
       setCurrentPage(1);
       setLoadProgress('');
       // 渲染由 useEffect [pdfDoc, currentPage, ...] 自动触发
-      // 记录到最近使用
+
       try {
-        const webUtils = (window as any).electron?.webUtils;
-        const filePath = webUtils?.pathForFile ? webUtils.pathForFile(file) : file.name;
         if (window.electron?.recentAdd) {
           await window.electron.recentAdd({ path: filePath, type: 'file', source: 'pdf-contrast' });
         }
@@ -364,24 +372,18 @@ const PdfContrastPage: React.FC = () => {
   const loadFromPath = useCallback(async (filePath: string) => {
     setError(null);
     setShowRecent(false);
-    // 文件名取最后一段
     const name = filePath.replace(/[\\/]/g, '/').split('/').pop() || filePath;
     setFileName(name);
     setLoading(true);
+    setLoadProgress('正在从路径加载 PDF...');
     try {
-      // 通过主进程读取二进制文件（base64 编码，避免 utf-8 损坏 PDF）
-      const result = await window.electron.readFileBinary(filePath);
-      if (!result.success || !result.data) throw new Error(result.error || '读取文件失败');
-      // base64 → Uint8Array → ArrayBuffer
-      const binStr = atob(result.data);
-      const bytes = new Uint8Array(binStr.length);
-      for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-      const buf = bytes.buffer;
-      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
-      setPdfDoc(doc);
-      setTotalPages(doc.numPages);
+      // 主进程直接从文件路径打开 PDF（省去 base64 传输）
+      const openResult = await window.electron.pdfOpenFromPath(filePath);
+      if (!openResult.success) throw new Error(openResult.error || '打开 PDF 失败');
+      setPdfDoc({ docId: openResult.docId });
+      setTotalPages(openResult.numPages);
       setCurrentPage(1);
-      // 更新最近使用时间
+      setLoadProgress('');
       try {
         if (window.electron?.recentAdd) {
           await window.electron.recentAdd({ path: filePath, type: 'file', source: 'pdf-contrast' });
@@ -389,6 +391,7 @@ const PdfContrastPage: React.FC = () => {
       } catch { /* ignore */ }
     } catch (err) {
       setError((err as Error).message || '从路径加载 PDF 失败');
+      setLoadProgress('');
     } finally {
       setLoading(false);
     }
@@ -490,34 +493,43 @@ const PdfContrastPage: React.FC = () => {
     }, 'image/png');
   };
 
-  // 导出整个 PDF（处理所有页）
+  // 导出整个 PDF（处理所有页）：主进程渲染每页 PNG → 前端处理像素 → jsPDF 拼接
   const handleExportPdf = async () => {
-    if (!pdfDoc || isExportingRef.current) return;
+    if (!pdfDoc || !pdfDoc.docId || isExportingRef.current) return;
     isExportingRef.current = true;
     setExporting(true);
     setError(null);
     try {
-      // 用第一页确定 PDF 尺寸（假设所有页尺寸一致；不一致时每页按自身尺寸）
-      const firstPage = await pdfDoc.getPage(1);
-      const firstViewport = firstPage.getViewport({ scale });
-      const orientation = firstViewport.width > firstViewport.height ? 'l' : 'p';
+      // 先渲染第一页确定尺寸
+      const firstResult = await window.electron.pdfRenderPage(pdfDoc.docId, 1, scale);
+      if (!firstResult.success) throw new Error(firstResult.error || '渲染第一页失败');
+
+      const orientation = firstResult.width > firstResult.height ? 'l' : 'p';
       const pdf = new jsPDF({
         orientation,
         unit: 'pt',
-        format: [firstViewport.width, firstViewport.height],
+        format: [firstResult.width, firstResult.height],
       });
 
       for (let i = 1; i <= totalPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        const viewport = page.getViewport({ scale });
+        setLoadProgress(`导出中：第 ${i}/${totalPages} 页...`);
+        const result = i === 1 ? firstResult : await window.electron.pdfRenderPage(pdfDoc.docId, i, scale);
+        if (!result.success) throw new Error(result.error || `渲染第 ${i} 页失败`);
+
+        // 把 PNG 画到临时 canvas 处理像素
         const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) throw new Error('Canvas 2D context 不可用');
+        canvas.width = result.width;
+        canvas.height = result.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error('图片加载失败'));
+          img.src = `data:image/png;base64,${result.imageData}`;
+        });
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        ctx.drawImage(img, 0, 0);
 
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         processImageData(imgData.data, contrast, brightness, whitePoint, blackPoint);
@@ -525,26 +537,28 @@ const PdfContrastPage: React.FC = () => {
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         if (i > 1) {
-          pdf.addPage([viewport.width, viewport.height], viewport.width > viewport.height ? 'l' : 'p');
+          pdf.addPage([result.width, result.height], result.width > result.height ? 'l' : 'p');
         }
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, viewport.width, viewport.height);
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, result.width, result.height);
       }
 
+      setLoadProgress('');
       pdf.save(`${fileName.replace(/\.pdf$/i, '')}_processed.pdf`);
       showToast(`已导出 ${totalPages} 页 PDF`);
     } catch (err) {
       setError('导出失败: ' + (err as Error).message);
+      setLoadProgress('');
     } finally {
       setExporting(false);
       isExportingRef.current = false;
     }
   };
 
-  // 卸载时释放 PDF 文档
+  // 卸载时通知主进程释放 PDF 文档
   useEffect(() => {
     return () => {
-      if (pdfDoc) {
-        pdfDoc.destroy?.();
+      if (pdfDoc?.docId) {
+        window.electron?.pdfClose?.(pdfDoc.docId).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

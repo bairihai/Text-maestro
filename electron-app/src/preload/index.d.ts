@@ -207,6 +207,12 @@ interface CustomElectronAPI extends ElectronAPI {
   recentAdd: (entry: RecentAddInput) => Promise<RecentEntry[]>;
   recentRemove: (path: string) => Promise<RecentEntry[]>;
   recentClear: () => Promise<RecentEntry[]>;
+
+  // PDF 对比度调整（主进程渲染）
+  pdfOpen: (base64: string, filePath: string) => Promise<{ success: boolean; docId?: number; numPages?: number; error?: string }>;
+  pdfOpenFromPath: (filePath: string) => Promise<{ success: boolean; docId?: number; numPages?: number; error?: string }>;
+  pdfRenderPage: (docId: number, pageNum: number, scale: number) => Promise<{ success: boolean; imageData?: string; width?: number; height?: number; error?: string }>;
+  pdfClose: (docId: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

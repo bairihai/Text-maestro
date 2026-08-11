@@ -147,6 +147,15 @@ const customAPI = {
     ipcRenderer.invoke('recent:add', entry),
   recentRemove: (path: string) => ipcRenderer.invoke('recent:remove', path),
   recentClear: () => ipcRenderer.invoke('recent:clear'),
+
+  // PDF 对比度调整（主进程渲染）
+  pdfOpen: (base64: string, filePath: string) =>
+    ipcRenderer.invoke('pdf:open', base64, filePath),
+  pdfOpenFromPath: (filePath: string) =>
+    ipcRenderer.invoke('pdf:open-from-path', filePath),
+  pdfRenderPage: (docId: number, pageNum: number, scale: number) =>
+    ipcRenderer.invoke('pdf:render-page', docId, pageNum, scale),
+  pdfClose: (docId: number) => ipcRenderer.invoke('pdf:close', docId),
 };
 
 // 合并标准 electronAPI 和自定义 API

@@ -25,6 +25,7 @@
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@gradio/client": "^1.6.0-beta.3",
+    "@napi-rs/canvas": "^1.0.5",
     "@reduxjs/toolkit": "^2.2.7",
     "@types/js-yaml": "^4.0.9",
     "electron-log": "^5.2.0",
