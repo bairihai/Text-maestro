@@ -189,7 +189,7 @@ const PdfContrastPage: React.FC = () => {
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [scale, setScale] = useState(2);
+  const [scale, setScale] = useState(1.5);
   const [contrast, setContrast] = useState(PRESETS['standard'].contrast);
   const [brightness, setBrightness] = useState(PRESETS['standard'].brightness);
   const [whitePoint, setWhitePoint] = useState(PRESETS['standard'].whitePoint);
@@ -203,6 +203,8 @@ const PdfContrastPage: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
+  // 加载进度提示文本（大 PDF 解析/渲染需要时间）
+  const [loadProgress, setLoadProgress] = useState<string>('');
   // 视图模式：processed = 处理后，original = 原图（用于前后对比）
   const [viewMode, setViewMode] = useState<'processed' | 'original'>('processed');
   // 最近 PDF 列表（用于快捷选择）
@@ -245,6 +247,7 @@ const PdfContrastPage: React.FC = () => {
     if (!pdfDoc || !canvasRef.current) return;
     setLoading(true);
     setError(null);
+    setLoadProgress(`正在渲染第 ${pageNum} 页...`);
     try {
       const page = await pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale });
@@ -258,15 +261,18 @@ const PdfContrastPage: React.FC = () => {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      setLoadProgress(`正在渲染第 ${pageNum} 页（${Math.round(viewport.width)}×${Math.round(viewport.height)}）...`);
       await page.render({ canvasContext: ctx, viewport }).promise;
 
       // 缓存原始像素
       originalImageDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+      setLoadProgress('');
       // 立即应用一次当前参数
       applyProcessingToCanvas();
     } catch (err) {
       setError((err as Error).message || '渲染失败');
+      setLoadProgress('');
     } finally {
       setLoading(false);
     }
@@ -323,21 +329,23 @@ const PdfContrastPage: React.FC = () => {
     setError(null);
     setFileName(file.name);
     setLoading(true);
+    setLoadProgress('正在读取文件...');
     try {
       const buf = await file.arrayBuffer();
-      // 加 15 秒超时检测：如果 worker 没加载好，getDocument 会卡住
+      setLoadProgress(`正在解析 PDF（${(buf.byteLength / 1024 / 1024).toFixed(1)} MB）...`);
+      // 大 PDF 解析慢，超时放宽到 60 秒
       const docPromise = pdfjsLib.getDocument({ data: buf }).promise;
       const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('PDF 解析超时（worker 可能未加载，请重试或重启应用）')), 15000)
+        setTimeout(() => reject(new Error('PDF 解析超时（60秒），可能文件过大或 worker 加载失败，请重试')), 60000)
       );
       const doc = await Promise.race([docPromise, timeout]);
       setPdfDoc(doc);
       setTotalPages(doc.numPages);
       setCurrentPage(1);
+      setLoadProgress('');
       // 渲染由 useEffect [pdfDoc, currentPage, ...] 自动触发
-      // 记录到最近使用（File 对象没有绝对路径，用 name 作为标识；若有 webUtils.pathForFile 可拿到真实路径）
+      // 记录到最近使用
       try {
-        // Electron 31+ 提供 webUtils.pathForFile 获取拖入文件的真实路径
         const webUtils = (window as any).electron?.webUtils;
         const filePath = webUtils?.pathForFile ? webUtils.pathForFile(file) : file.name;
         if (window.electron?.recentAdd) {
@@ -346,6 +354,7 @@ const PdfContrastPage: React.FC = () => {
       } catch { /* recent 失败不影响主流程 */ }
     } catch (err) {
       setError((err as Error).message || 'PDF 解析失败');
+      setLoadProgress('');
     } finally {
       setLoading(false);
     }
@@ -539,6 +548,17 @@ const PdfContrastPage: React.FC = () => {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 注入 spinner 动画 keyframe（只注入一次）
+  useEffect(() => {
+    const styleId = 'pdf-contrast-spin-keyframe';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(style);
+    }
   }, []);
 
   return (
@@ -824,8 +844,14 @@ const PdfContrastPage: React.FC = () => {
               background: colors.cardBg, color: colors.textPrimary,
               padding: '8px 16px', borderRadius: 6, border: `1px solid ${colors.border}`,
               fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 10,
+              display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              {loading ? '渲染 PDF 页面...' : processing ? '处理像素...' : `导出中...`}
+              <span style={{
+                display: 'inline-block', width: 12, height: 12,
+                border: '2px solid #2f81f7', borderTopColor: 'transparent',
+                borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+              }} />
+              {loadProgress || (processing ? '处理像素...' : exporting ? '导出中...' : '加载中...')}
             </div>
           )}
           <canvas
