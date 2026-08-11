@@ -299,7 +299,8 @@ const PdfContrastPage: React.FC = () => {
   }, [applyProcessingToCanvas]);
 
   // 文件导入（共用：file input 与拖拽均走这里）
-  const loadFile = async (file: File) => {
+  // 不直接调 renderPage —— 渲染交给下面的 useEffect 监听 pdfDoc 变化触发，避免闭包陈旧
+  const loadFile = useCallback(async (file: File) => {
     if (!file) return;
     // 类型校验：优先看 MIME，缺失时回退到扩展名
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -315,12 +316,11 @@ const PdfContrastPage: React.FC = () => {
       setPdfDoc(doc);
       setTotalPages(doc.numPages);
       setCurrentPage(1);
-      // 等 state 更新后渲染第一页
-      setTimeout(() => renderPage(1), 0);
+      // 渲染由 useEffect [pdfDoc, currentPage, ...] 自动触发，无需手动调
     } catch (err) {
       setError((err as Error).message || 'PDF 解析失败');
     }
-  };
+  }, []);
 
   // file input 回调
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,51 +331,62 @@ const PdfContrastPage: React.FC = () => {
     e.target.value = '';
   };
 
-  // 拖拽相关
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-  };
+  // ----- 拖拽：用 window 级原生监听器（Electron 里比 React 合成事件可靠）-----
+  // 用 ref 持有最新 loadFile，避免监听器捕获陈旧闭包
+  const loadFileRef = useRef(loadFile);
+  useEffect(() => { loadFileRef.current = loadFile; }, [loadFile]);
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // 仅当离开整个 drop zone（relatedTarget 为 null 或不在内部）时才取消高亮
-    if (e.relatedTarget === null) {
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      // 必须 preventDefault，否则 drop 不会触发
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      setIsDragging(true);
+    };
+    const onDragLeave = (e: DragEvent) => {
+      // 仅当离开整个窗口时才取消高亮
+      if (e.relatedTarget === null) setIsDragging(false);
+    };
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault();
       setIsDragging(false);
-    }
-  };
-
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) await loadFile(file);
-  };
+      const file = e.dataTransfer?.files?.[0];
+      if (file) {
+        await loadFileRef.current(file);
+      }
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
 
   // 翻页
   const goToPage = (n: number) => {
     if (!pdfDoc || n < 1 || n > totalPages || n === currentPage) return;
     setCurrentPage(n);
-    renderPage(n);
+    // 渲染由下方 useEffect 监听 currentPage 触发
   };
 
   // 切换缩放
   const onScaleChange = (s: number) => {
     setScale(s);
-    if (pdfDoc) {
-      // 等 state 更新后重渲染
-      setTimeout(() => renderPage(currentPage), 0);
-    }
+    // 渲染由下方 useEffect 监听 scale 触发
   };
+
+  // 渲染触发器：pdfDoc / currentPage / scale 任一变化时重新渲染当前页
+  // 这样避免了 loadFile / goToPage / onScaleChange 里手动调 renderPage 的闭包陈旧问题
+  useEffect(() => {
+    if (pdfDoc) {
+      renderPage(currentPage);
+    }
+    // renderPage 依赖 pdfDoc + scale，其 identity 变化时也会触发，符合预期
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfDoc, currentPage, scale, renderPage]);
 
   // 导出当前页 PNG
   const handleExportPng = () => {
@@ -453,14 +464,8 @@ const PdfContrastPage: React.FC = () => {
   }, []);
 
   return (
-    <div
-      style={getPageStyle(colors)}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {/* 拖拽遮罩 */}
+    <div style={getPageStyle(colors)}>
+      {/* 拖拽遮罩（拖拽事件由 window 级监听器处理） */}
       {isDragging && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9998,
