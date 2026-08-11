@@ -1,21 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '@renderer/context/ThemeContext';
-// pdfjs-dist v6: worker 文件已复制到 renderer/public/pdf.worker.min.mjs
-// 优先手动创建 module worker（明确 type:'module'）；
-// 如果失败（CSP/环境限制），回退到 workerSrc 让 pdfjs 自行处理；
-// 如果还是失败，用 fake worker（主线程模式，性能差但能跑）
+// pdfjs-dist v6: Electron + electron-vite 环境下 Worker 各种方式都不可靠
+// （?worker/?url 后缀不工作，手动创建 module worker 也会卡住）
+// 最终方案：禁用 worker，用主线程模式（fake worker）直接解析
+// 对于 <100MB 的 PDF 完全够用，只是渲染时主线程会短暂阻塞
 import * as pdfjsLib from 'pdfjs-dist';
 import { jsPDF } from 'jspdf';
 
-// 配置 worker
-try {
-  // 方案 1：手动创建 module worker
-  pdfjsLib.GlobalWorkerOptions.workerPort = new Worker('/pdf.worker.min.mjs', { type: 'module' });
-} catch (e) {
-  console.warn('[PdfContrast] 手动创建 module worker 失败，回退到 workerSrc:', e);
-  // 方案 2：让 pdfjs 自己用 workerSrc 创建
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-}
+// 禁用 worker：workerSrc 设为空字符串，pdfjs 自动用主线程模式
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
 // ------------- helpers -------------
 function clamp(v: number, min = 0, max = 255): number {
