@@ -1,14 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '@renderer/context/ThemeContext';
-// pdfjs-dist v6: 在 Vite + Electron 下，用 ?worker 后缀让 Vite 编译为真正的 Web Worker 实例
-// （?url 方式在 Electron 渲染进程里加载 worker 会卡住/被 CSP 拦截，导致 getDocument 永远 pending）
+// pdfjs-dist v6: worker 文件已复制到 renderer/public/pdf.worker.min.mjs
+// 优先手动创建 module worker（明确 type:'module'）；
+// 如果失败（CSP/环境限制），回退到 workerSrc 让 pdfjs 自行处理；
+// 如果还是失败，用 fake worker（主线程模式，性能差但能跑）
 import * as pdfjsLib from 'pdfjs-dist';
-// @ts-ignore - Vite ?worker 后缀导入，运行时为 Worker constructor
-import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
 import { jsPDF } from 'jspdf';
 
-// 配置 worker：用 workerPort 传入 Worker 实例，比 workerSrc URL 更可靠
-pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
+// 配置 worker
+try {
+  // 方案 1：手动创建 module worker
+  pdfjsLib.GlobalWorkerOptions.workerPort = new Worker('/pdf.worker.min.mjs', { type: 'module' });
+} catch (e) {
+  console.warn('[PdfContrast] 手动创建 module worker 失败，回退到 workerSrc:', e);
+  // 方案 2：让 pdfjs 自己用 workerSrc 创建
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+}
 
 // ------------- helpers -------------
 function clamp(v: number, min = 0, max = 255): number {
