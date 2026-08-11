@@ -31,11 +31,13 @@ let pdfjsModule: any = null;
 let canvasModule: any = null;
 
 // 动态加载 pdfjs-dist（v6 是纯 ESM，CJS 主进程用动态 import）
+// 注意：Node 环境必须用 legacy build，主 build 引用了浏览器全局 DOMMatrix，
+// 会报 "ReferenceError: DOMMatrix is not defined"
 async function loadPdfjs(): Promise<any> {
   if (pdfjsModule) return pdfjsModule;
   try {
-    pdfjsModule = await import('pdfjs-dist');
-    log.info('[PdfMain] pdfjs-dist 加载成功，版本:', pdfjsModule.version);
+    pdfjsModule = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    log.info('[PdfMain] pdfjs-dist(legacy) 加载成功，版本:', pdfjsModule.version);
     // v6 把 @napi-rs/canvas 列为 optionalDependencies，但我们也显式加载一份，
     // 用于手动创建 canvas 传给 page.render
     try {
