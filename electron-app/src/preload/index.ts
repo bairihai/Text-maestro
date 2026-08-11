@@ -71,6 +71,8 @@ const globals = {
 // 自定义 API：封装 IPC 调用，供渲染层直接使用
 const customAPI = {
   readFileByPath: (filePath: string) => ipcRenderer.invoke('read-file-by-path', filePath),
+  readFileBinary: (filePath: string) =>
+    ipcRenderer.invoke('read-file-binary', filePath),
   readMultipleFiles: (filePaths: string[]) => ipcRenderer.invoke('read-multiple-files', filePaths),
   wordFrequency: (text: string, stopwords: string, customDict: string) => ipcRenderer.invoke('word-frequency', text, stopwords, customDict),
   generateWordcloud: (

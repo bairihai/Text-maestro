@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '@renderer/context/ThemeContext';
-// pdfjs-dist v6: 在 Vite 中用 ?url 导入 worker
+// pdfjs-dist v6: 在 Vite + Electron 下，用 ?worker 后缀让 Vite 编译为真正的 Web Worker 实例
+// （?url 方式在 Electron 渲染进程里加载 worker 会卡住/被 CSP 拦截，导致 getDocument 永远 pending）
 import * as pdfjsLib from 'pdfjs-dist';
-// @ts-ignore - Vite ?url 后缀导入，运行时为 worker URL 字符串
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// @ts-ignore - Vite ?worker 后缀导入，运行时为 Worker constructor
+import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
 import { jsPDF } from 'jspdf';
 
-// 配置 worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl as string;
+// 配置 worker：用 workerPort 传入 Worker 实例，比 workerSrc URL 更可靠
+pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
 // ------------- helpers -------------
 function clamp(v: number, min = 0, max = 255): number {
@@ -202,6 +203,11 @@ const PdfContrastPage: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
+  // 视图模式：processed = 处理后，original = 原图（用于前后对比）
+  const [viewMode, setViewMode] = useState<'processed' | 'original'>('processed');
+  // 最近 PDF 列表（用于快捷选择）
+  const [recentPdfs, setRecentPdfs] = useState<Array<{ path: string; timestamp: number }>>([]);
+  const [showRecent, setShowRecent] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -267,6 +273,7 @@ const PdfContrastPage: React.FC = () => {
   }, [pdfDoc, scale]);
 
   // 基于缓存的原始 ImageData 应用当前参数
+  // viewMode='original' 时直接回显原图（前后对比用），'processed' 时应用处理
   const applyProcessingToCanvas = useCallback(() => {
     if (!canvasRef.current || !originalImageDataRef.current) return;
     setProcessing(true);
@@ -275,24 +282,29 @@ const PdfContrastPage: React.FC = () => {
       try {
         const canvas = canvasRef.current!;
         const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-        // 复制一份原始数据再处理（避免污染缓存）
         const src = originalImageDataRef.current!;
-        const copy = new ImageData(
-          new Uint8ClampedArray(src.data),
-          src.width,
-          src.height,
-        );
-        processImageData(copy.data, contrast, brightness, whitePoint, blackPoint);
-        ctx.putImageData(copy, 0, 0);
+        if (viewMode === 'original') {
+          // 原图模式：直接回显，不做任何处理
+          ctx.putImageData(src, 0, 0);
+        } else {
+          // 复制一份原始数据再处理（避免污染缓存）
+          const copy = new ImageData(
+            new Uint8ClampedArray(src.data),
+            src.width,
+            src.height,
+          );
+          processImageData(copy.data, contrast, brightness, whitePoint, blackPoint);
+          ctx.putImageData(copy, 0, 0);
+        }
       } catch (err) {
         console.error('[PdfContrast] 处理失败:', err);
       } finally {
         setProcessing(false);
       }
     });
-  }, [contrast, brightness, whitePoint, blackPoint]);
+  }, [contrast, brightness, whitePoint, blackPoint, viewMode]);
 
-  // 参数变化时重新处理（节流：用 RAF 合并连续输入）
+  // 参数变化或视图模式切换时重新处理
   useEffect(() => {
     if (!originalImageDataRef.current) return;
     applyProcessingToCanvas();
@@ -310,15 +322,66 @@ const PdfContrastPage: React.FC = () => {
     }
     setError(null);
     setFileName(file.name);
+    setLoading(true);
     try {
       const buf = await file.arrayBuffer();
+      // 加 15 秒超时检测：如果 worker 没加载好，getDocument 会卡住
+      const docPromise = pdfjsLib.getDocument({ data: buf }).promise;
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('PDF 解析超时（worker 可能未加载，请重试或重启应用）')), 15000)
+      );
+      const doc = await Promise.race([docPromise, timeout]);
+      setPdfDoc(doc);
+      setTotalPages(doc.numPages);
+      setCurrentPage(1);
+      // 渲染由 useEffect [pdfDoc, currentPage, ...] 自动触发
+      // 记录到最近使用（File 对象没有绝对路径，用 name 作为标识；若有 webUtils.pathForFile 可拿到真实路径）
+      try {
+        // Electron 31+ 提供 webUtils.pathForFile 获取拖入文件的真实路径
+        const webUtils = (window as any).electron?.webUtils;
+        const filePath = webUtils?.pathForFile ? webUtils.pathForFile(file) : file.name;
+        if (window.electron?.recentAdd) {
+          await window.electron.recentAdd({ path: filePath, type: 'file', source: 'pdf-contrast' });
+        }
+      } catch { /* recent 失败不影响主流程 */ }
+    } catch (err) {
+      setError((err as Error).message || 'PDF 解析失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 从绝对路径加载 PDF（用于最近文件快捷选择）
+  const loadFromPath = useCallback(async (filePath: string) => {
+    setError(null);
+    setShowRecent(false);
+    // 文件名取最后一段
+    const name = filePath.replace(/[\\/]/g, '/').split('/').pop() || filePath;
+    setFileName(name);
+    setLoading(true);
+    try {
+      // 通过主进程读取二进制文件（base64 编码，避免 utf-8 损坏 PDF）
+      const result = await window.electron.readFileBinary(filePath);
+      if (!result.success || !result.data) throw new Error(result.error || '读取文件失败');
+      // base64 → Uint8Array → ArrayBuffer
+      const binStr = atob(result.data);
+      const bytes = new Uint8Array(binStr.length);
+      for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+      const buf = bytes.buffer;
       const doc = await pdfjsLib.getDocument({ data: buf }).promise;
       setPdfDoc(doc);
       setTotalPages(doc.numPages);
       setCurrentPage(1);
-      // 渲染由 useEffect [pdfDoc, currentPage, ...] 自动触发，无需手动调
+      // 更新最近使用时间
+      try {
+        if (window.electron?.recentAdd) {
+          await window.electron.recentAdd({ path: filePath, type: 'file', source: 'pdf-contrast' });
+        }
+      } catch { /* ignore */ }
     } catch (err) {
-      setError((err as Error).message || 'PDF 解析失败');
+      setError((err as Error).message || '从路径加载 PDF 失败');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -387,6 +450,21 @@ const PdfContrastPage: React.FC = () => {
     // renderPage 依赖 pdfDoc + scale，其 identity 变化时也会触发，符合预期
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfDoc, currentPage, scale, renderPage]);
+
+  // 页面挂载时拉取最近 PDF 列表（用于快捷选择）
+  useEffect(() => {
+    const fetchRecent = async () => {
+      try {
+        const list = await window.electron.recentList();
+        // 只保留 PDF 文件，按时间倒序
+        const pdfs = (list || [])
+          .filter((e: any) => e.type === 'file' && /\.pdf$/i.test(e.path))
+          .map((e: any) => ({ path: e.path, timestamp: e.timestamp }));
+        setRecentPdfs(pdfs);
+      } catch { /* ignore */ }
+    };
+    fetchRecent();
+  }, []);
 
   // 导出当前页 PNG
   const handleExportPng = () => {
@@ -522,6 +600,71 @@ const PdfContrastPage: React.FC = () => {
               导入 PDF
             </button>
 
+            {/* 最近 PDF 快捷选择 */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRecent(!showRecent);
+                  // 点击时刷新一次列表
+                  if (!showRecent) {
+                    window.electron?.recentList?.().then((list: any[]) => {
+                      const pdfs = (list || [])
+                        .filter((e) => e.type === 'file' && /\.pdf$/i.test(e.path))
+                        .map((e) => ({ path: e.path, timestamp: e.timestamp }));
+                      setRecentPdfs(pdfs);
+                    }).catch(() => {});
+                  }
+                }}
+                disabled={recentPdfs.length === 0}
+                style={recentPdfs.length === 0 ? getDisabledBtnStyle(colors) : getGhostBtnStyle(colors)}
+                title="从最近使用的 PDF 中选择"
+              >
+                最近 PDF {recentPdfs.length > 0 && `(${recentPdfs.length})`}
+              </button>
+              {showRecent && recentPdfs.length > 0 && (
+                <>
+                  {/* 点击外部关闭 */}
+                  <div
+                    onClick={() => setShowRecent(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                  />
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, marginTop: 4,
+                    minWidth: 320, maxHeight: 280, overflowY: 'auto',
+                    background: colors.cardBg, border: `1px solid ${colors.border}`,
+                    borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                    zIndex: 100, padding: 4,
+                  }}>
+                    {recentPdfs.map((item, i) => {
+                      const name = item.path.replace(/[\\/]/g, '/').split('/').pop() || item.path;
+                      const parent = item.path.replace(/[\\/]/g, '/').split('/').slice(0, -1).join('/') + '/';
+                      return (
+                        <div
+                          key={item.path}
+                          onClick={() => loadFromPath(item.path)}
+                          style={{
+                            padding: '6px 10px', cursor: 'pointer', borderRadius: 4,
+                            fontSize: 12,
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = colors.inputBg; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <div style={{ color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {name}
+                          </div>
+                          <div style={{ color: colors.textSecondary, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {parent}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
             {pdfDoc && (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -563,6 +706,21 @@ const PdfContrastPage: React.FC = () => {
                       style={scale === s ? getPresetBtnActiveStyle : getPresetBtnStyle(colors)}
                     >{s}x</button>
                   ))}
+                </div>
+
+                {/* 前后对比切换：原图 / 处理后 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: colors.textSecondary }}>视图</span>
+                  <button
+                    onClick={() => setViewMode('processed')}
+                    style={viewMode === 'processed' ? getPresetBtnActiveStyle : getPresetBtnStyle(colors)}
+                    title="显示处理后的效果"
+                  >处理后</button>
+                  <button
+                    onClick={() => setViewMode('original')}
+                    style={viewMode === 'original' ? getPresetBtnActiveStyle : getPresetBtnStyle(colors)}
+                    title="显示原始 PDF（不应用任何处理）"
+                  >原图</button>
                 </div>
 
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>

@@ -404,6 +404,20 @@ app.whenReady().then(() => {
     }
   });
 
+  // 读取二进制文件（base64 编码返回，用于 PDF/图片等非文本文件）
+  ipcMain.handle('read-file-binary', async (_, filePath: string) => {
+    try {
+      const fullPath = path.resolve(filePath);
+      const buf = await fs.readFile(fullPath);  // Buffer
+      // 记录到最近使用（文件）
+      recordRecent(fullPath, 'file', 'pdf-contrast');
+      // 返回 base64 字符串 + 字节数
+      return { success: true, data: buf.toString('base64'), size: buf.length };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   // 批量读取文件
   ipcMain.handle('read-multiple-files', async (_, filePaths: string[]) => {
     const results: Array<{ path: string; success: boolean; data?: string; error?: string }> = [];

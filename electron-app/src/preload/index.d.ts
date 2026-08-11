@@ -129,6 +129,7 @@ interface RecentAddInput {
 // 扩展 ElectronAPI，添加自定义方法
 interface CustomElectronAPI extends ElectronAPI {
   readFileByPath: (filePath: string) => Promise<ReadFileResult>;
+  readFileBinary: (filePath: string) => Promise<{ success: boolean; data?: string; size?: number; error?: string }>;
   readMultipleFiles: (filePaths: string[]) => Promise<ReadMultipleFilesResult[]>;
   wordFrequency: (text: string, stopwords: string, customDict: string) => Promise<WordFrequencyResult>;
   generateWordcloud: (
